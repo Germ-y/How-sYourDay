@@ -1,4 +1,5 @@
 from api.schemas import Constraints, EmotionCost, EmotionState, RouteCandidate
+from memory.preferences import UserPreferenceWeights
 from tools.landmark_emotion_prior import get_landmark_emotion_prior
 
 
@@ -6,14 +7,16 @@ def score_route_for_emotion(
     route: RouteCandidate,
     emotion: EmotionState,
     constraints: Constraints | None = None,
+    preference_weights: UserPreferenceWeights | None = None,
 ) -> EmotionCost:
+    weights = preference_weights or UserPreferenceWeights()
     fatigue_cost = _fatigue_cost(emotion)
-    walking_cost = _walking_cost(route, emotion)
-    crowd_cost = _crowd_cost(route, emotion)
-    transfer_cost = _transfer_cost(route, emotion)
+    walking_cost = round(_walking_cost(route, emotion) * weights.walking_sensitivity)
+    crowd_cost = round(_crowd_cost(route, emotion) * weights.crowd_sensitivity)
+    transfer_cost = round(_transfer_cost(route, emotion) * weights.transfer_sensitivity)
     time_pressure_cost = _time_pressure_cost(route, emotion, constraints)
     familiarity_bonus = _familiarity_bonus(route)
-    recovery_bonus = _recovery_bonus(route, emotion)
+    recovery_bonus = round(_recovery_bonus(route, emotion) * weights.recovery_affinity)
 
     total = (
         fatigue_cost

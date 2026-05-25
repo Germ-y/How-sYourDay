@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import {
   requestDailyPlan,
+  sendRouteFeedback,
   type Coordinate,
   type DailyPlan,
   type EmotionCost,
@@ -283,6 +284,23 @@ export default function HomePage() {
 function MobilePlanResult({ plan }: { plan: DailyPlan }) {
   const firstTradeoff = plan.tradeoffs[0];
   const usesKakaoPoi = plan.stops.some((stop) => stop.source_confidence === "kakao");
+  const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
+
+  async function handleFeedback(liked: boolean) {
+    setFeedbackStatus("피드백 저장 중");
+    try {
+      await sendRouteFeedback({
+        route_id: plan.selected_route.id,
+        liked,
+        emotion_primary: plan.emotion.primary,
+        provider: plan.selected_route.provider,
+        reason: firstTradeoff?.reason ?? plan.explanation
+      });
+      setFeedbackStatus(liked ? "좋았던 route로 기억했어요" : "불편했던 route로 기억했어요");
+    } catch {
+      setFeedbackStatus("피드백 저장에 실패했어요");
+    }
+  }
 
   return (
     <>
@@ -327,6 +345,28 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
             </div>
             <p className="mt-2 text-sm leading-6 text-ink/68">{firstTradeoff.reason}</p>
           </div>
+        ) : null}
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            className="min-h-11 rounded-xl bg-[#eef5f1] px-3 text-sm font-semibold text-moss transition active:scale-[0.99]"
+            type="button"
+            onClick={() => handleFeedback(true)}
+          >
+            이 route 괜찮았어요
+          </button>
+          <button
+            className="min-h-11 rounded-xl bg-[#fff0ec] px-3 text-sm font-semibold text-coral transition active:scale-[0.99]"
+            type="button"
+            onClick={() => handleFeedback(false)}
+          >
+            별로였어요
+          </button>
+        </div>
+        {feedbackStatus ? (
+          <p className="mt-2 text-center text-xs font-medium text-ink/48">
+            {feedbackStatus}
+          </p>
         ) : null}
       </section>
 

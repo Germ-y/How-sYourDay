@@ -18,6 +18,22 @@ class PlanRequest(BaseModel):
     destination: Location | None = None
 
 
+class FeedbackRequest(BaseModel):
+    route_id: str
+    liked: bool
+    emotion_primary: str
+    provider: str
+    reason: str | None = None
+
+
+class FeedbackResponse(BaseModel):
+    status: str
+    walking_sensitivity: float
+    crowd_sensitivity: float
+    transfer_sensitivity: float
+    recovery_affinity: float
+
+
 class Task(BaseModel):
     kind: str
     label: str

@@ -223,6 +223,21 @@ def test_real_route_duration_affects_hurried_time_pressure() -> None:
     assert any("Real route duration" in reason for reason in score.reasons)
 
 
+def test_feedback_memory_changes_scoring_weights(tmp_path, monkeypatch) -> None:
+    from memory.preferences import (
+        load_preference_weights,
+        record_route_feedback,
+    )
+
+    monkeypatch.setenv("HYS_PREFERENCES_PATH", str(tmp_path / "preferences.json"))
+
+    before = load_preference_weights()
+    after = record_route_feedback(liked_route=False, reason="Too much walking")
+
+    assert after.walking_sensitivity > before.walking_sensitivity
+    assert load_preference_weights().walking_sensitivity == after.walking_sensitivity
+
+
 def test_deadline_fallback_selects_least_late_route() -> None:
     intent = extract_intent("I need to print and visit a clinic before 5. I am tired.")
     pois = search_poi_candidates(

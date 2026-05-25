@@ -13,10 +13,10 @@ build/
 # Environment
 .env
 .env.local
+server/memory/preferences.json
 
 # OS/editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
-

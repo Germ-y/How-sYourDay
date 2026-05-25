@@ -1,4 +1,5 @@
 from api.schemas import PlanRequest, PlanResponse
+from memory.preferences import load_preference_weights
 from planner.compose_plan import compose_plan
 from planner.evaluate_tradeoffs import evaluate_tradeoffs
 from tools.emotion_score import score_route_for_emotion
@@ -19,7 +20,12 @@ class DailyPlanningAgent:
             destination=request.destination,
         )
         scores = [
-            score_route_for_emotion(route, intent.emotion, intent.constraints)
+            score_route_for_emotion(
+                route,
+                intent.emotion,
+                intent.constraints,
+                load_preference_weights(),
+            )
             for route in routes
         ]
         evaluation = evaluate_tradeoffs(

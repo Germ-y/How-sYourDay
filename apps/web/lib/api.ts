@@ -170,6 +170,14 @@ export type DailyPlan = {
   explanation: string;
 };
 
+export type FeedbackPayload = {
+  route_id: string;
+  liked: boolean;
+  emotion_primary: string;
+  provider: string;
+  reason?: string;
+};
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8010";
 
@@ -195,4 +203,18 @@ export async function requestDailyPlan(
   }
 
   return response.json();
+}
+
+export async function sendRouteFeedback(payload: FeedbackPayload): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/feedback`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Feedback request failed with ${response.status}`);
+  }
 }
