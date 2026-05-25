@@ -8,6 +8,12 @@ from tools.search_poi import search_poi_candidates
 from tools.extract_intent import extract_intent
 
 
+def setup_module() -> None:
+    import os
+
+    os.environ["HYS_DISABLE_TMAP"] = "1"
+
+
 def test_tired_user_gets_lower_stress_route() -> None:
     plan = _run("I need to print and visit a clinic before 5. I am tired.")
 
@@ -92,6 +98,70 @@ def test_kakao_poi_falls_back_to_mock_when_provider_has_no_result(monkeypatch) -
     )
 
     assert candidates[0].source_confidence == "mock"
+
+
+def test_tmap_pedestrian_route_is_normalized(monkeypatch) -> None:
+    from tools import tmap_route
+
+    monkeypatch.delenv("HYS_DISABLE_TMAP", raising=False)
+    monkeypatch.setattr(tmap_route, "_get_tmap_app_key", lambda: "test-key")
+    monkeypatch.setattr(
+        tmap_route,
+        "_fetch_pedestrian_leg",
+        lambda app_key, start, end: tmap_route.TmapLegResult(
+            duration_minutes=12,
+            walking_minutes=12,
+            transfer_count=0,
+            distance_meters=900,
+            fare=0,
+            polyline=[start, end],
+            segments=[],
+        ),
+    )
+    monkeypatch.setattr(tmap_route, "_fetch_transit_leg", lambda app_key, start, end: None)
+
+    routes = tmap_route.build_tmap_route_candidates(
+        [],
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+        Location(label="Home", lat=37.5826, lng=127.0019),
+    )
+
+    assert routes[0].provider == "tmap-pedestrian"
+    assert routes[0].route_mode == "walk"
+    assert routes[0].real_duration_minutes == 12
+    assert routes[0].distance_meters == 900
+
+
+def test_tmap_transit_route_is_normalized(monkeypatch) -> None:
+    from tools import tmap_route
+
+    monkeypatch.delenv("HYS_DISABLE_TMAP", raising=False)
+    monkeypatch.setattr(tmap_route, "_get_tmap_app_key", lambda: "test-key")
+    monkeypatch.setattr(tmap_route, "_fetch_pedestrian_leg", lambda app_key, start, end: None)
+    monkeypatch.setattr(
+        tmap_route,
+        "_fetch_transit_leg",
+        lambda app_key, start, end: tmap_route.TmapLegResult(
+            duration_minutes=18,
+            walking_minutes=5,
+            transfer_count=1,
+            distance_meters=2300,
+            fare=1450,
+            polyline=[start, end],
+            segments=[],
+        ),
+    )
+
+    routes = tmap_route.build_tmap_route_candidates(
+        [],
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+        Location(label="Home", lat=37.5826, lng=127.0019),
+    )
+
+    assert routes[0].provider == "tmap-transit"
+    assert routes[0].route_mode == "transit"
+    assert routes[0].transfer_count == 1
+    assert routes[0].fare == 1450
 
 
 def test_landmark_priors_only_use_allowed_tags() -> None:

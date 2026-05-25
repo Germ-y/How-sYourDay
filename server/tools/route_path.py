@@ -1,4 +1,5 @@
 from api.schemas import Coordinate, PoiCandidate, RouteCandidate, RouteSegment
+from tools.tmap_route import build_tmap_route_candidates
 
 
 DEFAULT_ORIGIN = Coordinate(lat=37.5882, lng=126.9936)
@@ -12,6 +13,11 @@ def build_route_candidates(
 ) -> list[RouteCandidate]:
     origin_point = origin or DEFAULT_ORIGIN
     destination_point = destination or DEFAULT_DESTINATION
+    tmap_routes = build_tmap_route_candidates(
+        stops=stops,
+        origin=origin_point,
+        destination=destination_point,
+    )
     polyline = [
         Coordinate(lat=origin_point.lat, lng=origin_point.lng),
         *[Coordinate(lat=stop.lat, lng=stop.lng) for stop in stops],
@@ -112,4 +118,4 @@ def build_route_candidates(
         ],
     )
 
-    return [primary, faster, recovery_friendly]
+    return [*tmap_routes, primary, faster, recovery_friendly]
