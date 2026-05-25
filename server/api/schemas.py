@@ -15,6 +15,7 @@ class Location(BaseModel):
 class PlanRequest(BaseModel):
     user_text: str = Field(min_length=1)
     origin: Location
+    destination: Location | None = None
 
 
 class Task(BaseModel):

@@ -18,6 +18,7 @@ import {
   type Coordinate,
   type DailyPlan,
   type EmotionCost,
+  type Location,
   type MapViewModel,
   type RouteCandidate
 } from "@/lib/api";
@@ -38,12 +39,56 @@ const samplePrompts = [
 ];
 
 const starterText = samplePrompts[0].text;
+const DEMO_ORIGIN: Location = {
+  label: "Demo origin",
+  lat: 37.5882,
+  lng: 126.9936
+};
+const DEFAULT_DESTINATIONS: Record<string, Location> = {
+  집: {
+    label: "집",
+    lat: 37.5826,
+    lng: 127.0019
+  },
+  학교: {
+    label: "학교",
+    lat: 37.5882,
+    lng: 126.9936
+  },
+  회사: {
+    label: "회사",
+    lat: 37.5665,
+    lng: 126.978
+  }
+};
+const DESTINATION_STORAGE_KEY = "hows-your-day.destinations.v1";
 
 export default function HomePage() {
   const [text, setText] = useState(starterText);
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [origin, setOrigin] = useState<Location>(DEMO_ORIGIN);
+  const [destinations, setDestinations] =
+    useState<Record<string, Location>>(DEFAULT_DESTINATIONS);
+  const [selectedDestinationKey, setSelectedDestinationKey] = useState("집");
+  const [locationStatus, setLocationStatus] = useState("demo 위치 사용 중");
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(DESTINATION_STORAGE_KEY);
+    if (!stored) {
+      return;
+    }
+
+    try {
+      setDestinations({
+        ...DEFAULT_DESTINATIONS,
+        ...JSON.parse(stored)
+      });
+    } catch {
+      window.localStorage.removeItem(DESTINATION_STORAGE_KEY);
+    }
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,13 +96,53 @@ export default function HomePage() {
     setError(null);
 
     try {
-      const result = await requestDailyPlan(text);
+      const result = await requestDailyPlan(
+        text,
+        origin,
+        destinations[selectedDestinationKey] ?? DEFAULT_DESTINATIONS["집"]
+      );
       setPlan(result);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Failed to plan day.");
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function handleUseCurrentLocation() {
+    if (!navigator.geolocation) {
+      setLocationStatus("현재 위치를 사용할 수 없어 demo 위치를 유지해요");
+      return;
+    }
+
+    setLocationStatus("현재 위치 확인 중");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setOrigin({
+          label: "현재 위치",
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+        setLocationStatus("현재 위치 사용 중");
+      },
+      () => {
+        setOrigin(DEMO_ORIGIN);
+        setLocationStatus("권한이 없어 demo 위치 사용 중");
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 60_000,
+        timeout: 8_000
+      }
+    );
+  }
+
+  function handleDestinationSelect(key: string) {
+    setSelectedDestinationKey(key);
+    window.localStorage.setItem(
+      DESTINATION_STORAGE_KEY,
+      JSON.stringify(destinations)
+    );
   }
 
   return (
@@ -109,6 +194,41 @@ export default function HomePage() {
                   </button>
                 ))}
               </div>
+            </article>
+
+            <article className="rounded-2xl border border-ink/10 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-ink/60">출발/도착</p>
+                  <p className="mt-1 text-xs text-ink/46">{locationStatus}</p>
+                </div>
+                <button
+                  className="min-h-10 shrink-0 rounded-full bg-[#eef5f1] px-3 text-sm font-semibold text-tide transition hover:bg-[#e2efe9]"
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                >
+                  현재 위치 사용
+                </button>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {Object.keys(destinations).map((key) => (
+                  <button
+                    className={`min-h-10 rounded-full border px-3 text-sm font-semibold transition ${
+                      selectedDestinationKey === key
+                        ? "border-tide bg-tide text-white"
+                        : "border-ink/10 bg-white text-ink/70"
+                    }`}
+                    key={key}
+                    type="button"
+                    onClick={() => handleDestinationSelect(key)}
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 truncate text-xs text-ink/48">
+                {origin.label} → {destinations[selectedDestinationKey]?.label}
+              </p>
             </article>
 
             {error ? (

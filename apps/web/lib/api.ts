@@ -3,6 +3,10 @@ export type Coordinate = {
   lng: number;
 };
 
+export type Location = Coordinate & {
+  label: string;
+};
+
 export type EmotionState = {
   primary: string;
   walking_tolerance: string;
@@ -163,7 +167,11 @@ export type DailyPlan = {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8010";
 
-export async function requestDailyPlan(userText: string): Promise<DailyPlan> {
+export async function requestDailyPlan(
+  userText: string,
+  origin: Location,
+  destination: Location
+): Promise<DailyPlan> {
   const response = await fetch(`${API_BASE_URL}/plan`, {
     method: "POST",
     headers: {
@@ -171,11 +179,8 @@ export async function requestDailyPlan(userText: string): Promise<DailyPlan> {
     },
     body: JSON.stringify({
       user_text: userText,
-      origin: {
-        label: "Current location",
-        lat: 37.5882,
-        lng: 126.9936
-      }
+      origin,
+      destination
     })
   });
 

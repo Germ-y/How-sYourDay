@@ -106,7 +106,10 @@ def test_emotion_score_penalizes_high_crowd_for_tired_user() -> None:
         intent.tasks,
         Location(label="Current location", lat=37.5882, lng=126.9936),
     )
-    routes = build_route_candidates(pois)
+    routes = build_route_candidates(
+        pois,
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+    )
     high_crowd = next(route for route in routes if route.id == "route-faster")
     calm_route = next(route for route in routes if route.id == "route-recovery-friendly")
 
@@ -124,7 +127,10 @@ def test_deadline_fallback_selects_least_late_route() -> None:
         intent.tasks,
         Location(label="Current location", lat=37.5882, lng=126.9936),
     )
-    routes = build_route_candidates(pois)
+    routes = build_route_candidates(
+        pois,
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+    )
     constraints = Constraints(deadline="14:10", destination="home")
     emotion = EmotionState(
         primary="steady",

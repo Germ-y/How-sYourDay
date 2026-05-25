@@ -1,10 +1,21 @@
 from api.schemas import Coordinate, PoiCandidate, RouteCandidate, RouteSegment
 
 
-def build_route_candidates(stops: list[PoiCandidate]) -> list[RouteCandidate]:
+DEFAULT_ORIGIN = Coordinate(lat=37.5882, lng=126.9936)
+DEFAULT_DESTINATION = Coordinate(lat=37.5826, lng=127.0019)
+
+
+def build_route_candidates(
+    stops: list[PoiCandidate],
+    origin: Coordinate | None = None,
+    destination: Coordinate | None = None,
+) -> list[RouteCandidate]:
+    origin_point = origin or DEFAULT_ORIGIN
+    destination_point = destination or DEFAULT_DESTINATION
     polyline = [
-        Coordinate(lat=37.5882, lng=126.9936),
+        Coordinate(lat=origin_point.lat, lng=origin_point.lng),
         *[Coordinate(lat=stop.lat, lng=stop.lng) for stop in stops],
+        Coordinate(lat=destination_point.lat, lng=destination_point.lng),
     ]
 
     primary = RouteCandidate(

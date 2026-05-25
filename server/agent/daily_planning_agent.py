@@ -13,7 +13,11 @@ class DailyPlanningAgent:
     def run(self, request: PlanRequest) -> PlanResponse:
         intent = extract_intent(request.user_text)
         poi_candidates = search_poi_candidates(intent.tasks, request.origin)
-        routes = build_route_candidates(poi_candidates)
+        routes = build_route_candidates(
+            stops=poi_candidates,
+            origin=request.origin,
+            destination=request.destination,
+        )
         scores = [
             score_route_for_emotion(route, intent.emotion, intent.constraints)
             for route in routes
