@@ -4,11 +4,14 @@ import { FormEvent, ReactNode, useMemo, useState } from "react";
 import {
   ArrowRight,
   Brain,
-  Clock,
-  Compass,
+  CheckCircle2,
+  Clock3,
   HeartPulse,
   MapPinned,
-  Sparkles
+  MessageCircle,
+  Navigation,
+  Sparkles,
+  Zap
 } from "lucide-react";
 import {
   requestDailyPlan,
@@ -29,7 +32,7 @@ const samplePrompts = [
     text: "I am in a hurry and need to get home by 5."
   },
   {
-    label: "회복이 필요한 날",
+    label: "쉬고 싶은 날",
     text: "I need to rest before going home."
   }
 ];
@@ -58,356 +61,186 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-field text-ink">
-      <section className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 px-5 py-6 lg:grid-cols-[360px_1fr] lg:px-8">
-        <aside className="flex flex-col gap-5 lg:sticky lg:top-6 lg:h-[calc(100vh-48px)]">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-moss">
-              How&apos;s Your Day
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold leading-tight">
-              하루 동선을 감정 비용까지 계산해서 조율합니다.
-            </h1>
-          </div>
-
-          <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
-            <textarea
-              className="min-h-44 resize-none rounded-lg border border-ink/15 bg-white p-4 text-base leading-7 shadow-sm outline-none focus:border-tide"
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-            />
-            <button
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-ink px-4 font-semibold text-white transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45"
-              type="submit"
-              disabled={isLoading}
-            >
-              {isLoading ? "Planning..." : "Generate plan"}
-              <ArrowRight size={18} aria-hidden />
-            </button>
-          </form>
-
-          <div className="grid gap-2">
-            <p className="text-sm font-semibold text-ink/70">Demo prompts</p>
-            <div className="grid grid-cols-1 gap-2">
-              {samplePrompts.map((prompt) => (
-                <button
-                  className="flex items-center justify-between rounded-lg border border-ink/10 bg-white px-3 py-2 text-left text-sm shadow-sm transition hover:border-tide hover:text-tide"
-                  key={prompt.label}
-                  type="button"
-                  onClick={() => setText(prompt.text)}
-                >
-                  <span>{prompt.label}</span>
-                  <Sparkles size={15} aria-hidden />
-                </button>
-              ))}
+    <main className="min-h-screen bg-[#f6f8f4] text-ink">
+      <form
+        className="mx-auto flex min-h-screen w-full max-w-md flex-col pb-24 lg:max-w-6xl lg:px-6"
+        onSubmit={handleSubmit}
+      >
+        <header className="px-5 pb-4 pt-5 lg:px-0">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-tide">How&apos;s Your Day</p>
+              <h1 className="mt-1 text-2xl font-semibold leading-tight tracking-normal">
+                오늘 하루를 무리 없이 조율해볼게요.
+              </h1>
             </div>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink text-white shadow-sm">
+              <Brain size={22} aria-hidden />
+            </span>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <StatusPill icon={<HeartPulse size={14} aria-hidden />} label="감정 비용" />
+            <StatusPill icon={<Navigation size={14} aria-hidden />} label="동선 조율" />
+            <StatusPill icon={<Clock3 size={14} aria-hidden />} label="시간 제약" />
+          </div>
+        </header>
+
+        <section className="grid gap-4 px-5 lg:grid-cols-[380px_1fr] lg:px-0">
+          <div className="grid gap-4 lg:self-start lg:sticky lg:top-6">
+            <article className="rounded-2xl border border-ink/10 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-sm font-semibold text-ink/60">
+                <MessageCircle size={17} aria-hidden />
+                오늘 해야 할 일을 말해줘
+              </div>
+              <textarea
+                className="mt-3 min-h-32 w-full resize-none rounded-xl border border-ink/10 bg-[#f9faf7] p-3 text-[15px] leading-6 outline-none transition focus:border-tide focus:bg-white"
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+              />
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                {samplePrompts.map((prompt) => (
+                  <button
+                    className="min-h-10 shrink-0 rounded-full border border-ink/10 bg-white px-3 text-sm font-semibold text-ink/70 shadow-sm transition hover:border-tide hover:text-tide"
+                    key={prompt.label}
+                    type="button"
+                    onClick={() => setText(prompt.text)}
+                  >
+                    {prompt.label}
+                  </button>
+                ))}
+              </div>
+            </article>
+
+            {error ? (
+              <p className="rounded-2xl border border-coral/40 bg-white p-3 text-sm text-coral">
+                {error}
+              </p>
+            ) : null}
+
+            <article className="rounded-2xl bg-ink p-4 text-white shadow-sm">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white/70">
+                <Sparkles size={16} aria-hidden />
+                planner가 보는 것
+              </div>
+              <p className="mt-2 text-sm leading-6 text-white/82">
+                route 후보를 모두 비교하고, 시간 제약과 감정 비용 사이의
+                tradeoff를 설명합니다.
+              </p>
+            </article>
           </div>
 
-          {error ? (
-            <p className="rounded-lg border border-coral/40 bg-white p-3 text-sm text-coral">
-              {error}
-            </p>
-          ) : null}
-
-          <div className="rounded-lg border border-ink/10 bg-white p-4 text-sm leading-6 text-ink/65 shadow-sm">
-            planner는 route 후보를 모두 scoring한 뒤, 시간 제약과 감정 비용의
-            tradeoff를 비교합니다.
+          <div className="grid gap-4">
+            {plan ? <MobilePlanResult plan={plan} /> : <EmptyState />}
           </div>
-        </aside>
+        </section>
 
-        {plan ? <PlannerDashboard plan={plan} /> : <EmptyDashboard />}
-      </section>
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink/10 bg-white/92 px-5 py-3 shadow-[0_-8px_24px_rgba(23,33,29,0.08)] backdrop-blur lg:hidden">
+          <button
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-ink/45"
+            type="submit"
+            disabled={isLoading}
+          >
+            {isLoading ? "계획을 계산하는 중" : "하루 계획 만들기"}
+            <ArrowRight size={18} aria-hidden />
+          </button>
+        </div>
+
+        <div className="hidden px-5 lg:mt-4 lg:block lg:px-0">
+          <button
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 font-semibold text-white transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45"
+            type="submit"
+            disabled={isLoading}
+          >
+            {isLoading ? "계획을 계산하는 중" : "하루 계획 만들기"}
+            <ArrowRight size={18} aria-hidden />
+          </button>
+        </div>
+      </form>
     </main>
   );
 }
 
-function EmptyDashboard() {
+function MobilePlanResult({ plan }: { plan: DailyPlan }) {
+  const firstTradeoff = plan.tradeoffs[0];
+
   return (
-    <section className="grid min-h-[720px] place-items-center rounded-lg border border-ink/10 bg-white p-8 shadow-sm">
-      <div className="max-w-xl text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-field text-tide">
-          <Brain size={28} aria-hidden />
+    <>
+      <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-ink/10">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-moss">추천 route</p>
+            <h2 className="mt-1 break-words text-2xl font-semibold leading-tight">
+              {routeLabel(plan.selected_route.id)}
+            </h2>
+          </div>
+          <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-tide text-white">
+            <span className="text-xs font-semibold text-white/75">comfort</span>
+            <span className="text-2xl font-semibold">
+              {plan.emotional_cost.comfort_score}
+            </span>
+          </div>
         </div>
-        <h2 className="mt-5 text-2xl font-semibold">Planner dashboard</h2>
-        <p className="mt-3 leading-7 text-ink/65">
-          프롬프트를 실행하면 선택된 route, 감정 비용 breakdown, tradeoff,
-          timeline, mock map preview가 이곳에 표시됩니다.
-        </p>
-      </div>
-    </section>
-  );
-}
 
-function PlannerDashboard({ plan }: { plan: DailyPlan }) {
-  return (
-    <section className="grid gap-5">
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <SelectedRouteCard plan={plan} />
-        <MapPreview map={plan.map_overlays} />
-      </div>
+        <p className="mt-3 text-sm leading-6 text-ink/68">{plan.explanation}</p>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard
-          icon={<Brain size={20} aria-hidden />}
-          label="Emotion"
-          value={plan.emotion.primary}
-          detail={`${plan.emotion.walking_tolerance} walking · ${plan.emotion.crowd_tolerance} crowd`}
-        />
-        <MetricCard
-          icon={<HeartPulse size={20} aria-hidden />}
-          label="Comfort"
-          value={`${plan.emotional_cost.comfort_score}`}
-          detail={`stress ${plan.emotional_cost.stress_score}`}
-        />
-        <MetricCard
-          icon={<Clock size={20} aria-hidden />}
-          label="Deadline"
-          value={plan.constraints.deadline ?? "--"}
-          detail={plan.constraints.destination ?? "destination inferred later"}
-        />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <EmotionalCostPanel cost={plan.emotional_cost} />
-        <TradeoffPanel plan={plan} />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <TimelinePanel plan={plan} />
-        <RouteComparison routes={plan.routes} selectedRouteId={plan.selected_route.id} />
-      </div>
-    </section>
-  );
-}
-
-function SelectedRouteCard({ plan }: { plan: DailyPlan }) {
-  return (
-    <article className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.14em] text-moss">
-            Selected Route
-          </p>
-          <h2 className="mt-2 text-3xl font-semibold">{plan.selected_route.id}</h2>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <MiniStat label="이동" value={`${plan.selected_route.estimated_minutes}분`} />
+          <MiniStat label="걷기" value={`${plan.selected_route.walking_minutes}분`} />
+          <MiniStat label="혼잡" value={translateCrowd(plan.selected_route.crowd_level)} />
         </div>
-        <span className="rounded-full bg-field px-3 py-1 text-sm font-semibold text-tide">
-          {plan.selected_route.provider}
-        </span>
-      </div>
 
-      <p className="mt-4 max-w-3xl leading-7 text-ink/70">{plan.explanation}</p>
+        {firstTradeoff ? (
+          <div className="mt-4 rounded-2xl bg-[#f6f8f4] p-3">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Zap className="text-coral" size={16} aria-hidden />
+              핵심 tradeoff
+            </div>
+            <p className="mt-2 text-sm leading-6 text-ink/68">{firstTradeoff.reason}</p>
+          </div>
+        ) : null}
+      </section>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-4">
-        <RouteStat label="Minutes" value={plan.selected_route.estimated_minutes} />
-        <RouteStat label="Walking" value={plan.selected_route.walking_minutes} />
-        <RouteStat label="Transfers" value={plan.selected_route.transfer_count} />
-        <RouteStat label="Crowd" value={plan.selected_route.crowd_level} />
-      </div>
+      <MapPreview map={plan.map_overlays} />
+
+      <section className="grid gap-3">
+        <SectionTitle icon={<HeartPulse size={18} aria-hidden />} title="감정 비용" />
+        <EmotionalCostCard cost={plan.emotional_cost} />
+      </section>
 
       {plan.recommendations.length > 0 ? (
-        <div className="mt-5 grid gap-2">
+        <section className="grid gap-3">
+          <SectionTitle icon={<Sparkles size={18} aria-hidden />} title="추천 조정" />
           {plan.recommendations.map((item) => (
-            <div
-              className="flex items-start gap-2 rounded-lg bg-field p-3 text-sm leading-6 text-ink/70"
-              key={`${item.kind}-${item.label}`}
-            >
-              <Sparkles className="mt-0.5 text-coral" size={16} aria-hidden />
-              <span>{item.label}</span>
-            </div>
+            <InfoCard key={`${item.kind}-${item.label}`}>{item.label}</InfoCard>
           ))}
-        </div>
+        </section>
       ) : null}
-    </article>
+
+      <section className="grid gap-3">
+        <SectionTitle icon={<Clock3 size={18} aria-hidden />} title="타임라인" />
+        <TimelineList plan={plan} />
+      </section>
+
+      <section className="grid gap-3 pb-8">
+        <SectionTitle icon={<Navigation size={18} aria-hidden />} title="후보 route" />
+        <RouteList routes={plan.routes} selectedRouteId={plan.selected_route.id} />
+      </section>
+    </>
   );
 }
 
-function RouteStat({ label, value }: { label: string; value: string | number }) {
+function EmptyState() {
   return (
-    <div className="rounded-lg bg-field p-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/45">
-        {label}
+    <section className="rounded-3xl bg-white p-5 text-center shadow-sm ring-1 ring-ink/10">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef5f1] text-tide">
+        <MessageCircle size={26} aria-hidden />
+      </div>
+      <h2 className="mt-4 text-xl font-semibold">아직 계획이 없어요</h2>
+      <p className="mt-2 text-sm leading-6 text-ink/62">
+        해야 할 일과 지금 컨디션을 적으면 planner가 route, 감정 비용,
+        tradeoff를 계산해줍니다.
       </p>
-      <p className="mt-1 text-lg font-semibold capitalize">{value}</p>
-    </div>
-  );
-}
-
-function EmotionalCostPanel({ cost }: { cost: EmotionCost }) {
-  const costs = [
-    ["Fatigue", cost.fatigue_cost],
-    ["Walking", cost.walking_cost],
-    ["Crowd", cost.crowd_cost],
-    ["Transfer", cost.transfer_cost],
-    ["Time pressure", cost.time_pressure_cost],
-    ["Familiarity bonus", -cost.familiarity_bonus],
-    ["Recovery bonus", -cost.recovery_bonus]
-  ] as const;
-
-  return (
-    <article className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.14em] text-moss">
-            Emotional Cost
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold">
-            total {cost.total_emotional_cost}
-          </h2>
-        </div>
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-field text-2xl font-semibold text-tide">
-          {cost.comfort_score}
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-3">
-        {costs.map(([label, value]) => (
-          <CostBar key={label} label={label} value={value} />
-        ))}
-      </div>
-
-      <ul className="mt-5 grid gap-2 text-sm leading-6 text-ink/65">
-        {cost.reasons.slice(0, 3).map((reason) => (
-          <li className="rounded-lg bg-field px-3 py-2" key={reason}>
-            {reason}
-          </li>
-        ))}
-      </ul>
-    </article>
-  );
-}
-
-function CostBar({ label, value }: { label: string; value: number }) {
-  const width = Math.min(100, Math.abs(value) * 4);
-  const isBonus = value < 0;
-
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between text-sm">
-        <span className="font-medium">{label}</span>
-        <span className={isBonus ? "text-moss" : "text-coral"}>
-          {isBonus ? value : `+${value}`}
-        </span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-field">
-        <div
-          className={isBonus ? "h-full bg-moss" : "h-full bg-coral"}
-          style={{ width: `${width}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function TradeoffPanel({ plan }: { plan: DailyPlan }) {
-  return (
-    <article className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
-      <p className="text-sm font-semibold uppercase tracking-[0.14em] text-moss">
-        Tradeoffs
-      </p>
-      <h2 className="mt-2 text-2xl font-semibold">Why this route?</h2>
-
-      <div className="mt-5 grid gap-3">
-        {plan.tradeoffs.map((tradeoff) => (
-          <div className="rounded-lg bg-field p-4" key={tradeoff.reason}>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-ink px-3 py-1 text-xs font-semibold text-white">
-                {tradeoff.user_visible_label}
-              </span>
-              <span className="text-sm text-ink/55">
-                {tradeoff.chosen_option} vs {tradeoff.rejected_option}
-              </span>
-            </div>
-            <p className="mt-3 leading-7 text-ink/72">{tradeoff.reason}</p>
-            <div className="mt-3 flex flex-wrap gap-2 text-sm">
-              <span className="rounded-full bg-white px-3 py-1">
-                time {formatDelta(tradeoff.cost_delta.estimated_minutes)}m
-              </span>
-              <span className="rounded-full bg-white px-3 py-1">
-                emotion {formatDelta(tradeoff.cost_delta.emotional_cost)}
-              </span>
-            </div>
-          </div>
-        ))}
-
-        {plan.tradeoffs.length === 0 ? (
-          <p className="rounded-lg bg-field p-4 text-ink/65">
-            No major tradeoff was needed for this plan.
-          </p>
-        ) : null}
-      </div>
-    </article>
-  );
-}
-
-function TimelinePanel({ plan }: { plan: DailyPlan }) {
-  return (
-    <article className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
-      <p className="text-sm font-semibold uppercase tracking-[0.14em] text-moss">
-        Timeline
-      </p>
-      <h2 className="mt-2 text-2xl font-semibold">Daily flow</h2>
-
-      <ol className="mt-5 grid gap-3">
-        {plan.estimated_timeline.map((item) => (
-          <li className="grid grid-cols-[64px_1fr] gap-3" key={`${item.time}-${item.label}`}>
-            <span className="rounded-lg bg-field px-2 py-2 text-center text-sm font-semibold">
-              {item.time}
-            </span>
-            <span className="rounded-lg border border-ink/10 px-3 py-2 leading-6">
-              <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-ink/45">
-                {item.type}
-              </span>
-              {item.label}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </article>
-  );
-}
-
-function RouteComparison({
-  routes,
-  selectedRouteId
-}: {
-  routes: RouteCandidate[];
-  selectedRouteId: string;
-}) {
-  return (
-    <article className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
-      <p className="text-sm font-semibold uppercase tracking-[0.14em] text-moss">
-        Candidate Routes
-      </p>
-      <h2 className="mt-2 text-2xl font-semibold">Planner search space</h2>
-      <div className="mt-5 grid gap-3">
-        {routes.map((route) => {
-          const selected = route.id === selectedRouteId;
-          return (
-            <div
-              className={`rounded-lg border p-4 ${
-                selected ? "border-tide bg-tide/10" : "border-ink/10 bg-field"
-              }`}
-              key={route.id}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-semibold">{route.id}</span>
-                {selected ? (
-                  <span className="rounded-full bg-tide px-3 py-1 text-xs font-semibold text-white">
-                    selected
-                  </span>
-                ) : null}
-              </div>
-              <div className="mt-3 grid gap-2 text-sm text-ink/65 sm:grid-cols-4">
-                <span>{route.estimated_minutes} min</span>
-                <span>{route.walking_minutes} walking</span>
-                <span>{route.transfer_count} transfers</span>
-                <span className="capitalize">{route.crowd_level} crowd</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </article>
+    </section>
   );
 }
 
@@ -415,23 +248,20 @@ function MapPreview({ map }: { map: MapViewModel }) {
   const projected = useMemo(() => createProjector(map), [map]);
 
   return (
-    <article className="overflow-hidden rounded-lg border border-ink/10 bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-3 border-b border-ink/10 p-4">
+    <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-ink/10">
+      <div className="flex items-center justify-between px-4 py-3">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.14em] text-moss">
-            Map Preview
-          </p>
-          <h2 className="mt-1 text-2xl font-semibold">Mock route surface</h2>
+          <p className="text-sm font-semibold text-moss">mock map</p>
+          <h2 className="text-lg font-semibold">동선 미리보기</h2>
         </div>
-        <MapPinned className="text-tide" size={24} aria-hidden />
+        <MapPinned className="text-tide" size={22} aria-hidden />
       </div>
-
-      <div className="relative h-[360px] bg-field">
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(23,33,29,0.05)_1px,transparent_1px),linear-gradient(rgba(23,33,29,0.05)_1px,transparent_1px)] bg-[size:42px_42px]" />
+      <div className="relative h-60 bg-[#edf2ee]">
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(23,33,29,0.05)_1px,transparent_1px),linear-gradient(rgba(23,33,29,0.05)_1px,transparent_1px)] bg-[size:34px_34px]" />
         <svg
           className="absolute inset-0 h-full w-full"
           role="img"
-          aria-label="Mock map preview of planner routes"
+          aria-label="planner route preview"
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
         >
@@ -441,10 +271,10 @@ function MapPreview({ map }: { map: MapViewModel }) {
               <circle
                 cx={point.x}
                 cy={point.y}
-                fill="rgba(217,111,93,0.22)"
+                fill="rgba(217,111,93,0.24)"
                 key={zone.id}
-                r="8"
-                stroke="rgba(217,111,93,0.7)"
+                r="9"
+                stroke="rgba(217,111,93,0.75)"
                 strokeWidth="0.8"
               />
             );
@@ -457,16 +287,17 @@ function MapPreview({ map }: { map: MapViewModel }) {
                 return `${projectedPoint.x},${projectedPoint.y}`;
               })
               .join(" ");
+
             return (
               <polyline
                 fill="none"
                 key={polyline.id}
                 points={path}
-                stroke={polyline.selected ? "#4f8a9b" : polyline.emotion_level === "stressful" ? "#d96f5d" : "#8f9f89"}
+                stroke={routeStroke(polyline.emotion_level, polyline.selected)}
                 strokeDasharray={polyline.selected ? "0" : "3 3"}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={polyline.selected ? "3.2" : "1.8"}
+                strokeWidth={polyline.selected ? "4" : "2"}
                 vectorEffect="non-scaling-stroke"
               />
             );
@@ -481,52 +312,167 @@ function MapPreview({ map }: { map: MapViewModel }) {
               key={marker.id}
               style={{ left: `${point.x}%`, top: `${point.y}%` }}
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-sm font-semibold text-white shadow">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-sm font-semibold text-white shadow-sm">
                 {marker.badge}
               </span>
-              <span className="max-w-[120px] rounded-md bg-white/92 px-2 py-1 text-center text-xs font-medium shadow-sm">
+              <span className="max-w-20 truncate rounded-md bg-white/95 px-2 py-1 text-xs font-medium shadow-sm">
                 {marker.label}
               </span>
             </div>
           );
         })}
       </div>
+    </section>
+  );
+}
 
-      <div className="grid gap-2 p-4 text-sm text-ink/65">
-        {map.tradeoff_badges.map((badge) => (
-          <div className="flex items-start gap-2 rounded-lg bg-field p-3" key={badge.description}>
-            <Compass className="mt-0.5 text-tide" size={16} aria-hidden />
-            <span>
-              <span className="block font-semibold text-ink">{badge.label}</span>
-              {badge.description}
-            </span>
-          </div>
+function EmotionalCostCard({ cost }: { cost: EmotionCost }) {
+  const rows = [
+    ["피로", cost.fatigue_cost],
+    ["걷기", cost.walking_cost],
+    ["혼잡", cost.crowd_cost],
+    ["환승", cost.transfer_cost],
+    ["시간 압박", cost.time_pressure_cost],
+    ["익숙함 보너스", -cost.familiarity_bonus],
+    ["회복 보너스", -cost.recovery_bonus]
+  ] as const;
+
+  return (
+    <article className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-ink/10">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-ink/60">total emotional cost</span>
+        <span className="rounded-full bg-[#eef5f1] px-3 py-1 text-sm font-semibold text-tide">
+          {cost.total_emotional_cost}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3">
+        {rows.map(([label, value]) => (
+          <CostRow key={label} label={label} value={value} />
         ))}
       </div>
     </article>
   );
 }
 
-function MetricCard({
-  icon,
-  label,
-  value,
-  detail
+function CostRow({ label, value }: { label: string; value: number }) {
+  const isBonus = value < 0;
+  const width = Math.min(100, Math.abs(value) * 4);
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-sm">
+        <span className="font-medium">{label}</span>
+        <span className={isBonus ? "text-moss" : "text-coral"}>
+          {isBonus ? value : `+${value}`}
+        </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-[#edf2ee]">
+        <div
+          className={isBonus ? "h-full bg-moss" : "h-full bg-coral"}
+          style={{ width: `${width}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TimelineList({ plan }: { plan: DailyPlan }) {
+  return (
+    <ol className="grid gap-2">
+      {plan.estimated_timeline.map((item) => (
+        <li
+          className="grid grid-cols-[58px_1fr] gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-ink/10"
+          key={`${item.time}-${item.label}`}
+        >
+          <span className="rounded-xl bg-[#eef5f1] px-2 py-2 text-center text-sm font-semibold text-tide">
+            {item.time}
+          </span>
+          <span className="min-w-0 text-sm leading-6 text-ink/72">
+            <span className="block text-xs font-semibold uppercase tracking-[0.1em] text-ink/38">
+              {item.type}
+            </span>
+            {item.label}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function RouteList({
+  routes,
+  selectedRouteId
 }: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  detail: string;
+  routes: RouteCandidate[];
+  selectedRouteId: string;
 }) {
   return (
-    <article className="rounded-lg border border-ink/10 bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-ink/60">
-        {icon}
-        <span className="text-sm font-medium">{label}</span>
-      </div>
-      <p className="mt-3 text-2xl font-semibold capitalize">{value}</p>
-      <p className="mt-1 text-sm text-ink/60">{detail}</p>
-    </article>
+    <div className="grid gap-2">
+      {routes.map((route) => {
+        const selected = route.id === selectedRouteId;
+
+        return (
+          <article
+            className={`rounded-2xl p-3 shadow-sm ring-1 ${
+              selected ? "bg-[#eef7f8] ring-tide/35" : "bg-white ring-ink/10"
+            }`}
+            key={route.id}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-sm font-semibold">
+                {routeLabel(route.id)}
+              </span>
+              {selected ? (
+                <span className="shrink-0 rounded-full bg-tide px-2 py-1 text-xs font-semibold text-white">
+                  선택됨
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-ink/62">
+              <span>{route.estimated_minutes}분</span>
+              <span>걷기 {route.walking_minutes}분</span>
+              <span>{translateCrowd(route.crowd_level)}</span>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function StatusPill({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-white px-3 text-sm font-semibold text-ink/64 shadow-sm ring-1 ring-ink/8">
+      {icon}
+      {label}
+    </span>
+  );
+}
+
+function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
+  return (
+    <div className="flex items-center gap-2 px-1 text-sm font-semibold text-ink/68">
+      {icon}
+      {title}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-[#f6f8f4] p-3">
+      <p className="text-xs font-semibold text-ink/42">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function InfoCard({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 rounded-2xl bg-white p-3 text-sm leading-6 text-ink/70 shadow-sm ring-1 ring-ink/10">
+      <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={17} aria-hidden />
+      <span>{children}</span>
+    </div>
   );
 }
 
@@ -544,9 +490,30 @@ function createProjector(map: MapViewModel) {
   });
 }
 
-function formatDelta(value: number) {
-  if (value > 0) {
-    return `+${value}`;
+function routeStroke(emotionLevel: string, selected: boolean) {
+  if (selected) {
+    return "#4f8a9b";
   }
-  return `${value}`;
+  if (emotionLevel === "stressful") {
+    return "#d96f5d";
+  }
+  return "#7e9375";
+}
+
+function routeLabel(routeId: string) {
+  return routeId
+    .replace("route-", "")
+    .split("-")
+    .map((word) => word[0]?.toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function translateCrowd(level: string) {
+  if (level === "low") {
+    return "낮음";
+  }
+  if (level === "high") {
+    return "높음";
+  }
+  return "보통";
 }
