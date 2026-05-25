@@ -244,8 +244,8 @@ export default function HomePage() {
                 planner가 보는 것
               </div>
               <p className="mt-2 text-sm leading-6 text-white/82">
-                route 후보를 모두 비교하고, 시간 제약과 감정 비용 사이의
-                tradeoff를 설명합니다.
+                Kakao 장소와 Tmap 경로를 조합하고, 실패한 구간만 fallback으로
+                보완해 감정 비용과 시간 tradeoff를 계산합니다.
               </p>
             </article>
           </div>
@@ -309,7 +309,7 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
           <div>
             <p className="text-sm font-semibold text-moss">추천 route</p>
             <h2 className="mt-1 break-words text-2xl font-semibold leading-tight">
-              {routeLabel(plan.selected_route.id)}
+              {routeDisplayName(plan.selected_route)}
             </h2>
           </div>
           <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-tide text-white">
@@ -705,7 +705,7 @@ function RouteList({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="min-w-0 truncate text-sm font-semibold">
-                {routeLabel(route.id)}
+                {routeDisplayName(route)}
               </span>
               <div className="flex shrink-0 items-center gap-1">
                 <span className="rounded-full bg-[#eef5f1] px-2 py-1 text-xs font-semibold text-tide">
@@ -921,6 +921,19 @@ function routeLabel(routeId: string) {
     .split("-")
     .map((word) => word[0]?.toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function routeDisplayName(route: RouteCandidate) {
+  if (route.provider === "tmap-pedestrian") {
+    return "Tmap 도보 경로";
+  }
+  if (route.provider === "tmap-transit") {
+    return "Tmap 대중교통 경로";
+  }
+  if (route.provider === "tmap-mixed") {
+    return "Tmap 혼합 경로";
+  }
+  return routeLabel(route.id);
 }
 
 function translateCrowd(level: string) {

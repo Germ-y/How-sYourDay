@@ -31,11 +31,12 @@ def compose_plan(
     map_overlays = _map_view_model(routes, selected_route, evaluation)
     explanation = _explanation(evaluation, selected_score)
     task_labels = ", ".join(task.label.lower() for task in intent.tasks)
+    route_label = _route_provider_label(selected_route)
 
     return PlanResponse(
         summary=(
-            f"A planned day for {task_labels}, optimized around "
-            f"{intent.emotion.primary} energy and current constraints."
+            f"{task_labels} 일정을 {route_label} 기준으로 조율했어요. "
+            f"현재 상태는 {intent.emotion.primary}로 해석했습니다."
         ),
         emotion=intent.emotion,
         constraints=intent.constraints,
@@ -58,7 +59,7 @@ def compose_plan(
 def _ordered_stops(route: RouteCandidate) -> list[OrderedStop]:
     stops = []
     current_minutes = 14 * 60
-    travel_step = max(8, route.estimated_minutes // max(1, len(route.stops) + 1))
+    travel_step = max(8, _route_duration(route) // max(1, len(route.stops) + 1))
 
     for stop in route.stops:
         current_minutes += travel_step
@@ -79,7 +80,13 @@ def _ordered_stops(route: RouteCandidate) -> list[OrderedStop]:
 
 
 def _timeline(route: RouteCandidate) -> list[TimelineItem]:
-    items = [TimelineItem(time="14:00", label="Leave current location", type="depart")]
+    items = [
+        TimelineItem(
+            time="14:00",
+            label=f"출발지에서 {_route_provider_label(route)} 경로로 이동을 시작해요.",
+            type="depart",
+        )
+    ]
     for stop in _ordered_stops(route):
         items.append(
             TimelineItem(
@@ -90,8 +97,8 @@ def _timeline(route: RouteCandidate) -> list[TimelineItem]:
         )
     items.append(
         TimelineItem(
-            time=_format_minutes(14 * 60 + route.estimated_minutes),
-            label="Arrive at final destination",
+            time=_format_minutes(14 * 60 + _route_duration(route)),
+            label="최종 목적지에 도착합니다.",
             type="arrive",
         )
     )
@@ -109,14 +116,14 @@ def _recommendations(
         recommendations.append(
             Recommendation(
                 kind="recovery",
-                label="Use the recovery stop as a deliberate pause in the day plan.",
+                label="회복 지점을 단순 경유지가 아니라 의도적인 쉬는 시간으로 사용해보세요.",
             )
         )
     elif intent.emotion.recovery_need == "high":
         recommendations.append(
             Recommendation(
                 kind="recovery",
-                label="Keep a short recovery stop optional if the route starts feeling heavy.",
+                label="이동이 부담스럽게 느껴지면 짧은 회복 지점을 추가로 고려하세요.",
             )
         )
 
@@ -124,7 +131,7 @@ def _recommendations(
         recommendations.append(
             Recommendation(
                 kind="time",
-                label="Prioritize the selected route first; recovery can wait until the deadline is safe.",
+                label="시간 압박이 크므로 먼저 도착 안정성을 확보하고, 회복은 이후로 미루는 편이 좋아요.",
             )
         )
 
@@ -182,29 +189,55 @@ def _explanation(evaluation: TradeoffEvaluation, score: EmotionCost) -> str:
     if evaluation.tradeoffs:
         parts.append(evaluation.tradeoffs[0].reason)
     else:
-        parts.append("This route best satisfies the current constraints.")
+        parts.append("현재 제약을 가장 안정적으로 만족하는 경로를 선택했어요.")
 
     parts.append(
-        f"Comfort score is {score.comfort_score}, with emotional cost "
-        f"{score.total_emotional_cost}."
+        f"comfort score는 {score.comfort_score}, 감정 비용은 "
+        f"{score.total_emotional_cost}입니다."
     )
 
+    route = evaluation.selected_route
+    if route.provider == "tmap-mixed":
+        parts.append("일부 짧은 구간은 Tmap 결과가 없어 추정 이동으로 보완했어요.")
+    elif route.provider.startswith("tmap"):
+        parts.append(f"{_route_provider_label(route)} 실제 경로를 기준으로 계산했어요.")
+    elif route.provider == "mock":
+        parts.append("Tmap 경로 생성에 실패해 추정 fallback 경로를 사용했어요.")
+
     if evaluation.fallback_used:
-        parts.append("No route fully met the deadline, so the least-late option was used.")
+        parts.append("deadline을 완전히 만족하는 경로가 없어 가장 덜 늦는 경로를 선택했어요.")
 
     return " ".join(parts)
 
 
 def _why_stop(stop) -> str:
     if stop.category == "recovery":
-        return f"Recovery option: {stop.name}"
-    return f"{stop.name} handles the {stop.category} task near a {stop.landmark_type} area."
+        return f"{stop.name}에서 잠깐 회복할 수 있어요."
+    return f"{stop.name}에서 {stop.category} 일을 처리합니다."
 
 
 def _format_minutes(total_minutes: int) -> str:
     hours = total_minutes // 60
     minutes = total_minutes % 60
     return f"{hours:02d}:{minutes:02d}"
+
+
+def _route_duration(route: RouteCandidate) -> int:
+    return (
+        route.real_duration_minutes
+        or route.estimated_duration_minutes
+        or route.estimated_minutes
+    )
+
+
+def _route_provider_label(route: RouteCandidate) -> str:
+    if route.provider == "tmap-pedestrian":
+        return "Tmap 도보"
+    if route.provider == "tmap-transit":
+        return "Tmap 대중교통"
+    if route.provider == "tmap-mixed":
+        return "Tmap 혼합"
+    return "추정 fallback"
 
 
 def _all_points(routes: list[RouteCandidate]) -> list[Coordinate]:
