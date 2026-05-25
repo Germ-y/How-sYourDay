@@ -1,4 +1,5 @@
 from api.schemas import Location, PoiCandidate, Task
+from tools.kakao_local import search_kakao_poi_candidates
 
 
 MOCK_POIS = {
@@ -48,10 +49,17 @@ MOCK_POIS = {
 
 
 def search_poi_candidates(tasks: list[Task], origin: Location) -> list[PoiCandidate]:
-    del origin
-
     candidates: list[PoiCandidate] = []
+    kakao_candidates = {
+        candidate.category: candidate
+        for candidate in search_kakao_poi_candidates(tasks, origin)
+    }
+
     for task in tasks:
+        kakao_candidate = kakao_candidates.get(task.kind)
+        if kakao_candidate:
+            candidates.append(kakao_candidate)
+            continue
         candidates.extend(MOCK_POIS.get(task.kind, MOCK_POIS["recovery"]))
 
     return candidates

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Brain,
@@ -162,6 +162,7 @@ export default function HomePage() {
 
 function MobilePlanResult({ plan }: { plan: DailyPlan }) {
   const firstTradeoff = plan.tradeoffs[0];
+  const usesKakaoPoi = plan.stops.some((stop) => stop.source_confidence === "kakao");
 
   return (
     <>
@@ -200,7 +201,7 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
         ) : null}
       </section>
 
-      <MapPreview map={plan.map_overlays} />
+      <KakaoMapPreview map={plan.map_overlays} usesKakaoPoi={usesKakaoPoi} />
 
       <section className="grid gap-3">
         <SectionTitle icon={<HeartPulse size={18} aria-hidden />} title="감정 비용" />
@@ -244,17 +245,103 @@ function EmptyState() {
   );
 }
 
-function MapPreview({ map }: { map: MapViewModel }) {
+type KakaoStatus = "loading" | "ready" | "fallback";
+
+declare global {
+  interface Window {
+    kakao?: any;
+    __kakaoMapsPromise?: Promise<void>;
+  }
+}
+
+function KakaoMapPreview({
+  map,
+  usesKakaoPoi
+}: {
+  map: MapViewModel;
+  usesKakaoPoi: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [status, setStatus] = useState<KakaoStatus>("loading");
+  const kakaoJsKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!kakaoJsKey) {
+      setStatus("fallback");
+      return;
+    }
+
+    loadKakaoMaps(kakaoJsKey)
+      .then(() => {
+        if (cancelled || !containerRef.current || !window.kakao?.maps) {
+          return;
+        }
+
+        renderKakaoMap(containerRef.current, map);
+        setStatus("ready");
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStatus("fallback");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [kakaoJsKey, map]);
+
+  if (status === "fallback") {
+    return <MapPreview map={map} providerLabel="Mock fallback" usesKakaoPoi={usesKakaoPoi} />;
+  }
+
+  return (
+    <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-ink/10">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-moss">
+            {status === "ready" ? "Kakao map" : "지도 연결 중"}
+          </p>
+          <h2 className="text-lg font-semibold">동선 미리보기</h2>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <span className="rounded-full bg-[#eef5f1] px-2.5 py-1 text-xs font-semibold text-tide">
+            {usesKakaoPoi ? "Kakao POI" : "Mock POI"}
+          </span>
+          <MapPinned className="text-tide" size={22} aria-hidden />
+        </div>
+      </div>
+      <div ref={containerRef} className="h-60 w-full bg-[#edf2ee]" />
+    </section>
+  );
+}
+
+function MapPreview({
+  map,
+  providerLabel = "mock map",
+  usesKakaoPoi = false
+}: {
+  map: MapViewModel;
+  providerLabel?: string;
+  usesKakaoPoi?: boolean;
+}) {
   const projected = useMemo(() => createProjector(map), [map]);
 
   return (
     <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-ink/10">
       <div className="flex items-center justify-between px-4 py-3">
         <div>
-          <p className="text-sm font-semibold text-moss">mock map</p>
+          <p className="text-sm font-semibold text-moss">{providerLabel}</p>
           <h2 className="text-lg font-semibold">동선 미리보기</h2>
         </div>
-        <MapPinned className="text-tide" size={22} aria-hidden />
+        <div className="flex flex-col items-end gap-1">
+          <span className="rounded-full bg-[#eef5f1] px-2.5 py-1 text-xs font-semibold text-tide">
+            {usesKakaoPoi ? "Kakao POI" : "Mock POI"}
+          </span>
+          <MapPinned className="text-tide" size={22} aria-hidden />
+        </div>
       </div>
       <div className="relative h-60 bg-[#edf2ee]">
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(23,33,29,0.05)_1px,transparent_1px),linear-gradient(rgba(23,33,29,0.05)_1px,transparent_1px)] bg-[size:34px_34px]" />
@@ -488,6 +575,128 @@ function createProjector(map: MapViewModel) {
     x: 12 + ((point.lng - west) / lngRange) * 76,
     y: 88 - ((point.lat - south) / latRange) * 76
   });
+}
+
+function loadKakaoMaps(kakaoJsKey: string) {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Kakao Maps can only load in the browser."));
+  }
+
+  if (window.kakao?.maps) {
+    return new Promise<void>((resolve) => window.kakao.maps.load(resolve));
+  }
+
+  if (window.__kakaoMapsPromise) {
+    return window.__kakaoMapsPromise;
+  }
+
+  window.__kakaoMapsPromise = new Promise<void>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      "script[data-kakao-maps-sdk='true']"
+    );
+
+    const handleLoad = () => {
+      if (!window.kakao?.maps) {
+        reject(new Error("Kakao Maps SDK did not expose window.kakao.maps."));
+        return;
+      }
+      window.kakao.maps.load(resolve);
+    };
+
+    if (existingScript) {
+      existingScript.addEventListener("load", handleLoad, { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Kakao Maps SDK failed.")), {
+        once: true
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.dataset.kakaoMapsSdk = "true";
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
+      kakaoJsKey
+    )}&autoload=false`;
+    script.onload = handleLoad;
+    script.onerror = () => reject(new Error("Kakao Maps SDK failed."));
+    document.head.appendChild(script);
+  });
+
+  return window.__kakaoMapsPromise;
+}
+
+function renderKakaoMap(container: HTMLDivElement, map: MapViewModel) {
+  const kakao = window.kakao;
+  container.innerHTML = "";
+
+  const center = new kakao.maps.LatLng(map.center.lat, map.center.lng);
+  const kakaoMap = new kakao.maps.Map(container, {
+    center,
+    level: 4
+  });
+  const bounds = new kakao.maps.LatLngBounds();
+
+  map.markers.forEach((marker) => {
+    const position = new kakao.maps.LatLng(marker.lat, marker.lng);
+    bounds.extend(position);
+    const kakaoMarker = new kakao.maps.Marker({
+      map: kakaoMap,
+      position,
+      title: marker.label
+    });
+    const infoWindow = new kakao.maps.InfoWindow({
+      content: `<div style="padding:6px 8px;font-size:12px;white-space:nowrap;">${escapeHtml(
+        marker.badge
+      )}. ${escapeHtml(marker.label)}</div>`
+    });
+
+    kakao.maps.event.addListener(kakaoMarker, "click", () => {
+      infoWindow.open(kakaoMap, kakaoMarker);
+    });
+  });
+
+  map.polylines.forEach((polyline) => {
+    const path = polyline.points.map((point) => {
+      const position = new kakao.maps.LatLng(point.lat, point.lng);
+      bounds.extend(position);
+      return position;
+    });
+
+    new kakao.maps.Polyline({
+      map: kakaoMap,
+      path,
+      strokeWeight: polyline.selected ? 6 : 3,
+      strokeColor: routeStroke(polyline.emotion_level, polyline.selected),
+      strokeOpacity: polyline.selected ? 0.95 : 0.62,
+      strokeStyle: polyline.selected ? "solid" : "shortdash"
+    });
+  });
+
+  map.emotion_zones.forEach((zone) => {
+    new kakao.maps.Circle({
+      map: kakaoMap,
+      center: new kakao.maps.LatLng(zone.center.lat, zone.center.lng),
+      radius: zone.radius_meters,
+      strokeWeight: 1,
+      strokeColor: "#d96f5d",
+      strokeOpacity: 0.65,
+      fillColor: "#d96f5d",
+      fillOpacity: 0.18
+    });
+  });
+
+  if (map.markers.length > 0 || map.polylines.length > 0) {
+    kakaoMap.setBounds(bounds);
+  }
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function routeStroke(emotionLevel: string, selected: boolean) {

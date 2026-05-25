@@ -33,6 +33,58 @@ def test_recovery_request_adds_recovery_poi_and_recommendation() -> None:
     assert any(item.kind == "recovery" for item in plan.recommendations)
 
 
+def test_kakao_poi_is_normalized_when_provider_returns_result(monkeypatch) -> None:
+    from tools import kakao_local
+
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+    monkeypatch.setattr(
+        kakao_local,
+        "_fetch_kakao_documents",
+        lambda api_key, task, origin: [
+            {
+                "id": "123",
+                "place_name": "혜화 인쇄소",
+                "category_name": "서비스,산업 > 전문대행 > 인쇄",
+                "x": "126.9945",
+                "y": "37.5891",
+                "distance": "110",
+            }
+        ],
+    )
+
+    candidates = search_poi_candidates(
+        [
+            extract_intent("I need to print my report.").tasks[0],
+        ],
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+    )
+
+    assert candidates[0].source_confidence == "kakao"
+    assert candidates[0].provider_id == "123"
+    assert candidates[0].category == "print"
+    assert candidates[0].distance_meters == 110
+
+
+def test_kakao_poi_falls_back_to_mock_when_provider_has_no_result(monkeypatch) -> None:
+    from tools import kakao_local
+
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+    monkeypatch.setattr(
+        kakao_local,
+        "_fetch_kakao_documents",
+        lambda api_key, task, origin: [],
+    )
+
+    candidates = search_poi_candidates(
+        [
+            extract_intent("I need to print my report.").tasks[0],
+        ],
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+    )
+
+    assert candidates[0].source_confidence == "mock"
+
+
 def test_landmark_priors_only_use_allowed_tags() -> None:
     allowed_tags = {
         "calm",
