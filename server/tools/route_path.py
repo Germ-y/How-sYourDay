@@ -18,11 +18,27 @@ def build_route_candidates(
         origin=origin_point,
         destination=destination_point,
     )
+    if tmap_routes:
+        return tmap_routes
+
+    return build_mock_route_candidates(
+        stops=stops,
+        origin=origin_point,
+        destination=destination_point,
+    )
+
+
+def build_mock_route_candidates(
+    stops: list[PoiCandidate],
+    origin: Coordinate,
+    destination: Coordinate,
+) -> list[RouteCandidate]:
     polyline = [
-        Coordinate(lat=origin_point.lat, lng=origin_point.lng),
+        Coordinate(lat=origin.lat, lng=origin.lng),
         *[Coordinate(lat=stop.lat, lng=stop.lng) for stop in stops],
-        Coordinate(lat=destination_point.lat, lng=destination_point.lng),
+        Coordinate(lat=destination.lat, lng=destination.lng),
     ]
+    fallback_reason = "Tmap 경로를 만들 수 없어 추정 route를 사용했어요."
 
     primary = RouteCandidate(
         id="route-low-stress",
@@ -37,7 +53,7 @@ def build_route_candidates(
         estimated_duration_minutes=34 + len(stops) * 8,
         distance_meters=1200 + len(stops) * 450,
         fare=None,
-        fallback_reason="Tmap route provider is not connected for this candidate.",
+        fallback_reason=fallback_reason,
         cost_estimate=None,
         polyline=polyline,
         segments=[
@@ -68,7 +84,7 @@ def build_route_candidates(
         estimated_duration_minutes=26 + len(stops) * 7,
         distance_meters=1000 + len(stops) * 380,
         fare=None,
-        fallback_reason="Tmap route provider is not connected for this candidate.",
+        fallback_reason=fallback_reason,
         cost_estimate=None,
         polyline=polyline,
         segments=[
@@ -99,7 +115,7 @@ def build_route_candidates(
         estimated_duration_minutes=42 + len(stops) * 9,
         distance_meters=1500 + len(stops) * 520,
         fare=None,
-        fallback_reason="Tmap route provider is not connected for this candidate.",
+        fallback_reason=fallback_reason,
         cost_estimate=None,
         polyline=polyline,
         segments=[
@@ -118,4 +134,4 @@ def build_route_candidates(
         ],
     )
 
-    return [*tmap_routes, primary, faster, recovery_friendly]
+    return [primary, faster, recovery_friendly]

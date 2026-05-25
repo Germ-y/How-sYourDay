@@ -23,6 +23,7 @@ class TmapLegResult:
     fare: int | None
     polyline: list[Coordinate]
     segments: list[RouteSegment]
+    estimated: bool = False
 
 
 def build_tmap_route_candidates(
@@ -63,7 +64,7 @@ def _build_legs(app_key: str, waypoints: list[Coordinate], fetcher) -> list[Tmap
     for start, end in zip(waypoints, waypoints[1:]):
         leg = fetcher(app_key, start, end)
         if not leg:
-            return []
+            leg = _estimated_walking_leg(start, end)
         legs.append(leg)
     return legs
 
@@ -114,6 +115,7 @@ def _fetch_pedestrian_leg(
                 emotion_tags=["walkable"],
             )
         ],
+        estimated=False,
     )
 
 
@@ -165,6 +167,7 @@ def _fetch_transit_leg(
         fare=_to_int(fare, 0) or None,
         polyline=points or [start, end],
         segments=_transit_segments(legs),
+        estimated=False,
     )
 
 
@@ -201,11 +204,14 @@ def _compose_route(
     fare = sum(leg.fare or 0 for leg in legs) or None
     polyline = [point for leg in legs for point in leg.polyline]
     segments = [segment for leg in legs for segment in leg.segments]
+    has_estimated_leg = any(leg.estimated for leg in legs)
+    resolved_provider = "tmap-mixed" if has_estimated_leg else provider
+    resolved_mode = "mixed" if has_estimated_leg else route_mode
 
     return RouteCandidate(
         id=route_id,
-        provider=provider,
-        route_mode=route_mode,
+        provider=resolved_provider,
+        route_mode=resolved_mode,
         stops=stops,
         walking_minutes=walking,
         transfer_count=transfer_count,
@@ -215,11 +221,44 @@ def _compose_route(
         estimated_duration_minutes=None,
         distance_meters=distance,
         fare=fare,
-        fallback_reason=None,
+        fallback_reason=(
+            "일부 짧은 구간은 추정 이동으로 보완했어요."
+            if has_estimated_leg
+            else None
+        ),
         cost_estimate=fare,
         polyline=polyline,
         segments=segments,
     )
+
+
+def _estimated_walking_leg(start: Coordinate, end: Coordinate) -> TmapLegResult:
+    distance = _rough_distance_meters(start, end)
+    minutes = max(3, round(distance / 70))
+
+    return TmapLegResult(
+        duration_minutes=minutes,
+        walking_minutes=minutes,
+        transfer_count=0,
+        distance_meters=distance,
+        fare=0,
+        polyline=[start, end],
+        segments=[
+            RouteSegment(
+                mode="walk-estimated",
+                minutes=minutes,
+                landmark_type="side_street",
+                emotion_tags=["walkable"],
+            )
+        ],
+        estimated=True,
+    )
+
+
+def _rough_distance_meters(start: Coordinate, end: Coordinate) -> int:
+    lat_meters = (end.lat - start.lat) * 111_000
+    lng_meters = (end.lng - start.lng) * 88_000
+    return round((lat_meters**2 + lng_meters**2) ** 0.5)
 
 
 def _feature_points(features: list[dict]) -> list[Coordinate]:

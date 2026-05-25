@@ -1,5 +1,5 @@
 from agent.daily_planning_agent import DailyPlanningAgent
-from api.schemas import Constraints, EmotionState, Location, PlanRequest
+from api.schemas import Coordinate, Constraints, EmotionState, Location, PlanRequest, PoiCandidate
 from planner.evaluate_tradeoffs import evaluate_tradeoffs
 from tools.emotion_score import score_route_for_emotion
 from tools.landmark_emotion_prior import LANDMARK_PRIORS
@@ -46,6 +46,45 @@ def test_mock_routes_expose_reliability_metadata() -> None:
     assert all(route.route_mode == "mock" for route in plan.routes)
     assert all(route.estimated_duration_minutes for route in plan.routes)
     assert all(route.fallback_reason for route in plan.routes)
+
+
+def test_real_tmap_route_excludes_mock_candidates(monkeypatch) -> None:
+    from tools import route_path
+
+    monkeypatch.setattr(
+        route_path,
+        "build_tmap_route_candidates",
+        lambda stops, origin, destination: [
+            route_path.RouteCandidate(
+                id="route-tmap-walk",
+                provider="tmap-pedestrian",
+                route_mode="walk",
+                stops=stops,
+                walking_minutes=12,
+                transfer_count=0,
+                crowd_level="low",
+                estimated_minutes=12,
+                real_duration_minutes=12,
+                estimated_duration_minutes=None,
+                distance_meters=900,
+                fare=0,
+                fallback_reason=None,
+                polyline=[
+                    Coordinate(lat=origin.lat, lng=origin.lng),
+                    Coordinate(lat=destination.lat, lng=destination.lng),
+                ],
+                segments=[],
+            )
+        ],
+    )
+
+    routes = route_path.build_route_candidates(
+        [],
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+        Location(label="Home", lat=37.5826, lng=127.0019),
+    )
+
+    assert [route.provider for route in routes] == ["tmap-pedestrian"]
 
 
 def test_kakao_poi_is_normalized_when_provider_returns_result(monkeypatch) -> None:
@@ -171,7 +210,19 @@ def test_tmap_transit_route_is_normalized(monkeypatch) -> None:
 
     monkeypatch.delenv("HYS_DISABLE_TMAP", raising=False)
     monkeypatch.setattr(tmap_route, "_get_tmap_app_key", lambda: "test-key")
-    monkeypatch.setattr(tmap_route, "_fetch_pedestrian_leg", lambda app_key, start, end: None)
+    monkeypatch.setattr(
+        tmap_route,
+        "_fetch_pedestrian_leg",
+        lambda app_key, start, end: tmap_route.TmapLegResult(
+            duration_minutes=12,
+            walking_minutes=12,
+            transfer_count=0,
+            distance_meters=900,
+            fare=0,
+            polyline=[start, end],
+            segments=[],
+        ),
+    )
     monkeypatch.setattr(
         tmap_route,
         "_fetch_transit_leg",
@@ -192,10 +243,53 @@ def test_tmap_transit_route_is_normalized(monkeypatch) -> None:
         Location(label="Home", lat=37.5826, lng=127.0019),
     )
 
-    assert routes[0].provider == "tmap-transit"
-    assert routes[0].route_mode == "transit"
-    assert routes[0].transfer_count == 1
-    assert routes[0].fare == 1450
+    transit = next(route for route in routes if route.id == "route-tmap-transit")
+    assert transit.provider == "tmap-transit"
+    assert transit.route_mode == "transit"
+    assert transit.transfer_count == 1
+    assert transit.fare == 1450
+
+
+def test_tmap_failed_leg_becomes_mixed_route(monkeypatch) -> None:
+    from tools import tmap_route
+
+    monkeypatch.delenv("HYS_DISABLE_TMAP", raising=False)
+    monkeypatch.setattr(tmap_route, "_get_tmap_app_key", lambda: "test-key")
+    monkeypatch.setattr(tmap_route, "_fetch_pedestrian_leg", lambda app_key, start, end: None)
+    monkeypatch.setattr(
+        tmap_route,
+        "_fetch_transit_leg",
+        lambda app_key, start, end: tmap_route.TmapLegResult(
+            duration_minutes=10,
+            walking_minutes=3,
+            transfer_count=0,
+            distance_meters=1000,
+            fare=1200,
+            polyline=[start, end],
+            segments=[],
+        )
+        if start.lat == 37.5882
+        else None,
+    )
+
+    routes = tmap_route.build_tmap_route_candidates(
+        [
+            PoiCandidate(
+                id="poi-test",
+                name="Test stop",
+                category="recovery",
+                landmark_type="side_street",
+                lat=37.586,
+                lng=126.996,
+            )
+        ],
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+        Location(label="Home", lat=37.5826, lng=127.0019),
+    )
+
+    transit = next(route for route in routes if route.id == "route-tmap-transit")
+    assert transit.provider == "tmap-mixed"
+    assert transit.fallback_reason
 
 
 def test_landmark_priors_only_use_allowed_tags() -> None:

@@ -33,7 +33,7 @@ def evaluate_tradeoffs(
 
     if not feasible_routes:
         fallback_used = True
-        feasible_routes = sorted(routes, key=lambda route: route.estimated_minutes)[:1]
+        feasible_routes = sorted(routes, key=_route_duration)[:1]
 
     selected_route = min(
         feasible_routes,
@@ -79,13 +79,14 @@ def _planner_objective(
     score: EmotionCost,
     emotion: EmotionState,
 ) -> float:
+    duration = _route_duration(route)
     if emotion.time_pressure_tolerance == "high":
-        return score.total_emotional_cost + route.estimated_minutes * 3.0
+        return score.total_emotional_cost + duration * 3.0
 
     if emotion.primary == "tired":
-        return score.total_emotional_cost + route.estimated_minutes * 0.2
+        return score.total_emotional_cost + duration * 0.2
 
-    return score.total_emotional_cost + route.estimated_minutes * 0.6
+    return score.total_emotional_cost + duration * 0.6
 
 
 def _meets_deadline(route: RouteCandidate, constraints: Constraints) -> bool:
@@ -96,7 +97,7 @@ def _meets_deadline(route: RouteCandidate, constraints: Constraints) -> bool:
     if minutes_available is None:
         return True
 
-    return route.estimated_minutes <= minutes_available
+    return _route_duration(route) <= minutes_available
 
 
 def _minutes_until_deadline(deadline: str) -> int | None:
@@ -124,7 +125,7 @@ def _representative_rejected_route(
     if emotion.time_pressure_tolerance == "high":
         return min(others, key=lambda route: score_by_route[route.id].total_emotional_cost)
 
-    return min(others, key=lambda route: route.estimated_minutes)
+    return min(others, key=_route_duration)
 
 
 def _build_tradeoff(
@@ -134,7 +135,7 @@ def _build_tradeoff(
     rejected_score: EmotionCost,
     emotion: EmotionState,
 ) -> Tradeoff:
-    time_delta = selected_route.estimated_minutes - rejected_route.estimated_minutes
+    time_delta = _route_duration(selected_route) - _route_duration(rejected_route)
     emotional_delta = (
         selected_score.total_emotional_cost - rejected_score.total_emotional_cost
     )
@@ -167,4 +168,12 @@ def _build_tradeoff(
             estimated_minutes=time_delta,
             emotional_cost=emotional_delta,
         ),
+    )
+
+
+def _route_duration(route: RouteCandidate) -> int:
+    return (
+        route.real_duration_minutes
+        or route.estimated_duration_minutes
+        or route.estimated_minutes
     )

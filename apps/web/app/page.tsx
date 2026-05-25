@@ -940,12 +940,20 @@ function routeProviderLabel(route: RouteCandidate) {
   if (route.provider === "tmap-transit") {
     return "Tmap 대중교통";
   }
-  return "추정";
+  if (route.provider === "tmap-mixed") {
+    return "Tmap 혼합";
+  }
+  return "추정 fallback";
 }
 
 function routeReliabilityLabel(route: RouteCandidate, usesKakaoPoi: boolean) {
   const poiLabel = usesKakaoPoi ? "실제 장소" : "demo 장소";
-  const routeLabelText = route.provider.startsWith("tmap") ? "실제 경로" : "추정 경로";
+  const routeLabelText =
+    route.provider === "tmap-mixed"
+      ? "일부 추정 경로"
+      : route.provider.startsWith("tmap")
+        ? "실제 경로"
+        : "추정 경로";
   return `${poiLabel} + ${routeLabelText}`;
 }
 
