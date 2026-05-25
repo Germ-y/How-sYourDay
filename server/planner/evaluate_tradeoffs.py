@@ -62,7 +62,7 @@ def evaluate_tradeoffs(
     summaries = [tradeoff.reason for tradeoff in tradeoffs]
     if fallback_used:
         summaries.append(
-            "No route satisfies the deadline, so the least-late route is selected."
+            "마감 시간을 완전히 만족하는 route가 없어 가장 덜 늦는 경로를 선택했어요."
         )
 
     return TradeoffEvaluation(
@@ -141,22 +141,24 @@ def _build_tradeoff(
     )
 
     if emotion.time_pressure_tolerance == "high" and time_delta < 0:
-        label = "Faster route over calmer route"
+        label = "편안함보다 도착 시간을 우선했어요"
         reason = (
-            f"{selected_route.id} saves {abs(time_delta)} minutes, accepting "
-            f"{max(0, emotional_delta)} extra emotional cost because time pressure is high."
+            f"{_route_name(selected_route)}는 {_route_name(rejected_route)}보다 "
+            f"{abs(time_delta)}분 빠릅니다. 시간이 촉박해서 감정 비용 "
+            f"{max(0, emotional_delta)}점을 감수하고 빠른 route를 골랐어요."
         )
     elif emotional_delta < 0:
-        label = "Calmer route over fastest route"
+        label = "속도보다 감정 비용을 낮췄어요"
         reason = (
-            f"{selected_route.id} adds {max(0, time_delta)} minutes but lowers "
-            f"emotional cost by {abs(emotional_delta)}."
+            f"{_route_name(selected_route)}는 {_route_name(rejected_route)}보다 "
+            f"{max(0, time_delta)}분 더 걸리지만 감정 비용을 "
+            f"{abs(emotional_delta)}점 낮춰요."
         )
     else:
-        label = "Balanced route"
+        label = "시간과 컨디션을 균형 있게 맞췄어요"
         reason = (
-            f"{selected_route.id} is selected because it best balances time and "
-            "emotional cost under the current constraints."
+            f"{_route_name(selected_route)}가 현재 시간 제약과 감정 비용을 "
+            "가장 안정적으로 맞춰서 선택됐어요."
         )
 
     return Tradeoff(
@@ -177,3 +179,13 @@ def _route_duration(route: RouteCandidate) -> int:
         or route.estimated_duration_minutes
         or route.estimated_minutes
     )
+
+
+def _route_name(route: RouteCandidate) -> str:
+    if route.provider == "tmap-pedestrian":
+        return "Tmap 도보 경로"
+    if route.provider == "tmap-transit":
+        return "Tmap 대중교통 경로"
+    if route.provider == "tmap-mixed":
+        return "Tmap 혼합 경로"
+    return "추정 fallback 경로"

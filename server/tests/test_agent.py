@@ -29,7 +29,7 @@ def test_hurried_user_can_get_faster_route() -> None:
 
     assert plan.emotion.primary == "hurried"
     assert plan.selected_route.id == "route-faster"
-    assert any("time pressure" in summary for summary in plan.tradeoff_summaries)
+    assert any("시간이 촉박" in summary for summary in plan.tradeoff_summaries)
 
 
 def test_recovery_request_adds_recovery_poi_and_recommendation() -> None:
@@ -391,7 +391,7 @@ def test_deadline_fallback_selects_least_late_route() -> None:
 
     assert evaluation.fallback_used is True
     assert evaluation.selected_route.id == "route-faster"
-    assert any("least-late" in summary for summary in evaluation.tradeoff_summaries)
+    assert any("가장 덜 늦는" in summary for summary in evaluation.tradeoff_summaries)
 
 
 def _run(user_text: str):
