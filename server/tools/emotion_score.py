@@ -59,12 +59,16 @@ def _fatigue_cost(emotion: EmotionState) -> int:
 
 
 def _walking_cost(route: RouteCandidate, emotion: EmotionState) -> int:
+    base_walking = route.walking_minutes
+    if route.real_duration_minutes and emotion.primary == "tired":
+        base_walking += max(0, route.walking_minutes - 12) // 2
+
     multiplier = {
-        "low": 0.9,
+        "low": 1.05 if emotion.primary == "tired" else 0.9,
         "medium": 0.65,
         "high": 0.45,
     }.get(emotion.walking_tolerance, 0.65)
-    return round(route.walking_minutes * multiplier)
+    return round(base_walking * multiplier)
 
 
 def _crowd_cost(route: RouteCandidate, emotion: EmotionState) -> int:
@@ -88,11 +92,14 @@ def _crowd_cost(route: RouteCandidate, emotion: EmotionState) -> int:
 
 def _transfer_cost(route: RouteCandidate, emotion: EmotionState) -> int:
     per_transfer = {
-        "low": 8,
-        "medium": 5,
+        "low": 10 if emotion.primary in {"tired", "anxious"} else 8,
+        "medium": 6 if emotion.primary == "tired" else 5,
         "high": 3,
     }.get(emotion.transfer_tolerance, 5)
-    return route.transfer_count * per_transfer
+    fare_cost = 0
+    if route.fare and route.fare >= 2000:
+        fare_cost = 2
+    return route.transfer_count * per_transfer + fare_cost
 
 
 def _time_pressure_cost(
@@ -100,14 +107,16 @@ def _time_pressure_cost(
     emotion: EmotionState,
     constraints: Constraints | None,
 ) -> int:
+    duration = route.real_duration_minutes or route.estimated_duration_minutes or route.estimated_minutes
+
     if emotion.time_pressure_tolerance == "high":
-        return round(route.estimated_minutes * 0.7)
+        return round(duration * 0.75)
 
     if constraints and constraints.deadline:
         soft_limit = 60
-        return max(0, route.estimated_minutes - soft_limit) // 2
+        return max(0, duration - soft_limit) // 2
 
-    return max(0, route.estimated_minutes - 75) // 3
+    return max(0, duration - 75) // 3
 
 
 def _familiarity_bonus(route: RouteCandidate) -> int:
@@ -152,6 +161,8 @@ def _reasons(
 
     if emotion.primary == "tired":
         reasons.append("Fatigue increases the cost of walking and crowded segments.")
+    if route.real_duration_minutes:
+        reasons.append("Real route duration is included in the emotional cost.")
     if walking_cost <= 18:
         reasons.append("Walking load stays within a tolerable range.")
     else:
@@ -162,6 +173,8 @@ def _reasons(
         reasons.append("Crowd exposure is manageable.")
     if transfer_cost <= 5:
         reasons.append("Transfer count stays low.")
+    elif route.route_mode == "transit":
+        reasons.append("Transit transfers and fare add practical friction.")
     if recovery_bonus > 0:
         reasons.append("Calm or recovery-friendly landmarks reduce emotional cost.")
 

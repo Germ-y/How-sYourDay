@@ -200,6 +200,29 @@ def test_emotion_score_penalizes_high_crowd_for_tired_user() -> None:
     assert high_score.comfort_score + high_score.stress_score == 100
 
 
+def test_real_route_duration_affects_hurried_time_pressure() -> None:
+    intent = extract_intent("I am in a hurry and need to get home by 5.")
+    route = build_route_candidates(
+        [],
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+        Location(label="Home", lat=37.5826, lng=127.0019),
+    )[0].model_copy(
+        update={
+            "real_duration_minutes": 50,
+            "estimated_duration_minutes": None,
+            "estimated_minutes": 20,
+            "provider": "tmap-transit",
+            "route_mode": "transit",
+            "fare": 2400,
+        }
+    )
+
+    score = score_route_for_emotion(route, intent.emotion, intent.constraints)
+
+    assert score.time_pressure_cost >= 37
+    assert any("Real route duration" in reason for reason in score.reasons)
+
+
 def test_deadline_fallback_selects_least_late_route() -> None:
     intent = extract_intent("I need to print and visit a clinic before 5. I am tired.")
     pois = search_poi_candidates(
