@@ -54,11 +54,17 @@ export type RouteSegment = {
 export type RouteCandidate = {
   id: string;
   provider: string;
+  route_mode: string;
   stops: PoiCandidate[];
   walking_minutes: number;
   transfer_count: number;
   crowd_level: string;
   estimated_minutes: number;
+  real_duration_minutes: number | null;
+  estimated_duration_minutes: number | null;
+  distance_meters: number | null;
+  fare: number | null;
+  fallback_reason: string | null;
   cost_estimate: number | null;
   polyline: Coordinate[];
   segments: RouteSegment[];

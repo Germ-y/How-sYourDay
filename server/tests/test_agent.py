@@ -33,6 +33,15 @@ def test_recovery_request_adds_recovery_poi_and_recommendation() -> None:
     assert any(item.kind == "recovery" for item in plan.recommendations)
 
 
+def test_mock_routes_expose_reliability_metadata() -> None:
+    plan = _run("I need to rest before going home.")
+
+    assert all(route.provider == "mock" for route in plan.routes)
+    assert all(route.route_mode == "mock" for route in plan.routes)
+    assert all(route.estimated_duration_minutes for route in plan.routes)
+    assert all(route.fallback_reason for route in plan.routes)
+
+
 def test_kakao_poi_is_normalized_when_provider_returns_result(monkeypatch) -> None:
     from tools import kakao_local
 

@@ -305,9 +305,18 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
         <p className="mt-3 text-sm leading-6 text-ink/68">{plan.explanation}</p>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <MiniStat label="이동" value={`${plan.selected_route.estimated_minutes}분`} />
+          <MiniStat label="이동" value={durationLabel(plan.selected_route)} />
           <MiniStat label="걷기" value={`${plan.selected_route.walking_minutes}분`} />
-          <MiniStat label="혼잡" value={translateCrowd(plan.selected_route.crowd_level)} />
+          <MiniStat label="출처" value={routeProviderLabel(plan.selected_route)} />
+        </div>
+
+        <div className="mt-3 rounded-2xl bg-[#f6f8f4] p-3 text-xs leading-5 text-ink/58">
+          {routeReliabilityLabel(plan.selected_route, usesKakaoPoi)}
+          {plan.selected_route.fallback_reason ? (
+            <span className="mt-1 block text-ink/42">
+              {plan.selected_route.fallback_reason}
+            </span>
+          ) : null}
         </div>
 
         {firstTradeoff ? (
@@ -629,17 +638,25 @@ function RouteList({
               <span className="min-w-0 truncate text-sm font-semibold">
                 {routeLabel(route.id)}
               </span>
-              {selected ? (
-                <span className="shrink-0 rounded-full bg-tide px-2 py-1 text-xs font-semibold text-white">
-                  선택됨
+              <div className="flex shrink-0 items-center gap-1">
+                <span className="rounded-full bg-[#eef5f1] px-2 py-1 text-xs font-semibold text-tide">
+                  {routeProviderLabel(route)}
                 </span>
-              ) : null}
+                {selected ? (
+                  <span className="rounded-full bg-tide px-2 py-1 text-xs font-semibold text-white">
+                    선택됨
+                  </span>
+                ) : null}
+              </div>
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-ink/62">
-              <span>{route.estimated_minutes}분</span>
+              <span>{durationLabel(route)}</span>
               <span>걷기 {route.walking_minutes}분</span>
-              <span>{translateCrowd(route.crowd_level)}</span>
+              <span>{distanceLabel(route.distance_meters)}</span>
             </div>
+            {route.fallback_reason ? (
+              <p className="mt-2 text-xs leading-5 text-ink/42">{route.fallback_reason}</p>
+            ) : null}
           </article>
         );
       })}
@@ -845,4 +862,37 @@ function translateCrowd(level: string) {
     return "높음";
   }
   return "보통";
+}
+
+function routeProviderLabel(route: RouteCandidate) {
+  if (route.provider === "tmap-pedestrian") {
+    return "Tmap 도보";
+  }
+  if (route.provider === "tmap-transit") {
+    return "Tmap 대중교통";
+  }
+  return "추정";
+}
+
+function routeReliabilityLabel(route: RouteCandidate, usesKakaoPoi: boolean) {
+  const poiLabel = usesKakaoPoi ? "실제 장소" : "demo 장소";
+  const routeLabelText = route.provider.startsWith("tmap") ? "실제 경로" : "추정 경로";
+  return `${poiLabel} + ${routeLabelText}`;
+}
+
+function durationLabel(route: RouteCandidate) {
+  if (route.real_duration_minutes) {
+    return `${route.real_duration_minutes}분`;
+  }
+  return `${route.estimated_duration_minutes ?? route.estimated_minutes}분 추정`;
+}
+
+function distanceLabel(distanceMeters: number | null) {
+  if (!distanceMeters) {
+    return "거리 추정";
+  }
+  if (distanceMeters >= 1000) {
+    return `${(distanceMeters / 1000).toFixed(1)}km`;
+  }
+  return `${distanceMeters}m`;
 }

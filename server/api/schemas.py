@@ -75,11 +75,17 @@ class RouteSegment(BaseModel):
 class RouteCandidate(BaseModel):
     id: str
     provider: str = "mock"
+    route_mode: str = "mock"
     stops: list[PoiCandidate]
     walking_minutes: int
     transfer_count: int
     crowd_level: str
     estimated_minutes: int
+    real_duration_minutes: int | None = None
+    estimated_duration_minutes: int | None = None
+    distance_meters: int | None = None
+    fare: int | None = None
+    fallback_reason: str | None = None
     cost_estimate: int | None = None
     polyline: list[Coordinate] = Field(default_factory=list)
     segments: list[RouteSegment] = Field(default_factory=list)
