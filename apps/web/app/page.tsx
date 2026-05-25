@@ -432,38 +432,60 @@ function KakaoMapPreview({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<KakaoStatus>("loading");
+  const [sdkError, setSdkError] = useState<string | null>(null);
   const kakaoJsKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
 
   useEffect(() => {
     let cancelled = false;
+    const fallbackTimer = window.setTimeout(() => {
+      if (!cancelled) {
+        setSdkError("Kakao SDK 응답이 늦어 preview로 표시해요.");
+        setStatus("fallback");
+      }
+    }, 4500);
 
     if (!kakaoJsKey) {
+      window.clearTimeout(fallbackTimer);
+      setSdkError("Kakao JavaScript 키가 없어 preview로 표시해요.");
       setStatus("fallback");
       return;
     }
 
+    setStatus("loading");
+    setSdkError(null);
     loadKakaoMaps(kakaoJsKey)
       .then(() => {
         if (cancelled || !containerRef.current || !window.kakao?.maps) {
           return;
         }
 
+        window.clearTimeout(fallbackTimer);
         renderKakaoMap(containerRef.current, map);
         setStatus("ready");
       })
       .catch(() => {
         if (!cancelled) {
+          window.clearTimeout(fallbackTimer);
+          setSdkError("Kakao SDK 인증 또는 도메인 설정을 확인해야 해요.");
           setStatus("fallback");
         }
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(fallbackTimer);
     };
   }, [kakaoJsKey, map]);
 
   if (status === "fallback") {
-    return <MapPreview map={map} providerLabel="Mock fallback" usesKakaoPoi={usesKakaoPoi} />;
+    return (
+      <MapPreview
+        map={map}
+        providerLabel={sdkError ? "Kakao 연결 실패" : "Mock fallback"}
+        statusMessage={sdkError}
+        usesKakaoPoi={usesKakaoPoi}
+      />
+    );
   }
 
   return (
@@ -490,10 +512,12 @@ function KakaoMapPreview({
 function MapPreview({
   map,
   providerLabel = "mock map",
+  statusMessage,
   usesKakaoPoi = false
 }: {
   map: MapViewModel;
   providerLabel?: string;
+  statusMessage?: string | null;
   usesKakaoPoi?: boolean;
 }) {
   const projected = useMemo(() => createProjector(map), [map]);
@@ -512,6 +536,11 @@ function MapPreview({
           <MapPinned className="text-tide" size={22} aria-hidden />
         </div>
       </div>
+      {statusMessage ? (
+        <p className="mx-4 mb-3 rounded-2xl bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-coral">
+          {statusMessage}
+        </p>
+      ) : null}
       <div className="relative h-60 bg-[#edf2ee]">
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(23,33,29,0.05)_1px,transparent_1px),linear-gradient(rgba(23,33,29,0.05)_1px,transparent_1px)] bg-[size:34px_34px]" />
         <svg
