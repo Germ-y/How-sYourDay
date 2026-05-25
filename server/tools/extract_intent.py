@@ -14,8 +14,11 @@ TASK_RULES = {
     "print": ("print", "Print document", "print shop"),
     "clinic": ("clinic", "Visit clinic", "clinic"),
     "hospital": ("clinic", "Visit clinic", "clinic"),
+    "rest": ("recovery", "Take a short recovery break", "quiet cafe"),
+    "recover": ("recovery", "Take a short recovery break", "quiet cafe"),
     "coffee": ("recovery", "Take a short recovery break", "quiet cafe"),
     "cafe": ("recovery", "Take a short recovery break", "quiet cafe"),
+    "쉬": ("recovery", "Take a short recovery break", "quiet cafe"),
 }
 
 
@@ -47,6 +50,8 @@ def extract_intent(user_text: str) -> ExtractedIntent:
     constraints = Constraints(
         deadline=_extract_deadline(lowered),
         destination="home" if "home" in lowered else None,
+        max_walking_minutes=20 if any(marker in lowered for marker in ["tired", "피곤", "지쳐"]) else None,
+        must_arrive_before_deadline=True,
     )
 
     return ExtractedIntent(
@@ -67,6 +72,7 @@ def _extract_deadline(text: str) -> str | None:
 def _analyze_emotion(text: str) -> EmotionState:
     tired_markers = ["tired", "exhausted", "drained", "지쳐", "피곤"]
     anxious_markers = ["anxious", "nervous", "불안"]
+    hurry_markers = ["hurry", "urgent", "rush", "late", "급해", "촉박"]
 
     if any(marker in text for marker in tired_markers):
         return EmotionState(
@@ -74,7 +80,18 @@ def _analyze_emotion(text: str) -> EmotionState:
             walking_tolerance="low",
             crowd_tolerance="low",
             transfer_tolerance="medium",
+            time_pressure_tolerance="medium",
             recovery_need="high",
+        )
+
+    if any(marker in text for marker in hurry_markers):
+        return EmotionState(
+            primary="hurried",
+            walking_tolerance="medium",
+            crowd_tolerance="medium",
+            transfer_tolerance="medium",
+            time_pressure_tolerance="high",
+            recovery_need="low",
         )
 
     if any(marker in text for marker in anxious_markers):
@@ -83,6 +100,7 @@ def _analyze_emotion(text: str) -> EmotionState:
             walking_tolerance="medium",
             crowd_tolerance="low",
             transfer_tolerance="low",
+            time_pressure_tolerance="low",
             recovery_need="medium",
         )
 
@@ -91,6 +109,6 @@ def _analyze_emotion(text: str) -> EmotionState:
         walking_tolerance="medium",
         crowd_tolerance="medium",
         transfer_tolerance="medium",
+        time_pressure_tolerance="medium",
         recovery_need="low",
     )
-

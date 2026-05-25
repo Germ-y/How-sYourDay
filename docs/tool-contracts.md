@@ -1,20 +1,11 @@
-# Tool Contracts
+# Tool Contract
 
-All tools return structured data. Provider-specific fields must be normalized at
-the tool boundary so the agent and planner do not depend on Kakao, Naver, Tmap,
-or any single map vendor.
+모든 tool은 구조화된 데이터를 반환합니다. Kakao, Naver, Tmap 같은 provider
+응답은 tool boundary에서 내부 contract로 정규화해야 합니다.
 
 ## `extract_intent`
 
-Input:
-
-```json
-{
-  "user_text": "print my report, visit clinic, home by 5, tired"
-}
-```
-
-Output:
+사용자 입력에서 task, constraint, emotion state를 추출합니다.
 
 ```json
 {
@@ -30,41 +21,74 @@ Output:
   "constraints": {
     "deadline": "17:00",
     "destination": "home",
-    "max_walking_minutes": null,
+    "max_walking_minutes": 20,
     "must_arrive_before_deadline": true
+  },
+  "emotion": {
+    "primary": "tired",
+    "walking_tolerance": "low",
+    "crowd_tolerance": "low",
+    "transfer_tolerance": "medium",
+    "time_pressure_tolerance": "medium",
+    "recovery_need": "high"
   }
 }
 ```
 
-## `analyze_emotion`
+## `map_search_poi`
 
-Output:
+Kakao Local API 또는 mock provider를 감싸고, planner가 사용할 POI 후보로
+정규화합니다.
 
 ```json
 {
-  "primary": "tired",
-  "walking_tolerance": "low",
-  "crowd_tolerance": "low",
-  "transfer_tolerance": "medium",
-  "time_pressure_tolerance": "medium",
-  "recovery_need": "high"
+  "id": "poi-print-1",
+  "provider_id": "mock-print-1",
+  "name": "Campus Print Lab",
+  "category": "print",
+  "landmark_type": "university",
+  "emotion_tags": ["familiar", "walkable"],
+  "lat": 37.5889,
+  "lng": 126.9942,
+  "distance_meters": 180,
+  "source_confidence": "mock"
+}
+```
+
+## `map_route_path`
+
+route provider 또는 mock routing을 감싸고, planner가 비교할 수 있는 후보
+route를 반환합니다.
+
+```json
+{
+  "id": "route-low-stress",
+  "provider": "mock",
+  "estimated_minutes": 50,
+  "walking_minutes": 20,
+  "transfer_count": 1,
+  "crowd_level": "medium",
+  "cost_estimate": null,
+  "polyline": [
+    {
+      "lat": 37.5882,
+      "lng": 126.9936
+    }
+  ],
+  "segments": [
+    {
+      "mode": "walk",
+      "minutes": 8,
+      "landmark_type": "side_street",
+      "emotion_tags": ["calm", "walkable"]
+    }
+  ]
 }
 ```
 
 ## `landmark_emotion_prior`
 
-Purpose: provide cold-start emotional metadata for POIs, route segments, and
-areas before user feedback exists.
-
-Input:
-
-```json
-{
-  "landmark_type": "park"
-}
-```
-
-Output:
+사용자 피드백이 없는 cold start 상황에서 landmark별 감정 prior를 제공합니다.
 
 ```json
 {
@@ -74,161 +98,14 @@ Output:
   "crowd_modifier": -3,
   "noise_modifier": -2,
   "recovery_bonus": 8,
-  "reason": "Parks are usually calmer recovery spaces for cold-start scoring."
-}
-```
-
-Allowed `landmark_type` values:
-
-- `park`
-- `river`
-- `university`
-- `transit_hub`
-- `main_road`
-- `side_street`
-- `medical`
-- `commercial`
-
-Allowed `emotion_tags` values:
-
-- `calm`
-- `recovery`
-- `crowded`
-- `familiar`
-- `high_noise`
-- `walkable`
-- `stressful`
-
-## `map_search_poi`
-
-Purpose: wrap Kakao Local API or a mock provider and return normalized POI
-candidates.
-
-Input:
-
-```json
-{
-  "query": "print shop",
-  "category": "print",
-  "origin": {
-    "lat": 37.5882,
-    "lng": 126.9936
-  },
-  "radius_meters": 1500
-}
-```
-
-Output:
-
-```json
-{
-  "provider": "kakao",
-  "candidates": [
-    {
-      "id": "poi-print-1",
-      "provider_id": "kakao-123",
-      "name": "Campus Print Lab",
-      "category": "print",
-      "landmark_type": "university",
-      "emotion_tags": ["familiar", "walkable"],
-      "lat": 37.5889,
-      "lng": 126.9942,
-      "distance_meters": 180,
-      "source_confidence": "mock"
-    }
-  ]
-}
-```
-
-## `map_route_path`
-
-Purpose: wrap a route provider or deterministic mock routing and return route
-candidates the planner can compare.
-
-Input:
-
-```json
-{
-  "origin": {
-    "lat": 37.5882,
-    "lng": 126.9936
-  },
-  "stops": [
-    {
-      "id": "poi-print-1",
-      "lat": 37.5889,
-      "lng": 126.9942
-    }
-  ],
-  "destination": "home",
-  "mode_preferences": ["walk", "transit"]
-}
-```
-
-Output:
-
-```json
-{
-  "routes": [
-    {
-      "id": "route-low-stress",
-      "provider": "mock",
-      "stops": ["poi-print-1", "poi-clinic-1"],
-      "estimated_minutes": 50,
-      "walking_minutes": 20,
-      "transfer_count": 1,
-      "crowd_level": "medium",
-      "cost_estimate": null,
-      "polyline": [
-        {
-          "lat": 37.5882,
-          "lng": 126.9936
-        },
-        {
-          "lat": 37.5889,
-          "lng": 126.9942
-        }
-      ],
-      "segments": [
-        {
-          "mode": "walk",
-          "minutes": 8,
-          "landmark_type": "side_street",
-          "emotion_tags": ["calm", "walkable"]
-        }
-      ]
-    }
-  ]
+  "reason": "Parks usually provide calm recovery value for cold-start scoring."
 }
 ```
 
 ## `emotion_score`
 
-Purpose: calculate decomposed emotional cost for each route candidate. The
-planner should use this structure instead of relying only on a final score.
-
-Input:
-
-```json
-{
-  "route": {
-    "id": "route-low-stress",
-    "walking_minutes": 20,
-    "transfer_count": 1,
-    "crowd_level": "medium"
-  },
-  "emotion_state": {
-    "primary": "tired",
-    "walking_tolerance": "low",
-    "crowd_tolerance": "low",
-    "transfer_tolerance": "medium",
-    "recovery_need": "high"
-  },
-  "landmark_priors": []
-}
-```
-
-Output:
+route별 감정 비용을 분해해서 계산합니다. planner는 단일 점수가 아니라
+이 비용 구조를 이용해 route를 비교합니다.
 
 ```json
 {
@@ -244,31 +121,15 @@ Output:
   "comfort_score": 74,
   "stress_score": 26,
   "reasons": [
-    "Walking is near the upper limit for a tired day.",
-    "Transfer count is low.",
-    "Route includes a calm side street segment."
+    "Walking load stays within a tolerable range.",
+    "Calm or recovery-friendly landmarks reduce emotional cost."
   ]
 }
 ```
 
 ## `evaluate_tradeoffs`
 
-Purpose: compare viable route and stop combinations before composing a final
-daily plan.
-
-Input:
-
-```json
-{
-  "routes": [],
-  "emotion_scores": [],
-  "constraints": {
-    "deadline": "17:00"
-  }
-}
-```
-
-Output:
+route 후보와 감정 비용을 비교해 최종 route를 선택합니다.
 
 ```json
 {
@@ -277,37 +138,22 @@ Output:
     {
       "chosen_option": "route-low-stress",
       "rejected_option": "route-faster",
-      "reason": "The faster route saves 10 minutes but adds transfers and crowd exposure.",
+      "reason": "route-low-stress adds 10 minutes but lowers emotional cost by 18.",
       "user_visible_label": "Calmer route over fastest route",
       "cost_delta": {
         "estimated_minutes": 10,
         "emotional_cost": -18
       }
     }
-  ]
+  ],
+  "fallback_used": false
 }
 ```
 
 ## `compose_daily_plan`
 
-Purpose: assemble the chosen POIs, route, emotional cost, timeline, tradeoffs,
-and recommendation text into a single planner response.
-
-Input:
-
-```json
-{
-  "tasks": [],
-  "emotion_state": {},
-  "poi_candidates": [],
-  "route_candidates": [],
-  "constraints": {},
-  "selected_route_id": "route-low-stress",
-  "tradeoffs": []
-}
-```
-
-Output:
+선택된 route, stop, timeline, recommendation, map overlay, explanation을
+하나의 planner response로 조립합니다.
 
 ```json
 {
@@ -317,49 +163,23 @@ Output:
       "task_kind": "print",
       "arrival_time": "14:18",
       "departure_time": "14:28",
-      "why_here": "Closest print option with a familiar university landmark prior."
+      "why_here": "Campus Print Lab handles the print task near a university area."
     }
   ],
-  "estimated_timeline": [
-    {
-      "time": "14:00",
-      "label": "Leave current location",
-      "type": "depart"
-    },
-    {
-      "time": "14:18",
-      "label": "Print document",
-      "type": "task"
-    }
-  ],
-  "selected_route": {
-    "id": "route-low-stress",
-    "estimated_minutes": 50
-  },
-  "emotional_cost": {
-    "total_emotional_cost": 26,
-    "comfort_score": 74,
-    "stress_score": 26
-  },
+  "estimated_timeline": [],
+  "selected_route": {},
+  "emotional_cost": {},
   "tradeoffs": [],
-  "recommendations": [
-    {
-      "kind": "recovery",
-      "label": "Skip the cafe unless you still feel drained after the clinic."
-    }
-  ],
+  "recommendations": [],
   "map_overlays": {},
-  "explanation": "This route is slower than the fastest option, but it keeps transfers low and avoids the highest-crowd path."
+  "explanation": "Chosen because it keeps transfers low and avoids high-crowd corridors."
 }
 ```
 
 ## `map_view_model`
 
-Purpose: convert planner output into a provider-agnostic map shape for the web
-client. The frontend may render this with Kakao Maps JS SDK, but the contract
-must not expose Kakao-specific fields.
-
-Output:
+frontend가 Kakao Maps JS SDK로 렌더링할 수 있는 provider-agnostic 지도
+view model입니다.
 
 ```json
 {
@@ -378,62 +198,16 @@ Output:
     }
   },
   "selected_route_id": "route-low-stress",
-  "markers": [
-    {
-      "id": "marker-poi-print-1",
-      "type": "stop",
-      "lat": 37.5889,
-      "lng": 126.9942,
-      "label": "Campus Print Lab",
-      "badge": "1"
-    }
-  ],
-  "polylines": [
-    {
-      "id": "polyline-route-low-stress",
-      "route_id": "route-low-stress",
-      "selected": true,
-      "points": [
-        {
-          "lat": 37.5882,
-          "lng": 126.9936
-        }
-      ],
-      "emotion_level": "calm"
-    }
-  ],
-  "emotion_zones": [
-    {
-      "id": "zone-transit-hub-1",
-      "type": "hotspot",
-      "emotion_tags": ["crowded", "stressful"],
-      "center": {
-        "lat": 37.59,
-        "lng": 126.996
-      },
-      "radius_meters": 120
-    }
-  ],
-  "tradeoff_badges": [
-    {
-      "route_id": "route-low-stress",
-      "label": "Calmer",
-      "description": "Fewer transfers, slightly longer duration."
-    }
-  ]
+  "markers": [],
+  "polylines": [],
+  "emotion_zones": [],
+  "tradeoff_badges": []
 }
 ```
 
 ## Acceptance Scenarios
 
-These are not implementation tests yet, but future code should be validated
-against them.
-
-- If the user says they are tired and must be home by 5, the planner should
-  choose a lower-stress route unless the deadline would be missed.
-- If time is tight, the planner may choose a faster but more stressful route and
-  must explain that tradeoff.
-- If the user asks to rest or recover, candidate expansion should include a
-  recovery POI.
-- If no feedback memory exists, landmark priors alone should still produce a
-  route emotional cost.
+- 피곤하고 5시까지 집에 가야 하면 fastest route보다 lower-stress route를 우선한다.
+- 시간이 촉박하면 faster route를 선택할 수 있고, stress 증가 tradeoff를 설명한다.
+- 쉬고 싶다는 입력이 있으면 recovery POI와 recommendation이 포함된다.
+- 사용자 memory가 없어도 landmark prior만으로 emotional cost를 계산한다.
