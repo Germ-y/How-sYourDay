@@ -132,6 +132,40 @@ def test_tmap_pedestrian_route_is_normalized(monkeypatch) -> None:
     assert routes[0].distance_meters == 900
 
 
+def test_tmap_pedestrian_request_uses_encoded_names(monkeypatch) -> None:
+    from tools import tmap_route
+
+    captured = {}
+
+    def fake_post_json(url, app_key, body):
+        captured["url"] = url
+        captured["body"] = body
+        return {
+            "features": [
+                {
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[126.9936, 37.5882], [127.0019, 37.5826]],
+                    },
+                    "properties": {"distance": 1000, "time": 600},
+                }
+            ]
+        }
+
+    monkeypatch.setattr(tmap_route, "_post_json", fake_post_json)
+
+    leg = tmap_route._fetch_pedestrian_leg(
+        "test-key",
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+        Location(label="Home", lat=37.5826, lng=127.0019),
+    )
+
+    assert leg is not None
+    assert "version=1" in captured["url"]
+    assert captured["body"]["startName"].startswith("%")
+    assert captured["body"]["endName"].startswith("%")
+
+
 def test_tmap_transit_route_is_normalized(monkeypatch) -> None:
     from tools import tmap_route
 

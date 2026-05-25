@@ -1,6 +1,7 @@
 import json
 import os
 from dataclasses import dataclass
+from urllib.parse import quote
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -73,17 +74,19 @@ def _fetch_pedestrian_leg(
     end: Coordinate,
 ) -> TmapLegResult | None:
     body = {
-        "startX": str(start.lng),
-        "startY": str(start.lat),
-        "endX": str(end.lng),
-        "endY": str(end.lat),
-        "startName": "출발지",
-        "endName": "도착지",
+        "startX": start.lng,
+        "startY": start.lat,
+        "endX": end.lng,
+        "endY": end.lat,
+        "startName": quote("출발지"),
+        "endName": quote("도착지"),
         "reqCoordType": "WGS84GEO",
         "resCoordType": "WGS84GEO",
+        "searchOption": "0",
+        "sort": "custom",
     }
     payload = _post_json(
-        f"{TMAP_PEDESTRIAN_URL}?{urlencode({'version': 1, 'format': 'json'})}",
+        f"{TMAP_PEDESTRIAN_URL}?{urlencode({'version': 1})}",
         app_key,
         body,
     )
