@@ -806,6 +806,10 @@ export default function HomePage() {
   }
 
   function handleQuickSavedPlaceSelect(place: SavedPlaceEntry) {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
     setDestinationText(place.address);
     setDestinationEdited(true);
     setSelectedDestinationLocation(
@@ -817,6 +821,8 @@ export default function HomePage() {
           }
         : null
     );
+    setDestinationCandidates([]);
+    setActiveLocationField(null);
     setLocationStatus(`${place.name}을 도착지로 설정`);
     setError(null);
   }
@@ -1009,22 +1015,14 @@ export default function HomePage() {
                 </div>
 
                 {quickSavedPlaces.length > 0 ? (
-                  <div
-                    className={`mt-3 grid gap-2 ${
-                      quickSavedPlaces.length === 1
-                        ? "grid-cols-1"
-                        : quickSavedPlaces.length === 2
-                          ? "grid-cols-2"
-                          : "grid-cols-3"
-                    }`}
-                  >
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {quickSavedPlaces.map((place) => {
                       const selected =
                         normalizeLocationText(destinationText) ===
                         normalizeLocationText(place.address);
                       return (
                         <button
-                          className={`min-h-10 min-w-0 rounded-xl border px-3 text-sm font-semibold transition ${
+                          className={`inline-flex min-h-10 max-w-full shrink-0 items-center rounded-xl border px-4 text-sm font-semibold transition ${
                             selected
                               ? "border-tide bg-tide text-white shadow-sm"
                               : "border-ink/10 bg-white text-ink/62 hover:border-tide/45"
@@ -1034,7 +1032,9 @@ export default function HomePage() {
                           title={place.address}
                           onClick={() => handleQuickSavedPlaceSelect(place)}
                         >
-                          <span className="block truncate">{place.name}</span>
+                          <span className="block max-w-[136px] truncate">
+                            {place.name}
+                          </span>
                         </button>
                       );
                     })}
