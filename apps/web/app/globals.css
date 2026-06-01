@@ -12,8 +12,16 @@
   box-sizing: border-box;
 }
 
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
   overflow-x: hidden;
   font-family:
@@ -21,6 +29,11 @@ body {
     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+body > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 button,

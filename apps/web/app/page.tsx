@@ -890,9 +890,9 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#fff9ed] text-ink">
+    <main className="min-h-screen max-w-full overflow-x-hidden bg-[#fff9ed] text-ink">
       <form
-        className="mx-auto flex min-h-screen w-full max-w-md flex-col pb-24 lg:max-w-6xl lg:px-6"
+        className="mx-auto flex min-h-screen w-full max-w-full flex-col overflow-x-hidden pb-24 sm:max-w-md lg:max-w-6xl lg:px-6"
         onSubmit={handleSubmit}
       >
         <ServiceTopBar activeView={activeView} onChange={handleViewChange} />
@@ -912,8 +912,8 @@ export default function HomePage() {
           </div>
         </header>
 
-        <section className="grid gap-5 px-5 lg:grid-cols-[420px_1fr] lg:items-start lg:px-0">
-          <article className="overflow-hidden rounded-[28px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8 lg:sticky lg:top-20">
+        <section className="grid min-w-0 gap-5 overflow-hidden px-5 lg:grid-cols-[420px_minmax(0,1fr)] lg:items-start lg:px-0">
+          <article className="min-w-0 overflow-hidden rounded-[28px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8 lg:sticky lg:top-20">
             <div className="border-b border-ink/8 bg-[#fffdf8] px-5 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -925,8 +925,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="grid gap-5 p-5">
-              <section className="rounded-[22px] bg-[#fff8e6] p-3 shadow-[0_10px_26px_rgba(217,151,76,0.08)] ring-1 ring-[#f2d89d]">
+            <div className="grid min-w-0 gap-5 overflow-hidden p-5">
+              <section className="min-w-0 overflow-hidden rounded-[22px] bg-[#fff8e6] p-3 shadow-[0_10px_26px_rgba(217,151,76,0.08)] ring-1 ring-[#f2d89d]">
                 <ComposerTitle
                   icon={<MessageCircle size={17} aria-hidden />}
                   label="이동 요청"
