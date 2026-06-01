@@ -942,8 +942,8 @@ export default function HomePage() {
 
               <div className="h-px bg-ink/8" />
 
-              <section className="rounded-[22px] bg-[#f3fbf7] p-3 ring-1 ring-moss/18">
-                <div className="flex items-start justify-between gap-3">
+              <section className="min-w-0 overflow-hidden rounded-[22px] bg-[#f3fbf7] p-3 ring-1 ring-moss/18">
+                <div className="flex min-w-0 items-start justify-between gap-3">
                   <ComposerTitle
                     icon={<Navigation size={17} aria-hidden />}
                     label="경로 확인"
@@ -958,14 +958,14 @@ export default function HomePage() {
                   </button>
                 </div>
 
-                <div className="mt-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-moss/14">
-                  <div className="grid grid-cols-[24px_1fr] gap-3">
+                <div className="mt-3 min-w-0 overflow-hidden rounded-2xl bg-white p-3 shadow-sm ring-1 ring-moss/14">
+                  <div className="grid min-w-0 grid-cols-[24px_minmax(0,1fr)] gap-3">
                     <div className="flex flex-col items-center pt-3">
                       <span className="h-2.5 w-2.5 rounded-full bg-moss" />
                       <span className="my-1 h-12 w-px bg-ink/12" />
                       <span className="h-2.5 w-2.5 rounded-full bg-tide" />
                     </div>
-                    <div className="grid gap-3">
+                    <div className="grid min-w-0 gap-3">
                       <LocationSearchInput
                         active={activeLocationField === "origin"}
                         candidates={originCandidates}
@@ -1932,11 +1932,11 @@ function LocationSearchInput({
   const showPanel = active && (isLoading || candidates.length > 0);
 
   return (
-    <label className="relative block" htmlFor={id}>
+    <label className="relative block min-w-0 overflow-hidden" htmlFor={id}>
       <span className="text-xs font-semibold text-ink/46">{label}</span>
       <input
         autoComplete="off"
-        className="mt-1 min-h-11 w-full rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold outline-none transition placeholder:text-ink/35 focus:border-tide"
+        className="mt-1 block min-h-11 w-full min-w-0 rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold outline-none transition placeholder:text-ink/35 focus:border-tide"
         id={id}
         placeholder={placeholder}
         value={value}
