@@ -538,7 +538,7 @@ export default function HomePage() {
         (savedPlace) => normalizePlaceText(savedPlace.address) !== normalizedAddress
       );
       persistSavedPlaces([nextPlace, ...withoutDuplicate].slice(0, 12));
-      setSavedPlaceNotice(`${place.name} 저장했어요`);
+      setSavedPlaceNotice("");
     } catch {
       const nextPlace: SavedPlaceEntry = {
         ...place,
@@ -549,7 +549,7 @@ export default function HomePage() {
         (savedPlace) => normalizePlaceText(savedPlace.address) !== normalizedAddress
       );
       persistSavedPlaces([nextPlace, ...withoutDuplicate].slice(0, 12));
-      setSavedPlaceNotice(`${place.name} 저장했어요`);
+      setSavedPlaceNotice("");
     }
   }
 
@@ -558,14 +558,10 @@ export default function HomePage() {
     try {
       await deleteSavedPlace(id);
       persistSavedPlaces(savedPlaces.filter((place) => place.id !== id));
-      setSavedPlaceNotice(
-        removed ? `${removed.name} 삭제했어요` : "저장 장소를 삭제했어요"
-      );
+      setSavedPlaceNotice("");
     } catch {
       persistSavedPlaces(savedPlaces.filter((place) => place.id !== id));
-      setSavedPlaceNotice(
-        removed ? `${removed.name} 삭제했어요` : "저장 장소를 삭제했어요"
-      );
+      setSavedPlaceNotice("");
     }
   }
 
