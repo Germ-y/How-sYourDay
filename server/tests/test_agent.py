@@ -10,6 +10,12 @@ from api.schemas import (
     RouteSegment,
     SavedPlaceCreate,
 )
+from auth.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
 from db.models import Base
 from planner.evaluate_tradeoffs import evaluate_tradeoffs
 from repositories.saved_places import create_saved_place, list_saved_places
@@ -218,6 +224,15 @@ def test_saved_places_are_scoped_by_user() -> None:
 
     assert [place.name for place in user_a_places] == ["집"]
     assert [place.name for place in user_b_places] == ["학교"]
+
+
+def test_auth_security_hashes_password_and_decodes_token() -> None:
+    hashed = hash_password("password123")
+
+    assert hashed != "password123"
+    assert verify_password("password123", hashed)
+    assert not verify_password("wrong-password", hashed)
+    assert decode_access_token(create_access_token("user-123")) == "user-123"
 
 
 def test_preview_insights_reflect_route_and_time(monkeypatch) -> None:

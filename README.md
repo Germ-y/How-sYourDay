@@ -73,9 +73,9 @@ npm install
 npm run dev
 ```
 
-브라우저는 `http://localhost:3000`으로 여는 것을 권장합니다. Kakao
+브라우저는 `http://localhost:4000`으로 여는 것을 권장합니다. Kakao
 JavaScript SDK는 등록된 도메인에서만 동작하므로 Kakao Developers의 Web
-플랫폼 도메인에도 `http://localhost:3000`을 등록해야 합니다.
+플랫폼 도메인에도 `http://localhost:4000`을 등록해야 합니다.
 
 ### DB
 
@@ -84,11 +84,22 @@ PostgreSQL을 사용합니다. 로컬 기본값은 `docker-compose.yml`과 `.env
 
 ```text
 DATABASE_URL=postgresql+psycopg://hows_your_day:hows_your_day@localhost:5432/hows_your_day
+JWT_SECRET_KEY=change-me-in-production
 ```
 
-현재는 회원가입/JWT 연결 전이라 저장 장소 API가 `X-User-Id` 헤더로 사용자
-공간을 나눕니다. 헤더가 없으면 `demo-user`로 저장됩니다. JWT가 붙으면 이
-부분만 로그인 사용자 ID로 교체하면 됩니다.
+저장 장소 API는 JWT의 사용자 ID를 우선 사용합니다. 토큰이 없으면 개발 중
+fallback으로 `X-User-Id` 헤더를 보고, 둘 다 없으면 `demo-user`로 저장됩니다.
+
+회원가입/로그인은 access token 기반 JWT로 시작합니다.
+
+```text
+POST /auth/signup
+POST /auth/login
+GET /auth/me
+```
+
+로그인 후 프론트는 `Authorization: Bearer {token}`을 보내고, 저장 장소 API는
+토큰의 사용자 ID를 우선 사용합니다.
 
 ## 환경 변수
 
@@ -126,4 +137,4 @@ npm run web:build
 
 - `I need to rest before going home.` 입력 시 Tmap route 후보가 표시되어야 합니다.
 - Tmap key가 없거나 실패하면 mock fallback route가 표시됩니다.
-- Kakao 지도는 `http://localhost:3000`에서 확인합니다.
+- Kakao 지도는 `http://localhost:4000`에서 확인합니다.

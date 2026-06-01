@@ -234,9 +234,21 @@ export type SavedPlacesResult = {
   places: SavedPlaceRecord[];
 };
 
+export type AuthUser = {
+  id: string;
+  email: string;
+  nickname: string;
+};
+
+export type LoginResult = {
+  access_token: string;
+  token_type: string;
+};
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8010";
 const DEMO_USER_ID = "demo-user";
+const ACCESS_TOKEN_KEY = "hows-your-day.access-token.v1";
 
 export async function requestDailyPlan(
   userText: string,
@@ -423,8 +435,93 @@ export async function deleteSavedPlace(id: string): Promise<void> {
   }
 }
 
-function userHeaders() {
+export async function signup(payload: {
+  email: string;
+  password: string;
+  nickname: string;
+}): Promise<AuthUser> {
+  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Signup failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function login(payload: {
+  email: string;
+  password: string;
+}): Promise<LoginResult> {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Login failed with ${response.status}`);
+  }
+
+  const result = await response.json();
+  setAccessToken(result.access_token);
+  return result;
+}
+
+export async function fetchMe(): Promise<AuthUser> {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    headers: authHeaders()
+  });
+
+  if (!response.ok) {
+    throw new Error(`Me request failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export function logout() {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+  }
+}
+
+function userHeaders(): Record<string, string> {
+  const token = accessToken();
+  if (token) {
+    return {
+      Authorization: `Bearer ${token}`,
+      "X-User-Id": DEMO_USER_ID
+    };
+  }
+
   return {
     "X-User-Id": DEMO_USER_ID
   };
+}
+
+function authHeaders(): Record<string, string> {
+  const token = accessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function accessToken() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+function setAccessToken(token: string) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  }
 }

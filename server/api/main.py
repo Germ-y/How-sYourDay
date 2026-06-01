@@ -26,6 +26,8 @@ from api.schemas import (
     SavedPlaceResponse,
     SavedPlacesResponse,
 )
+from auth.router import router as auth_router
+from auth.security import decode_access_token
 from db.session import get_db, init_db
 from memory.preferences import record_route_feedback
 from repositories.saved_places import create_saved_place, delete_saved_place, list_saved_places
@@ -35,6 +37,7 @@ from tools.preference_points import search_preference_points
 from tools.preview_insights import build_preview_insights
 
 app = FastAPI(title="How's Your Day API")
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,7 +61,14 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-def current_user_id(x_user_id: str | None = Header(default=None, alias="X-User-Id")) -> str:
+def current_user_id(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+) -> str:
+    if authorization and authorization.lower().startswith("bearer "):
+        token_user_id = decode_access_token(authorization.split(" ", 1)[1])
+        if token_user_id:
+            return token_user_id
     return x_user_id or "demo-user"
 
 
