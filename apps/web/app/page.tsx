@@ -1236,9 +1236,9 @@ function AuthPage({
                   onChange={(value) => onChange("nickname", value)}
                 />
               ) : (
-                <div className="flex min-h-[76px] items-center justify-center">
-                  <p className="text-sm font-semibold text-ink/42">
-                    다시 오셨네요
+                <div className="flex min-h-[76px] items-start justify-center pt-2">
+                  <p className="text-sm font-semibold text-ink/35">
+                    또 오셨네요. 반가워요!
                   </p>
                 </div>
               )}
