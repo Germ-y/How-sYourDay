@@ -240,7 +240,7 @@ def test_auth_security_hashes_password_and_decodes_token() -> None:
 def test_preview_insights_reflect_route_and_time(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
-    insights, source = build_preview_insights(
+    insights, source, mood_candidates = build_preview_insights(
         "성균관대학교에서 서울역까지 18시 전 도착",
         "성균관대학교",
         "서울역",
@@ -251,6 +251,41 @@ def test_preview_insights_reflect_route_and_time(monkeypatch) -> None:
     assert insights[0].label == "이동"
     assert "성균관대학교" in insights[0].value
     assert any(insight.kind == "time" for insight in insights)
+    assert "바쁨" in mood_candidates
+
+
+def test_preview_insights_prefers_typed_route_over_saved_fields(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    insights, _, _ = build_preview_insights(
+        "성균관대학교 수원에서 서울역까지 2시간 안에 도착해야해",
+        "학교",
+        "집",
+        "바쁨",
+    )
+
+    assert insights[0].kind == "route"
+    assert "성균관대학교 수원" in insights[0].value
+    assert "서울역" in insights[0].value
+    assert "학교 → 집" not in insights[0].value
+
+
+def test_preview_insights_extracts_multiple_stop_candidates(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    insights, _, mood_candidates = build_preview_insights(
+        "오목교역에서 출발해서 홍대까지 갈거야. 날씨 선선해서 홍대 주변 좀 걷고 카페에서 과제 좀 하다가 숯림 식당이라는 식당에서 3시에 친구 보기로 했어",
+        None,
+        None,
+        "여유",
+    )
+
+    stop_values = [insight.value for insight in insights if insight.kind == "stop"]
+
+    assert any("홍대 주변 산책" in value for value in stop_values)
+    assert any("홍대 카페 작업" in value for value in stop_values)
+    assert not any(insight.label == "조건" for insight in insights)
+    assert mood_candidates[:3] == ["바쁨", "여유", "휴식"]
 
 
 def test_route_location_extraction_handles_korean_from_to(monkeypatch) -> None:
@@ -261,6 +296,39 @@ def test_route_location_extraction_handles_korean_from_to(monkeypatch) -> None:
     assert hints.origin_text == "성균관대학교"
     assert hints.destination_text == "서울역"
     assert hints.source == "rules"
+
+
+def test_route_location_extraction_handles_casual_go_phrase(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    hints = extract_route_locations(
+        "오목교역에서 홍대입구역 가고 싶어 홍대입구역 가서 조금 걸을까 해"
+    )
+
+    assert hints.origin_text == "오목교역"
+    assert hints.destination_text == "홍대입구역"
+
+
+def test_route_location_extraction_handles_destination_before_origin(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    hints = extract_route_locations(
+        "나 홍대까지 가고 싶어 오목교역에서 날씨 선선해서 홍대 주변 좀 걸을까 해 가서 커피 한잔하게"
+    )
+
+    assert hints.origin_text == "오목교역"
+    assert hints.destination_text == "홍대"
+
+
+def test_route_location_extraction_prefers_specific_commitment_destination(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    hints = extract_route_locations(
+        "오목교역에서 출발해서 홍대까지 갈거야 홍대 가서 카페에서 과제 좀 하다가 숯림 식당이라는 식당에서 3시에 친구 보기로 했어"
+    )
+
+    assert hints.origin_text == "오목교역"
+    assert hints.destination_text == "숯림 식당"
 
 
 def test_route_location_extraction_allows_missing_origin(monkeypatch) -> None:
@@ -322,6 +390,104 @@ def test_route_location_resolution_selects_real_search_candidates(monkeypatch) -
     assert result.destination is not None
     assert result.destination.label == "서울역"
     assert result.selection_source == "score"
+
+
+def test_route_location_resolution_retrieves_specific_final_place(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    def fake_search(query: str, size: int = 5) -> list[LocationCandidate]:
+        if query == "오목교역":
+            return [
+                LocationCandidate(
+                    label="오목교역 5호선",
+                    address="서울 양천구 오목로 지하 342",
+                    lat=37.524496,
+                    lng=126.875181,
+                    source="kakao-keyword",
+                    category="지하철역",
+                )
+            ]
+        if query == "숯림 식당":
+            return [
+                LocationCandidate(
+                    label="숯림",
+                    address="서울 마포구 와우산로29길 48",
+                    lat=37.555302,
+                    lng=126.924891,
+                    source="kakao-keyword",
+                    category="음식점 > 한식",
+                )
+            ]
+        if query == "홍대":
+            return [
+                LocationCandidate(
+                    label="홍대입구역 2호선",
+                    address="서울 마포구 양화로 지하 160",
+                    lat=37.557192,
+                    lng=126.925381,
+                    source="kakao-keyword",
+                    category="지하철역",
+                )
+            ]
+        return []
+
+    monkeypatch.setattr(
+        route_location_resolution, "search_location_candidates", fake_search
+    )
+
+    result = route_location_resolution.resolve_route_locations(
+        "오목교역에서 출발해서 홍대까지 갈거야 홍대 가서 카페에서 과제 좀 하다가 숯림 식당이라는 식당에서 3시에 친구 보기로 했어"
+    )
+
+    assert result.origin is not None
+    assert result.origin.label == "오목교역 5호선"
+    assert result.destination_text == "숯림 식당"
+    assert result.destination is not None
+    assert result.destination.label == "숯림"
+
+
+def test_route_location_resolution_falls_back_to_broad_area_when_specific_missing(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    def fake_search(query: str, size: int = 5) -> list[LocationCandidate]:
+        if query == "오목교역":
+            return [
+                LocationCandidate(
+                    label="오목교역 5호선",
+                    address="서울 양천구 오목로 지하 342",
+                    lat=37.524496,
+                    lng=126.875181,
+                    source="kakao-keyword",
+                    category="지하철역",
+                )
+            ]
+        if query == "홍대":
+            return [
+                LocationCandidate(
+                    label="홍대입구역 2호선",
+                    address="서울 마포구 양화로 지하 160",
+                    lat=37.557192,
+                    lng=126.925381,
+                    source="kakao-keyword",
+                    category="지하철역",
+                )
+            ]
+        return []
+
+    monkeypatch.setattr(
+        route_location_resolution, "search_location_candidates", fake_search
+    )
+
+    result = route_location_resolution.resolve_route_locations(
+        "오목교역에서 출발해서 홍대까지 갈거야 홍대 가서 카페에서 과제 좀 하다가 숯림 식당이라는 식당에서 3시에 친구 보기로 했어"
+    )
+
+    assert result.origin is not None
+    assert result.origin.label == "오목교역 5호선"
+    assert result.destination is not None
+    assert result.destination.label == "홍대입구역 2호선"
 
 
 def test_tmap_pedestrian_route_is_normalized(monkeypatch) -> None:

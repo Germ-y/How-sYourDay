@@ -8,6 +8,7 @@ class ExtractedIntent:
     tasks: list[Task]
     constraints: Constraints
     emotion: EmotionState
+    mood_candidates: list[str]
 
 
 TASK_RULES = {
@@ -36,6 +37,7 @@ def extract_intent(user_text: str) -> ExtractedIntent:
             tasks=fallback.tasks,
             constraints=llm_intent.constraints,
             emotion=llm_intent.emotion,
+            mood_candidates=llm_intent.mood_candidates or fallback.mood_candidates,
         )
 
     return llm_intent
@@ -77,6 +79,7 @@ def _extract_intent_with_rules(user_text: str) -> ExtractedIntent:
         tasks=tasks,
         constraints=constraints,
         emotion=_analyze_emotion(lowered),
+        mood_candidates=_infer_mood_candidates(lowered),
     )
 
 
@@ -131,3 +134,27 @@ def _analyze_emotion(text: str) -> EmotionState:
         time_pressure_tolerance="medium",
         recovery_need="low",
     )
+
+
+def _infer_mood_candidates(text: str) -> list[str]:
+    rules = [
+        ("바쁨", ["바쁨", "급", "빨리", "늦", "촉박", "시간", "까지", "전", "시", "약속", "보기로", "만나", "도착", "hurry", "urgent"]),
+        ("여유", ["여유", "천천", "산책", "걸", "걷", "돌아다니", "선선", "둘러", "walk", "slow"]),
+        ("휴식", ["휴식", "쉬", "카페", "커피", "조용", "편한", "회복", "rest", "cafe", "coffee"]),
+        ("집중", ["집중", "공부", "과제", "작업", "시험", "회의", "업무", "study", "work", "focus"]),
+        ("피곤", ["피곤", "지침", "지쳐", "힘들", "무리", "tired", "exhausted"]),
+        ("불안", ["불안", "긴장", "복잡", "사람", "혼잡", "무서", "anxious", "nervous"]),
+        ("조용", ["조용", "소음", "시끄", "quiet", "noise"]),
+        ("가벼움", ["가볍", "괜찮", "좋아", "상쾌", "steady", "fine"]),
+    ]
+    scored: list[tuple[int, int, str]] = []
+    for index, (label, keywords) in enumerate(rules):
+        score = sum(1 for keyword in keywords if keyword in text)
+        if score:
+            scored.append((-score, index, label))
+
+    labels = [label for _, _, label in sorted(scored)]
+    for fallback in ["피곤", "바쁨", "여유", "휴식"]:
+        if fallback not in labels:
+            labels.append(fallback)
+    return labels[:4]

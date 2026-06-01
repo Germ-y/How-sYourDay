@@ -153,13 +153,17 @@ def resolve_route(request: RouteExtractionRequest) -> RouteLocationResolutionRes
 
 @app.post("/preview-insights", response_model=PreviewInsightsResponse)
 def preview_insights(request: PreviewInsightsRequest) -> PreviewInsightsResponse:
-    insights, source = build_preview_insights(
+    insights, source, mood_candidates = build_preview_insights(
         request.user_text,
         request.origin_text,
         request.destination_text,
         request.active_mood,
     )
-    return PreviewInsightsResponse(insights=insights, source=source)
+    return PreviewInsightsResponse(
+        insights=insights,
+        source=source,
+        mood_candidates=mood_candidates,
+    )
 
 
 @app.post("/preference-points", response_model=PreferencePointsResponse)

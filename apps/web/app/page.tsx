@@ -70,12 +70,12 @@ const MOOD_PRESETS = [
   {
     label: "바쁨",
     sentence: "시간 제약 높음. 우회보다 도착 시간을 우선.",
-    keywords: ["바쁨", "급", "빨리", "늦", "촉박", "시간", "까지", "전", "urgent", "hurry"]
+    keywords: ["바쁨", "급", "빨리", "늦", "촉박", "시간", "까지", "전", "시", "약속", "보기로", "만나", "도착", "urgent", "hurry"]
   },
   {
     label: "여유",
     sentence: "시간 여유 있음. 편안한 장소 경유 허용.",
-    keywords: ["여유", "천천", "산책", "둘러", "괜찮", "slow", "walk"]
+    keywords: ["여유", "천천", "산책", "둘러", "걸을", "걷", "돌아다니", "선선", "괜찮", "slow", "walk"]
   },
   {
     label: "휴식",
@@ -90,7 +90,7 @@ const MOOD_PRESETS = [
   {
     label: "집중",
     sentence: "집중 필요. 목적지까지 예측 가능한 동선을 우선.",
-    keywords: ["집중", "공부", "과제", "시험", "회의", "업무", "focus", "study", "work"]
+    keywords: ["집중", "공부", "과제", "작업", "시험", "회의", "업무", "focus", "study", "work"]
   },
   {
     label: "조용",
@@ -226,6 +226,7 @@ export default function HomePage() {
   const [previewInsights, setPreviewInsights] = useState<PreviewInsight[]>(
     defaultPreviewInsights()
   );
+  const [suggestedMoodLabels, setSuggestedMoodLabels] = useState<string[]>([]);
   const [previewSource, setPreviewSource] = useState("rules");
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isRouteConfirming, setIsRouteConfirming] = useState(false);
@@ -239,7 +240,10 @@ export default function HomePage() {
   });
   const [authStatus, setAuthStatus] = useState("");
   const [isAuthLoading, setIsAuthLoading] = useState(false);
-  const moodCandidates = useMemo(() => buildMoodCandidates(text), [text]);
+  const moodCandidates = useMemo(
+    () => buildMoodCandidates(text, suggestedMoodLabels),
+    [suggestedMoodLabels, text]
+  );
   const visibleMoodCandidates = useMemo(
     () => ensureActiveMoodCandidate(moodCandidates, activeMood),
     [activeMood, moodCandidates]
@@ -341,14 +345,16 @@ export default function HomePage() {
     setIsPreviewLoading(true);
     const timer = window.setTimeout(async () => {
       try {
+        const hasRouteRequestText = Boolean(text.trim());
         const result = await fetchPreviewInsights({
           user_text: text,
-          origin_text: originText,
-          destination_text: destinationText,
+          origin_text: hasRouteRequestText ? undefined : originText,
+          destination_text: hasRouteRequestText ? undefined : destinationText,
           active_mood: activeMood
         });
         if (!cancelled) {
           setPreviewInsights(result.insights);
+          setSuggestedMoodLabels(result.mood_candidates ?? []);
           setPreviewSource(result.source);
         }
       } catch {
@@ -356,6 +362,7 @@ export default function HomePage() {
           setPreviewInsights(
             buildLocalPreviewInsights(text, originText, destinationText, activeMood)
           );
+          setSuggestedMoodLabels(buildLocalMoodLabels(text));
           setPreviewSource("local");
         }
       } finally {
@@ -626,35 +633,45 @@ export default function HomePage() {
 
     setIsRouteConfirming(true);
     setLocationStatus("문장에서 경로 확인 중");
+    const localRoute = extractLocalPreviewRoute(trimmed, "", "");
 
     try {
       const resolved = await resolveRouteLocations(trimmed);
+      const originHint = resolved.origin_text ?? localRoute.origin;
+      const destinationHint = resolved.destination_text ?? localRoute.destination;
+      const [originFallback, destinationFallback] = await Promise.all([
+        !resolved.origin && originHint ? searchFirstLocationCandidate(originHint) : null,
+        !resolved.destination && destinationHint
+          ? searchFirstLocationCandidate(destinationHint)
+          : null
+      ]);
       let changed = false;
       let resolvedCount = 0;
       const requestedCount =
-        Number(Boolean(resolved.origin_text)) +
-        Number(Boolean(resolved.destination_text));
+        Number(Boolean(originHint)) + Number(Boolean(destinationHint));
+      const originCandidate = resolved.origin ?? originFallback;
+      const destinationCandidate = resolved.destination ?? destinationFallback;
 
-      if (resolved.origin_text) {
-        if (resolved.origin) {
-          setOriginText(resolved.origin.label);
-          setSelectedOriginLocation(locationFromCandidate(resolved.origin));
+      if (originHint) {
+        if (originCandidate) {
+          setOriginText(originCandidate.label);
+          setSelectedOriginLocation(locationFromCandidate(originCandidate));
           resolvedCount += 1;
         } else {
-          setOriginText(resolved.origin_text);
+          setOriginText(originHint);
           setSelectedOriginLocation(null);
         }
         setOriginEdited(false);
         setOriginCandidates([]);
         changed = true;
       }
-      if (resolved.destination_text) {
-        if (resolved.destination) {
-          setDestinationText(resolved.destination.label);
-          setSelectedDestinationLocation(locationFromCandidate(resolved.destination));
+      if (destinationHint) {
+        if (destinationCandidate) {
+          setDestinationText(destinationCandidate.label);
+          setSelectedDestinationLocation(locationFromCandidate(destinationCandidate));
           resolvedCount += 1;
         } else {
-          setDestinationText(resolved.destination_text);
+          setDestinationText(destinationHint);
           setSelectedDestinationLocation(null);
         }
         setDestinationEdited(false);
@@ -680,7 +697,55 @@ export default function HomePage() {
         setLocationStatus("찾은 경로 후보 없음. 직접 입력 가능");
       }
     } catch {
-      setLocationStatus("내용 확인 실패. 직접 입력 가능");
+      const [originFallback, destinationFallback] = await Promise.all([
+        localRoute.origin ? searchFirstLocationCandidate(localRoute.origin) : null,
+        localRoute.destination
+          ? searchFirstLocationCandidate(localRoute.destination)
+          : null
+      ]);
+      let changed = false;
+      let resolvedCount = 0;
+      const requestedCount =
+        Number(Boolean(localRoute.origin)) + Number(Boolean(localRoute.destination));
+
+      if (localRoute.origin) {
+        if (originFallback) {
+          setOriginText(originFallback.label);
+          setSelectedOriginLocation(locationFromCandidate(originFallback));
+          resolvedCount += 1;
+        } else {
+          setOriginText(localRoute.origin);
+          setSelectedOriginLocation(null);
+        }
+        setOriginEdited(false);
+        setOriginCandidates([]);
+        changed = true;
+      }
+      if (localRoute.destination) {
+        if (destinationFallback) {
+          setDestinationText(destinationFallback.label);
+          setSelectedDestinationLocation(locationFromCandidate(destinationFallback));
+          resolvedCount += 1;
+        } else {
+          setDestinationText(localRoute.destination);
+          setSelectedDestinationLocation(null);
+        }
+        setDestinationEdited(false);
+        setDestinationCandidates([]);
+        changed = true;
+      }
+
+      if (changed) {
+        setActiveLocationField(null);
+        setError(null);
+        setLocationStatus(
+          resolvedCount === requestedCount
+            ? "실제 장소로 경로 확인"
+            : "문장에서 경로 후보 확인"
+        );
+      } else {
+        setLocationStatus("내용 확인 실패. 직접 입력 가능");
+      }
     } finally {
       setIsRouteConfirming(false);
     }
@@ -2045,6 +2110,9 @@ function PlanPreview({
   originText: string;
   source: string;
 }) {
+  const routeLabel = previewRouteLabel(insights, originText, destinationText);
+  const cueInsights = previewCueInsights(insights);
+
   return (
     <section className="rounded-[24px] bg-white p-4 shadow-[0_14px_40px_rgba(23,26,24,0.055)] ring-1 ring-ink/8">
       <div className="flex items-start justify-between gap-3">
@@ -2067,14 +2135,14 @@ function PlanPreview({
           <div className="min-w-0">
             <p className="text-[11px] font-semibold text-ink/40">경로</p>
             <p className="mt-0.5 truncate text-base font-semibold">
-              {originText || "출발지"} → {destinationText || "도착지"}
+              {routeLabel}
             </p>
           </div>
         </div>
       </div>
 
       <div className="mt-4 grid gap-2">
-        {insights.map((insight, index) => (
+        {cueInsights.map((insight, index) => (
           <PlannerCue
             icon={previewInsightIcon(insight.kind)}
             key={`${insight.label}-${insight.value}-${index}`}
@@ -3358,21 +3426,37 @@ function locationFromCandidate(candidate: LocationCandidate): Location {
   };
 }
 
+async function searchFirstLocationCandidate(query: string) {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const result = await searchLocations(trimmed, 3);
+    return result.candidates[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function shouldSearchLocationInput(query: string) {
   return query.length >= 2 || ["집", "학교", "회사"].includes(query);
 }
 
-function buildMoodCandidates(input: string) {
+function buildMoodCandidates(input: string, suggestedLabels: string[] = []) {
   const normalized = input.toLowerCase();
   const scored = MOOD_PRESETS.map((mood, index) => {
     const keywordScore = mood.keywords.reduce(
       (score, keyword) => score + (normalized.includes(keyword.toLowerCase()) ? 4 : 0),
       0
     );
+    const suggestedIndex = suggestedLabels.indexOf(mood.label);
+    const suggestedScore = suggestedIndex >= 0 ? 40 - suggestedIndex : 0;
     const defaultScore = DEFAULT_MOOD_LABELS.includes(mood.label) ? 1 : 0;
     return {
       mood,
-      score: keywordScore + defaultScore,
+      score: suggestedScore + keywordScore + defaultScore,
       index
     };
   });
@@ -3381,6 +3465,28 @@ function buildMoodCandidates(input: string) {
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .slice(0, 4)
     .map((item) => item.mood);
+}
+
+function buildLocalMoodLabels(input: string) {
+  const normalized = input.toLowerCase();
+  const scored = MOOD_PRESETS.map((mood, index) => ({
+    label: mood.label,
+    score: mood.keywords.reduce(
+      (score, keyword) => score + (normalized.includes(keyword.toLowerCase()) ? 1 : 0),
+      0
+    ),
+    index
+  })).filter((item) => item.score > 0);
+  const labels = scored
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((item) => item.label);
+
+  DEFAULT_MOOD_LABELS.forEach((label) => {
+    if (!labels.includes(label)) {
+      labels.push(label);
+    }
+  });
+  return labels.slice(0, 4);
 }
 
 function ensureActiveMoodCandidate(
@@ -3402,9 +3508,41 @@ function ensureActiveMoodCandidate(
 function defaultPreviewInsights(): PreviewInsight[] {
   return [
     { label: "이동", value: "출발지와 도착지 확인", kind: "route" },
-    { label: "조건", value: "시간 조건 입력 시 반영", kind: "time" },
-    { label: "취향", value: "선호 장소는 후보로 반영", kind: "stop" }
+    { label: "경유 후보", value: "선호 장소 후보 확인", kind: "stop" },
+    { label: "상태", value: "컨디션 기준으로 경로 비교", kind: "mood" },
+    { label: "취향", value: "선호 지도 반영", kind: "stop" }
   ];
+}
+
+function previewRouteLabel(
+  insights: PreviewInsight[],
+  originText: string,
+  destinationText: string
+) {
+  const routeInsight = insights.find(
+    (insight) => insight.kind === "route" && insight.value.includes("→")
+  );
+  return routeInsight?.value ?? `${originText || "출발지"} → ${destinationText || "도착지"}`;
+}
+
+function previewCueInsights(insights: PreviewInsight[]) {
+  const defaults = defaultPreviewInsights().filter(
+    (insight) => insight.kind !== "route"
+  );
+  const cues = insights.filter((insight) => insight.kind !== "route");
+  const merged = [...cues, ...defaults];
+  const seen = new Set<string>();
+
+  return merged
+    .filter((insight) => {
+      const key = `${insight.label}:${insight.value}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 3);
 }
 
 function buildLocalPreviewInsights(
@@ -3414,10 +3552,11 @@ function buildLocalPreviewInsights(
   activeMood: string
 ): PreviewInsight[] {
   const normalized = text.toLowerCase();
+  const route = extractLocalPreviewRoute(text, originText, destinationText);
   const insights: PreviewInsight[] = [
     {
       label: "이동",
-      value: `${originText || "출발지"} → ${destinationText || "도착지"}`,
+      value: `${route.origin || "출발지"} → ${route.destination || "도착지"}`,
       kind: "route"
     }
   ];
@@ -3425,9 +3564,7 @@ function buildLocalPreviewInsights(
   if (/[0-9]+시|까지|전|deadline/.test(normalized)) {
     insights.push({ label: "시간", value: "도착 시간 조건 반영", kind: "time" });
   }
-  if (/(쉬|카페|휴식|조용|rest|cafe|coffee)/.test(normalized)) {
-    insights.push({ label: "경유", value: "쉴 만한 장소 후보 확인", kind: "stop" });
-  }
+  insights.push(...buildLocalStopInsights(text));
   if (/(피곤|지쳐|tired|exhausted)/.test(normalized)) {
     insights.push({ label: "상태", value: "피로 낮은 길 우선", kind: "mood" });
   }
@@ -3438,7 +3575,112 @@ function buildLocalPreviewInsights(
     kind: "mood"
   });
 
-  return [...insights, ...defaultPreviewInsights()].slice(0, 3);
+  return [...insights, ...defaultPreviewInsights()].slice(0, 4);
+}
+
+function buildLocalStopInsights(text: string): PreviewInsight[] {
+  const area = extractLocalAreaHint(text);
+  const insights: PreviewInsight[] = [];
+
+  if (/(걷|걸을|산책|돌아다니|주변|근처|선선)/.test(text)) {
+    insights.push({
+      label: "경유 후보",
+      value: area ? `${area} 주변 산책` : "주변 산책 후보",
+      kind: "stop"
+    });
+  }
+  if (/(카페|커피|과제|공부|작업|cafe|coffee|study|work)/i.test(text)) {
+    insights.push({
+      label: "경유 후보",
+      value: area ? `${area} 카페 작업` : "카페 작업 후보",
+      kind: "stop"
+    });
+  }
+  if (/(쉬|휴식|조용|rest|quiet)/i.test(text)) {
+    insights.push({
+      label: "경유 후보",
+      value: area ? `${area} 휴식 장소` : "쉴 만한 장소 후보",
+      kind: "stop"
+    });
+  }
+
+  const seen = new Set<string>();
+  return insights
+    .filter((insight) => {
+      if (seen.has(insight.value)) {
+        return false;
+      }
+      seen.add(insight.value);
+      return true;
+    })
+    .slice(0, 3);
+}
+
+function extractLocalAreaHint(text: string) {
+  const direct = text.match(/([가-힣A-Za-z0-9]+)\s*(?:주변|근처)/);
+  if (direct?.[1]) {
+    return direct[1];
+  }
+
+  const destination = text.match(
+    /([가-힣A-Za-z0-9]+)\s*(?:까지|으로|로)\s*(?:갈|가고|가야|도착|이동)/
+  );
+  return destination?.[1] ?? "";
+}
+
+function extractLocalPreviewRoute(
+  text: string,
+  originText: string,
+  destinationText: string
+) {
+  const compact = text.replace(/\s+/g, " ").trim();
+  const destinationFirstMatch = compact.match(
+    /(.+?)(?:까지|으로|로)\s*(?:가고\s*싶|가야|갈|가기|가려고|도착|이동)/
+  );
+  const originAfterDestinationMatch = compact.match(
+    /(?:가고\s*싶어|가고싶어|싶어)\s+(.+?)(?:에서|부터)/
+  );
+
+  if (destinationFirstMatch && originAfterDestinationMatch) {
+    return {
+      origin: cleanLocalLocationHint(originAfterDestinationMatch[1]) || originText,
+      destination: cleanLocalLocationHint(destinationFirstMatch[1]) || destinationText
+    };
+  }
+
+  const fromToMatch = compact.match(
+    /(.+?)(?:에서|부터)\s*(.+?)(?:까지|으로|로)(?=\s|,|\.|;|$)/
+  ) ?? compact.match(
+    /(.+?)(?:에서|부터)\s*(.+?)\s*(?:가고\s*싶|가야|갈|가기|가려고|도착|이동|가서)/
+  );
+
+  if (fromToMatch) {
+    return {
+      origin: cleanLocalLocationHint(fromToMatch[1]) || originText,
+      destination: cleanLocalLocationHint(fromToMatch[2]) || destinationText
+    };
+  }
+
+  const destinationMatch = compact.match(
+    /(.+?)(?:까지|으로|로|에)\s*(?:가야|갈|가기|가려고|도착|이동)/
+  );
+
+  return {
+    origin: originText,
+    destination: cleanLocalLocationHint(destinationMatch?.[1]) || destinationText
+  };
+}
+
+function cleanLocalLocationHint(value?: string) {
+  if (!value) {
+    return "";
+  }
+
+  return value
+    .replace(/^.*(?:가고\s*싶어|가고싶어|싶어)\s+/, "")
+    .replace(/^(오늘|내일|지금|일단|그리고|나는|나|제가|저는)\s+/, "")
+    .replace(/\s*(에서|부터|으로|로|까지|에)$/, "")
+    .trim();
 }
 
 function previewSourceLabel(source: string) {

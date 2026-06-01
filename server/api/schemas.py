@@ -83,6 +83,7 @@ class PreviewInsight(BaseModel):
 class PreviewInsightsResponse(BaseModel):
     insights: list[PreviewInsight]
     source: str
+    mood_candidates: list[str] = []
 
 
 class FeedbackRequest(BaseModel):

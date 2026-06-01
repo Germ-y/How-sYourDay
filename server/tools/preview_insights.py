@@ -8,16 +8,16 @@ def build_preview_insights(
     origin_text: str | None,
     destination_text: str | None,
     active_mood: str | None,
-) -> tuple[list[PreviewInsight], str]:
+) -> tuple[list[PreviewInsight], str, list[str]]:
     text = user_text.strip()
     route_hints = extract_route_locations(text) if text else None
     intent = extract_intent(text) if text else None
 
-    origin = _first_present(origin_text, route_hints.origin_text if route_hints else None)
+    origin = _first_present(route_hints.origin_text if route_hints else None, origin_text)
     destination = _first_present(
-        destination_text,
         route_hints.destination_text if route_hints else None,
         intent.constraints.destination if intent else None,
+        destination_text,
     )
 
     insights: list[PreviewInsight] = []
@@ -43,8 +43,11 @@ def build_preview_insights(
             PreviewInsight(label="시간", value="시간 조건 감지", kind="time")
         )
 
+    stop_points = _stop_insights(text)
+    insights.extend(stop_points)
+
     if intent:
-        task_point = _task_insight(intent.tasks)
+        task_point = None if stop_points else _task_insight(intent.tasks)
         if task_point:
             insights.append(task_point)
 
@@ -52,7 +55,7 @@ def build_preview_insights(
         if emotion_point:
             insights.append(emotion_point)
 
-    if active_mood and len(insights) < 3:
+    if active_mood and len(insights) < 4:
         insights.append(
             PreviewInsight(
                 label="컨디션",
@@ -61,11 +64,12 @@ def build_preview_insights(
             )
         )
 
-    while len(insights) < 3:
+    while len(insights) < 4:
         insights.append(_empty_insight(len(insights)))
 
     source = "llm" if route_hints and route_hints.source == "llm" else "rules"
-    return insights[:3], source
+    mood_candidates = intent.mood_candidates if intent else _default_mood_candidates()
+    return insights[:4], source, mood_candidates[:4]
 
 
 def _task_insight(tasks) -> PreviewInsight | None:
@@ -82,6 +86,32 @@ def _task_insight(tasks) -> PreviewInsight | None:
     return PreviewInsight(label="할 일", value=primary.label, kind="task")
 
 
+def _stop_insights(text: str) -> list[PreviewInsight]:
+    insights: list[PreviewInsight] = []
+    area = _area_hint(text)
+
+    if any(marker in text for marker in ["걷", "산책", "돌아다니", "주변", "근처", "선선"]):
+        value = f"{area} 주변 산책" if area else "주변 산책 후보"
+        insights.append(PreviewInsight(label="경유 후보", value=value, kind="stop"))
+
+    if any(marker in text for marker in ["카페", "커피", "과제", "공부", "작업"]):
+        value = f"{area} 카페 작업" if area else "카페 작업 후보"
+        insights.append(PreviewInsight(label="경유 후보", value=value, kind="stop"))
+
+    if any(marker in text for marker in ["쉬", "휴식", "조용"]):
+        value = f"{area} 휴식 장소" if area else "쉴 만한 장소 후보"
+        insights.append(PreviewInsight(label="경유 후보", value=value, kind="stop"))
+
+    unique: list[PreviewInsight] = []
+    seen: set[str] = set()
+    for insight in insights:
+        if insight.value in seen:
+            continue
+        seen.add(insight.value)
+        unique.append(insight)
+    return unique[:3]
+
+
 def _emotion_insight(primary: str) -> PreviewInsight | None:
     if primary == "tired":
         return PreviewInsight(label="상태", value="피로 낮은 길 우선", kind="mood")
@@ -95,10 +125,15 @@ def _emotion_insight(primary: str) -> PreviewInsight | None:
 def _empty_insight(index: int) -> PreviewInsight:
     defaults = [
         PreviewInsight(label="이동", value="출발지와 도착지 확인", kind="route"),
-        PreviewInsight(label="조건", value="시간 조건 입력 시 반영", kind="time"),
-        PreviewInsight(label="취향", value="선호 장소는 후보로 반영", kind="stop"),
+        PreviewInsight(label="경유 후보", value="선호 장소 후보 확인", kind="stop"),
+        PreviewInsight(label="상태", value="컨디션 기준으로 경로 비교", kind="mood"),
+        PreviewInsight(label="취향", value="선호 지도 반영", kind="stop"),
     ]
     return defaults[index]
+
+
+def _default_mood_candidates() -> list[str]:
+    return ["피곤", "바쁨", "여유", "휴식"]
 
 
 def _first_present(*values: str | None) -> str | None:
@@ -110,3 +145,20 @@ def _first_present(*values: str | None) -> str | None:
 
 def _has_time_hint(text: str) -> bool:
     return any(marker in text for marker in ["시", "분", "까지", "전", "deadline"])
+
+
+def _area_hint(text: str) -> str | None:
+    import re
+
+    direct = re.search(r"([가-힣A-Za-z0-9]+)\s*(?:주변|근처)", text)
+    if direct:
+        return direct.group(1)
+
+    destination = re.search(
+        r"([가-힣A-Za-z0-9]+)\s*(?:까지|으로|로)\s*(?:갈|가고|가야|도착|이동)",
+        text,
+    )
+    if destination:
+        return destination.group(1)
+
+    return None

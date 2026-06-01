@@ -49,12 +49,22 @@ class RouteLocationResolution:
 
 def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResolution:
     hints = extract_route_locations(user_text)
-    origin_candidates = _candidate_search(hints.origin_text, size)
-    destination_candidates = _candidate_search(hints.destination_text, size)
+    origin_text = _origin_hint_from_text(user_text) or hints.origin_text
+    destination_text = _specific_destination_hint_from_text(user_text) or hints.destination_text
+    origin_queries = _origin_queries_from_text(user_text, origin_text)
+    destination_queries = _destination_queries_from_text(user_text, destination_text)
+    origin_candidates = _candidate_search_many(
+        origin_queries,
+        size,
+    )
+    destination_candidates = _candidate_search_many(
+        destination_queries,
+        size,
+    )
     selection = _select_locations_with_llm(
         user_text,
-        hints.origin_text,
-        hints.destination_text,
+        origin_text,
+        destination_text,
         origin_candidates,
         destination_candidates,
     )
@@ -66,15 +76,29 @@ def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResol
         )
         selection_source = "llm"
     else:
-        origin = _select_candidate_by_score(hints.origin_text, origin_candidates)
-        destination = _select_candidate_by_score(
-            hints.destination_text, destination_candidates
+        origin = _select_best_across_queries(origin_queries, origin_candidates)
+        destination = _select_best_across_queries(
+            destination_queries, destination_candidates
         )
         selection_source = "score" if origin or destination else "none"
 
+    if (
+        origin
+        and destination
+        and _same_candidate(origin, destination)
+        and _normalize(origin_text or "") != _normalize(destination_text or "")
+    ):
+        destination = _select_distinct_candidate_by_score(
+            destination_text,
+            destination_candidates,
+            origin,
+        )
+        if destination:
+            selection_source = f"{selection_source}-deduped"
+
     return RouteLocationResolution(
-        origin_text=hints.origin_text,
-        destination_text=hints.destination_text,
+        origin_text=origin_text,
+        destination_text=destination_text,
         origin=origin,
         destination=destination,
         origin_candidates=origin_candidates,
@@ -88,6 +112,21 @@ def _candidate_search(query: str | None, size: int) -> list[LocationCandidate]:
     if not query:
         return []
     return search_location_candidates(query, size=size)
+
+
+def _candidate_search_many(queries: list[str], size: int) -> list[LocationCandidate]:
+    candidates: list[LocationCandidate] = []
+    seen: set[str] = set()
+
+    for query in queries:
+        for candidate in _candidate_search(query, size):
+            key = f"{_normalize(candidate.label)}:{candidate.lat:.6f}:{candidate.lng:.6f}"
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(candidate)
+
+    return candidates[: max(size, 10)]
 
 
 def _select_locations_with_llm(
@@ -119,10 +158,20 @@ def _select_locations_with_llm(
                 "role": "system",
                 "content": (
                     "You choose the best real map search result for a route request. "
-                    "Use the original user sentence and extracted place text to pick "
-                    "one candidate index for origin and destination. Prefer exact place "
-                    "names, campus/city hints, addresses, and transport stations. Return "
-                    "null only when no candidate reasonably represents the extracted text."
+                    "The candidate lists are retrieved from Kakao Local using several place "
+                    "mentions from the sentence, so they may include broad areas, stations, "
+                    "cafes, restaurants, and distractors. Use the original user sentence and "
+                    "extracted place text to pick one "
+                    "candidate index for origin and destination. Korean route text may be "
+                    "casual and unordered, such as '나 홍대까지 가고 싶어 오목교역에서 ...'. "
+                    "In that case, candidates for '오목교역' are origin and candidates for "
+                    "'홍대' or '홍대입구역' are destination. Prefer exact names, transport "
+                    "stations when the text contains '역', campus/city hints, and matching "
+                    "addresses. Avoid shops or unrelated facilities that merely contain the "
+                    "same keyword. If the origin and destination candidate are the same but "
+                    "the extracted place texts are different, choose a different destination "
+                    "candidate or return null for destination. Return null only when no candidate reasonably represents "
+                    "the extracted text."
                 ),
             },
             {
@@ -260,6 +309,129 @@ def _select_candidate_by_score(
     if best is None or best[0] <= 0:
         return None
     return best[2]
+
+
+def _select_distinct_candidate_by_score(
+    query: str | None,
+    candidates: list[LocationCandidate],
+    disallowed: LocationCandidate,
+) -> LocationCandidate | None:
+    return _select_candidate_by_score(
+        query,
+        [candidate for candidate in candidates if not _same_candidate(candidate, disallowed)],
+    )
+
+
+def _select_best_across_queries(
+    queries: list[str],
+    candidates: list[LocationCandidate],
+) -> LocationCandidate | None:
+    for query in queries:
+        selected = _select_candidate_by_score(query, candidates)
+        if selected:
+            return selected
+    return None
+
+
+def _same_candidate(a: LocationCandidate, b: LocationCandidate) -> bool:
+    return (
+        _normalize(a.label) == _normalize(b.label)
+        or (round(a.lat, 6) == round(b.lat, 6) and round(a.lng, 6) == round(b.lng, 6))
+    )
+
+
+def _origin_queries_from_text(user_text: str, origin_text: str | None) -> list[str]:
+    queries = [origin_text]
+    matches = re.findall(r"([^,.;\n]+?)(?:에서|부터)", user_text)
+    if matches:
+        queries.append(_clean_query(matches[0]))
+    return _unique_queries(queries)
+
+
+def _destination_queries_from_text(
+    user_text: str, destination_text: str | None
+) -> list[str]:
+    queries = [
+        _specific_destination_hint_from_text(user_text),
+        destination_text,
+        _destination_before_origin_hint_from_text(user_text),
+    ]
+    for match in re.findall(r"([^,.;\n]+?)(?:까지|으로|로)\s*(?:갈|가고|가야|도착|이동|$)", user_text):
+        queries.append(_clean_query(match))
+    for match in re.findall(r"(?:가서|하다가|그리고)\s*([^,.;\n]+?)(?:에서|까지|으로|로)", user_text):
+        queries.append(_clean_query(match))
+    return _unique_queries(queries)
+
+
+def _origin_hint_from_text(user_text: str) -> str | None:
+    matches = re.findall(r"([^,.;\n]+?)(?:에서|부터)", user_text)
+    if not matches:
+        return None
+    return _clean_query(matches[0])
+
+
+def _specific_destination_hint_from_text(user_text: str) -> str | None:
+    patterns = [
+        r"([가-힣A-Za-z0-9\s]+?)(?:이라는|라는)\s*(?:식당|카페|장소|곳)?에서\s*(?:\d{1,2}시|친구|약속|보기|만나)",
+        r"([가-힣A-Za-z0-9\s]+?(?:식당|카페|역|학교|병원|도서관|공원))에서\s*(?:\d{1,2}시|친구|약속|보기|만나)",
+    ]
+    for pattern in patterns:
+        matches = re.findall(pattern, user_text, flags=re.IGNORECASE)
+        for value in reversed(matches):
+            candidate = re.split(r"(?:하다가|가서|그리고|,|\.|;)", value)[-1]
+            cleaned = _clean_query(candidate)
+            if cleaned:
+                return cleaned
+    return None
+
+
+def _destination_before_origin_hint_from_text(user_text: str) -> str | None:
+    match = re.search(
+        r"(.+?)(?:까지|으로|로)\s*(?:가고\s*싶|가야|갈|가기|가려고|도착|이동)",
+        user_text,
+        flags=re.IGNORECASE,
+    )
+    return _clean_query(match.group(1) if match else None)
+
+
+def _clean_query(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    cleaned = value.strip()
+    cleaned = re.sub(r"^.*(?:가고\s*싶어|가고싶어|싶어)\s+", "", cleaned)
+    cleaned = re.sub(
+        r"^.*(?:에서|부터)\s*(?:출발해서|출발하고|출발|시작해서|시작)?\s*",
+        "",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"^(오늘|내일|지금|일단|그리고|나는|나|제가|저는|i)\s+",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\s*(가야|갈|가기|가려고|도착|출발|시작).*$", "", cleaned)
+    cleaned = re.sub(r"\s*(에서|부터|으로|로|까지|에)$", "", cleaned)
+    cleaned = cleaned.strip()
+    return cleaned if len(cleaned) >= 2 else None
+
+
+def _unique_queries(values: list[str | None]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+
+    for value in values:
+        cleaned = _clean_query(value)
+        if not cleaned:
+            continue
+        key = _normalize(cleaned)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(cleaned)
+
+    return unique
 
 
 def _terms(value: str) -> list[str]:

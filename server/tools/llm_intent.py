@@ -17,7 +17,7 @@ _LLM_INTENT_CACHE_LIMIT = 80
 INTENT_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["tasks", "constraints", "emotion"],
+    "required": ["tasks", "constraints", "emotion", "mood_candidates"],
     "properties": {
         "tasks": {
             "type": "array",
@@ -101,6 +101,15 @@ INTENT_SCHEMA = {
                 },
             },
         },
+        "mood_candidates": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+                "type": "string",
+                "enum": ["피곤", "바쁨", "여유", "휴식", "불안", "집중", "조용", "가벼움"],
+            },
+        },
     },
 }
 
@@ -128,13 +137,24 @@ def extract_intent_with_llm(user_text: str) -> ExtractedIntent | None:
             {
                 "role": "system",
                 "content": (
-                    "You extract daily planning intent from Korean or English text. "
-                    "Return only JSON matching the schema. Use concise Korean labels "
-                    "when the user writes Korean. Supported task kinds are print, "
-                    "clinic, and recovery. If the user mainly asks for a destination "
-                    "route with no task, use one recovery task only when they mention "
-                    "rest, fatigue, calm, cafe, or needing a break; otherwise use an "
-                    "empty tasks array. Infer tolerances conservatively from emotion."
+                    "You extract intent for an emotion-aware Korean route planner. "
+                    "Return only JSON matching the schema. Read casual Korean as a "
+                    "real user request, not as keywords. Separate four ideas: route, "
+                    "time pressure, condition/mood, and possible waypoint intent. "
+                    "For mood_candidates, choose exactly 4 Korean labels ordered by "
+                    "relevance from: 피곤, 바쁨, 여유, 휴식, 불안, 집중, 조용, 가벼움. "
+                    "Use 바쁨 when there is a deadline, appointment, '까지', '전', or "
+                    "risk of being late. Use 여유 when the user wants to walk, wander, "
+                    "look around, or says the weather is nice. Use 휴식 when they want "
+                    "a break, cafe, coffee, calm place, or recovery. Use 집중 when "
+                    "they mention assignment, study, work, meeting prep, or doing a "
+                    "task on the way. Use 피곤 for fatigue or avoiding hard routes. "
+                    "Use 조용 for quiet/noise-sensitive requests and 불안 for crowded "
+                    "or stressful routes. Supported task kinds are print, clinic, "
+                    "and recovery. Create a recovery task when the text asks for a "
+                    "cafe, rest, walking break, quiet place, or an optional stop. "
+                    "Do not turn final destinations or appointment places into tasks. "
+                    "Infer tolerances conservatively from the strongest mood signal."
                 ),
             },
             {"role": "user", "content": user_text},
@@ -174,6 +194,7 @@ def extract_intent_with_llm(user_text: str) -> ExtractedIntent | None:
             tasks=tasks,
             constraints=Constraints(**data["constraints"]),
             emotion=EmotionState(**data["emotion"]),
+            mood_candidates=data.get("mood_candidates", [])[:4],
         )
         _remember_intent(cache_key, intent)
         return intent

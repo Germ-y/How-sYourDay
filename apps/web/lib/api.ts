@@ -49,6 +49,7 @@ export type PreviewInsight = {
 export type PreviewInsightsResult = {
   insights: PreviewInsight[];
   source: string;
+  mood_candidates?: string[];
 };
 
 export type PreferencePointsResult = {
