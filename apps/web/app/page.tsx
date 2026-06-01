@@ -909,7 +909,7 @@ export default function HomePage() {
           </div>
         </header>
 
-        <section className="grid min-w-0 gap-5 overflow-hidden px-5 pb-36 lg:grid-cols-[420px_minmax(0,1fr)] lg:items-start lg:px-0 lg:pb-0">
+        <section className="mt-2 grid min-w-0 gap-5 overflow-x-clip px-5 pb-36 pt-1 lg:grid-cols-[420px_minmax(0,1fr)] lg:items-start lg:px-0 lg:pb-0">
           <article className="min-w-0 overflow-hidden rounded-[28px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8 lg:sticky lg:top-20">
             <div className="border-b border-ink/8 bg-[#fffdf8] px-5 py-4">
               <div className="flex items-center justify-between gap-3">
