@@ -909,7 +909,7 @@ export default function HomePage() {
           </div>
         </header>
 
-        <section className="grid min-w-0 gap-5 overflow-hidden px-5 lg:grid-cols-[420px_minmax(0,1fr)] lg:items-start lg:px-0">
+        <section className="grid min-w-0 gap-5 overflow-hidden px-5 pb-36 lg:grid-cols-[420px_minmax(0,1fr)] lg:items-start lg:px-0 lg:pb-0">
           <article className="min-w-0 overflow-hidden rounded-[28px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8 lg:sticky lg:top-20">
             <div className="border-b border-ink/8 bg-[#fffdf8] px-5 py-4">
               <div className="flex items-center justify-between gap-3">
@@ -1100,7 +1100,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink/10 bg-white/92 px-5 py-3 shadow-[0_-8px_24px_rgba(23,26,24,0.08)] backdrop-blur lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink/10 bg-white/92 px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(23,26,24,0.08)] backdrop-blur lg:hidden">
           <button
             className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-ink/45"
             type="submit"
