@@ -1203,13 +1203,13 @@ function AuthPage({
           </div>
 
           <div className="grid gap-5 p-5 pt-0">
-            <div className="-mx-5 grid grid-cols-2 border-b border-ink/8 bg-white px-5">
+            <div className="relative -mx-5 grid grid-cols-2 border-b border-ink/8 bg-white px-5">
               {[
                 { id: "login" as const, label: "로그인" },
                 { id: "signup" as const, label: "회원가입" }
               ].map((item) => (
                 <button
-                  className={`relative min-h-14 text-sm font-semibold transition ${
+                  className={`relative min-h-14 text-sm font-semibold transition-colors duration-200 ${
                     mode === item.id
                       ? "text-ink"
                       : "text-ink/42 hover:text-ink/70"
@@ -1219,29 +1219,47 @@ function AuthPage({
                   onClick={() => onModeChange(item.id)}
                 >
                   {item.label}
-                  {mode === item.id ? (
-                    <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-tide" />
-                  ) : null}
                 </button>
               ))}
+              <span
+                className={`pointer-events-none absolute bottom-0 left-5 h-0.5 w-[calc(50%-1.25rem)] rounded-full bg-tide transition-transform duration-300 ease-out ${
+                  isSignup ? "translate-x-full" : "translate-x-0"
+                }`}
+              />
             </div>
 
             <div className="grid gap-3">
-              {isSignup ? (
-                <AuthField
-                  icon={<UserRound size={16} aria-hidden />}
-                  label="닉네임"
-                  placeholder="예: 균이"
-                  value={form.nickname}
-                  onChange={(value) => onChange("nickname", value)}
-                />
-              ) : (
-                <div className="flex min-h-[76px] items-start justify-center pt-9">
-                  <p className="text-sm font-semibold text-ink/35">
-                    또 오셨네요. 반가워요!
-                  </p>
+              <div className="relative min-h-[76px] overflow-hidden">
+                <div
+                  className={`pointer-events-none absolute inset-0 transition duration-200 ease-out ${
+                    isSignup
+                      ? "-translate-y-1 opacity-0"
+                      : "translate-y-0 opacity-100"
+                  }`}
+                >
+                  <div className="flex min-h-[76px] items-start justify-center pt-9">
+                    <p className="text-sm font-semibold text-ink/35">
+                      또 오셨네요. 반가워요!
+                    </p>
+                  </div>
                 </div>
-              )}
+                <div
+                  className={`absolute inset-0 transition duration-200 ease-out ${
+                    isSignup
+                      ? "translate-y-0 opacity-100"
+                      : "pointer-events-none translate-y-1 opacity-0"
+                  }`}
+                >
+                  <AuthField
+                    disabled={!isSignup}
+                    icon={<UserRound size={16} aria-hidden />}
+                    label="닉네임"
+                    placeholder="예: 균이"
+                    value={form.nickname}
+                    onChange={(value) => onChange("nickname", value)}
+                  />
+                </div>
+              </div>
               <AuthField
                 icon={<Mail size={16} aria-hidden />}
                 label="이메일"
@@ -1282,6 +1300,7 @@ function AuthPage({
 }
 
 function AuthField({
+  disabled = false,
   icon,
   label,
   placeholder,
@@ -1289,6 +1308,7 @@ function AuthField({
   value,
   onChange
 }: {
+  disabled?: boolean;
   icon: ReactNode;
   label: string;
   placeholder: string;
@@ -1309,6 +1329,7 @@ function AuthField({
           type={type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
           required
         />
       </span>
