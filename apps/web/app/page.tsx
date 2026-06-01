@@ -944,7 +944,6 @@ export default function HomePage() {
                   <ComposerTitle
                     icon={<Navigation size={17} aria-hidden />}
                     label="경로 확인"
-                    support={`${locationStatus} · 직접 수정 가능`}
                   />
                   <button
                     className="min-h-9 max-w-[86px] shrink-0 rounded-xl bg-white px-3 text-xs font-semibold text-moss shadow-sm ring-1 ring-moss/15 transition hover:bg-[#ddf3eb] active:scale-[0.98]"
@@ -1984,7 +1983,7 @@ function ComposerTitle({
 }: {
   icon: ReactNode;
   label: string;
-  support: string;
+  support?: string;
 }) {
   return (
     <div className="flex min-w-0 items-start gap-2.5">
@@ -1993,9 +1992,11 @@ function ComposerTitle({
       </span>
       <span className="min-w-0">
         <span className="block text-sm font-semibold text-ink/72">{label}</span>
-        <span className="mt-0.5 block break-words text-xs leading-5 text-ink/45">
-          {support}
-        </span>
+        {support ? (
+          <span className="mt-0.5 block break-words text-xs leading-5 text-ink/45">
+            {support}
+          </span>
+        ) : null}
       </span>
     </div>
   );
