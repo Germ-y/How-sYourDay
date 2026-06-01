@@ -12,6 +12,7 @@ import {
   Home,
   HeartPulse,
   Leaf,
+  LockKeyhole,
   LogOut,
   Mail,
   MapPin,
@@ -32,13 +33,18 @@ import {
   createSavedPlace,
   deleteSavedPlace,
   extractRouteLocations,
+  fetchMe,
   fetchPreviewInsights,
   fetchPreferencePoints,
   fetchSavedPlaces,
   geocodeLocation,
+  login as loginUser,
+  logout as logoutUser,
   requestDailyPlan,
   sendRouteFeedback,
   searchLocations,
+  signup as signupUser,
+  type AuthUser,
   type Coordinate,
   type DailyPlan,
   type EmotionCost,
@@ -56,10 +62,6 @@ const QUICK_DESTINATIONS = ["집", "학교", "회사"];
 const LAST_ORIGIN_KEY = "hows-your-day.origin-text.v1";
 const LAST_DESTINATION_KEY = "hows-your-day.destination-text.v1";
 const SAVED_PLACES_KEY = "hows-your-day.saved-places.v1";
-const PROFILE_PLACEHOLDER = {
-  nickname: "균이",
-  email: "로그인 후 표시"
-};
 const MOOD_PRESETS = [
   {
     label: "피곤",
@@ -153,6 +155,7 @@ const POI_PREFERENCES = [
 type PreferenceVote = "like" | "dislike";
 type PreferenceSignal = PreferenceVote | "similar-like" | "similar-dislike" | null;
 type AppView = "planner" | "taste" | "profile";
+type AuthMode = "login" | "signup";
 type SavedPlaceKind = "home" | "school" | "work" | "favorite";
 type SavedPlaceEntry = {
   id: string;
@@ -226,6 +229,16 @@ export default function HomePage() {
   );
   const [previewSource, setPreviewSource] = useState("rules");
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authForm, setAuthForm] = useState({
+    email: "",
+    password: "",
+    nickname: ""
+  });
+  const [authStatus, setAuthStatus] = useState("");
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
   const moodCandidates = useMemo(() => buildMoodCandidates(text), [text]);
   const visibleMoodCandidates = useMemo(
     () => ensureActiveMoodCandidate(moodCandidates, activeMood),
@@ -253,17 +266,59 @@ export default function HomePage() {
       }
     }
 
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchMe()
+      .then((user) => {
+        if (!cancelled) {
+          setAuthUser(user);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAuthUser(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAuthChecked(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
+    let cancelled = false;
     fetchSavedPlaces()
       .then((result) => {
+        if (cancelled) {
+          return;
+        }
         const nextPlaces = result.places.map(savedPlaceRecordToEntry);
         setSavedPlaces(nextPlaces);
         window.localStorage.setItem(SAVED_PLACES_KEY, JSON.stringify(nextPlaces));
         setSavedPlaceNotice("DB 저장소 연결됨");
       })
       .catch(() => {
-        setSavedPlaceNotice("로컬 임시 저장 사용 중");
+        if (!cancelled) {
+          setSavedPlaceNotice("로컬 임시 저장 사용 중");
+        }
       });
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
 
   useEffect(() => {
     const trimmed = text.trim();
@@ -575,6 +630,57 @@ export default function HomePage() {
     setLocationStatus(`${candidate.label} 선택됨`);
   }
 
+  function handleAuthFormChange(field: "email" | "password" | "nickname", value: string) {
+    setAuthForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+    setAuthStatus("");
+  }
+
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsAuthLoading(true);
+    setAuthStatus("");
+
+    try {
+      if (authMode === "signup") {
+        await signupUser({
+          email: authForm.email.trim(),
+          password: authForm.password,
+          nickname: authForm.nickname.trim()
+        });
+      }
+      await loginUser({
+        email: authForm.email.trim(),
+        password: authForm.password
+      });
+      const user = await fetchMe();
+      setAuthUser(user);
+      setAuthForm((current) => ({
+        ...current,
+        password: ""
+      }));
+    } catch (caught) {
+      setAuthStatus(getAuthErrorMessage(caught));
+    } finally {
+      setIsAuthLoading(false);
+    }
+  }
+
+  function handleAuthModeChange(mode: AuthMode) {
+    setAuthMode(mode);
+    setAuthStatus("");
+  }
+
+  function handleLogout() {
+    logoutUser();
+    setAuthUser(null);
+    setSavedPlaces([]);
+    setSavedPlaceNotice("");
+    setActiveView("planner");
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
@@ -762,6 +868,24 @@ export default function HomePage() {
     }
   }, [poiPreferenceIndex, preferencePoints.length]);
   const primaryLabel = isLoading ? "경로 계산 중" : "경로 추천";
+
+  if (!authChecked) {
+    return <AuthLoading />;
+  }
+
+  if (!authUser) {
+    return (
+      <AuthPage
+        form={authForm}
+        isLoading={isAuthLoading}
+        mode={authMode}
+        status={authStatus}
+        onChange={handleAuthFormChange}
+        onModeChange={handleAuthModeChange}
+        onSubmit={handleAuthSubmit}
+      />
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#fff9ed] text-ink">
@@ -995,6 +1119,7 @@ export default function HomePage() {
           />
         ) : (
           <ProfilePage
+            authUser={authUser}
             destinationText={destinationText}
             originText={originText}
             plan={plan}
@@ -1005,6 +1130,7 @@ export default function HomePage() {
             onRemoveSavedPlace={handleRemoveSavedPlace}
             onSavedPlaceDraftChange={handleSavedPlaceDraftChange}
             onSaveCurrentPlace={handleSaveCurrentPlace}
+            onLogout={handleLogout}
             onOpenPlanner={() => setActiveView("planner")}
             onUseSavedPlace={handleUseSavedPlace}
           />
@@ -1012,6 +1138,189 @@ export default function HomePage() {
       </form>
     </main>
   );
+}
+
+function AuthLoading() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#fff9ed] px-5 text-ink">
+      <section className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#fde2ef] text-tide">
+            <Sparkles size={20} aria-hidden />
+          </span>
+          <div>
+            <p className="text-xs font-semibold text-tide">How's Your Day</p>
+            <h1 className="mt-1 text-xl font-semibold">로그인 확인 중</h1>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AuthPage({
+  form,
+  isLoading,
+  mode,
+  status,
+  onChange,
+  onModeChange,
+  onSubmit
+}: {
+  form: { email: string; password: string; nickname: string };
+  isLoading: boolean;
+  mode: AuthMode;
+  status: string;
+  onChange: (field: "email" | "password" | "nickname", value: string) => void;
+  onModeChange: (mode: AuthMode) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const isSignup = mode === "signup";
+
+  return (
+    <main className="min-h-screen bg-[#fff9ed] px-5 py-8 text-ink">
+      <form
+        className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md flex-col justify-center"
+        onSubmit={onSubmit}
+      >
+        <section className="overflow-hidden rounded-[30px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.08)] ring-1 ring-ink/8">
+          <div className="bg-[#ddf3eb] px-5 py-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-moss">How's Your Day</p>
+                <h1 className="mt-1 text-[30px] font-semibold leading-tight [word-break:keep-all]">
+                  내 이동 기록으로 시작
+                </h1>
+                <p className="mt-2 text-sm font-medium leading-6 text-ink/55 [word-break:keep-all]">
+                  감정, 장소 취향, 저장 장소를 내 계정에 따로 보관합니다.
+                </p>
+              </div>
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-tide shadow-sm ring-1 ring-ink/8">
+                <MapPinned size={23} aria-hidden />
+              </span>
+            </div>
+          </div>
+
+          <div className="grid gap-5 p-5">
+            <div className="grid grid-cols-2 rounded-2xl bg-[#fff9ed] p-1 ring-1 ring-ink/8">
+              {[
+                { id: "login" as const, label: "로그인" },
+                { id: "signup" as const, label: "회원가입" }
+              ].map((item) => (
+                <button
+                  className={`min-h-10 rounded-xl text-sm font-semibold transition ${
+                    mode === item.id
+                      ? "bg-[#fde2ef] text-tide shadow-sm"
+                      : "text-ink/48 hover:bg-white/70"
+                  }`}
+                  key={item.id}
+                  type="button"
+                  onClick={() => onModeChange(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-3">
+              {isSignup ? (
+                <AuthField
+                  icon={<UserRound size={16} aria-hidden />}
+                  label="닉네임"
+                  placeholder="예: 균이"
+                  value={form.nickname}
+                  onChange={(value) => onChange("nickname", value)}
+                />
+              ) : null}
+              <AuthField
+                icon={<Mail size={16} aria-hidden />}
+                label="이메일"
+                placeholder="user@example.com"
+                type="email"
+                value={form.email}
+                onChange={(value) => onChange("email", value)}
+              />
+              <AuthField
+                icon={<LockKeyhole size={16} aria-hidden />}
+                label="비밀번호"
+                placeholder="8자 이상"
+                type="password"
+                value={form.password}
+                onChange={(value) => onChange("password", value)}
+              />
+            </div>
+
+            {status ? (
+              <p className="rounded-2xl bg-[#fff7fb] p-3 text-sm font-medium leading-6 text-coral ring-1 ring-coral/20">
+                {status}
+              </p>
+            ) : null}
+
+            <button
+              className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-ink px-4 font-semibold text-white shadow-[0_12px_30px_rgba(23,26,24,0.14)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45"
+              type="submit"
+              disabled={isLoading}
+            >
+              {isLoading ? "확인 중" : isSignup ? "회원가입하고 시작" : "로그인"}
+              <ArrowRight size={18} aria-hidden />
+            </button>
+          </div>
+        </section>
+      </form>
+    </main>
+  );
+}
+
+function AuthField({
+  icon,
+  label,
+  placeholder,
+  type = "text",
+  value,
+  onChange
+}: {
+  icon: ReactNode;
+  label: string;
+  placeholder: string;
+  type?: "email" | "password" | "text";
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-semibold text-ink/68">{label}</span>
+      <span className="flex min-h-12 items-center gap-3 rounded-2xl bg-[#fffdf8] px-3 ring-1 ring-ink/9 transition focus-within:ring-tide/55">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fde2ef] text-tide">
+          {icon}
+        </span>
+        <input
+          className="min-w-0 flex-1 bg-transparent text-base font-semibold outline-none placeholder:text-ink/32"
+          placeholder={placeholder}
+          type={type}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required
+        />
+      </span>
+    </label>
+  );
+}
+
+function getAuthErrorMessage(caught: unknown) {
+  const message = caught instanceof Error ? caught.message : "";
+  if (message.includes("409")) {
+    return "이미 가입된 이메일입니다.";
+  }
+  if (message.includes("401")) {
+    return "이메일 또는 비밀번호를 다시 확인해주세요.";
+  }
+  if (message.includes("503")) {
+    return "DB 연결이 필요합니다. Postgres를 실행한 뒤 다시 시도해주세요.";
+  }
+  if (message.includes("422")) {
+    return "이메일, 비밀번호, 닉네임을 형식에 맞게 입력해주세요.";
+  }
+  return "인증 요청에 실패했습니다. 잠시 후 다시 시도해주세요.";
 }
 
 function ServiceTopBar({
@@ -1185,8 +1494,10 @@ function TasteIntroCard({
 }
 
 function ProfilePage({
+  authUser,
   destinationText,
   onAddSavedPlace,
+  onLogout,
   originText,
   onOpenPlanner,
   onRemoveSavedPlace,
@@ -1198,6 +1509,7 @@ function ProfilePage({
   savedPlaceNotice,
   savedPlaces
 }: {
+  authUser: AuthUser;
   destinationText: string;
   originText: string;
   plan: DailyPlan | null;
@@ -1205,6 +1517,7 @@ function ProfilePage({
   savedPlaceNotice: string;
   savedPlaces: SavedPlaceEntry[];
   onAddSavedPlace: () => void;
+  onLogout: () => void;
   onOpenPlanner: () => void;
   onRemoveSavedPlace: (id: string) => void;
   onSaveCurrentPlace: (role: "origin" | "destination") => void;
@@ -1220,7 +1533,7 @@ function ProfilePage({
   return (
     <section className="grid gap-4 px-5 py-5 lg:grid-cols-[360px_1fr] lg:px-0">
       <div className="grid gap-4 lg:self-start lg:sticky lg:top-20">
-        <AccountCard />
+        <AccountCard user={authUser} onLogout={onLogout} />
       </div>
 
       <div className="grid gap-4">
@@ -1270,7 +1583,13 @@ function ProfilePage({
   );
 }
 
-function AccountCard() {
+function AccountCard({
+  user,
+  onLogout
+}: {
+  user: AuthUser;
+  onLogout: () => void;
+}) {
   return (
     <article className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_46px_rgba(23,26,24,0.06)] ring-1 ring-ink/8">
       <div className="bg-[#ddf3eb] px-5 py-5">
@@ -1282,7 +1601,7 @@ function AccountCard() {
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-moss">내 정보</span>
               <span className="mt-1 block truncate text-2xl font-semibold leading-tight">
-                {PROFILE_PLACEHOLDER.nickname}
+                {user.nickname}
               </span>
             </span>
           </div>
@@ -1290,6 +1609,7 @@ function AccountCard() {
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/78 text-ink/48 transition active:scale-95"
             type="button"
             aria-label="로그아웃"
+            onClick={onLogout}
           >
             <LogOut size={17} aria-hidden />
           </button>
@@ -1300,7 +1620,7 @@ function AccountCard() {
         <AccountRow
           icon={<Mail size={16} aria-hidden />}
           label="이메일"
-          value={PROFILE_PLACEHOLDER.email}
+          value={user.email}
         />
       </div>
     </article>
