@@ -18,11 +18,12 @@ import {
   MapPinned,
   MessageCircle,
   Navigation,
+  Plus,
   RotateCcw,
-  Settings2,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
+  Trash2,
   UserRound,
   Zap,
   type LucideIcon
@@ -46,6 +47,7 @@ const starterText = "";
 const QUICK_DESTINATIONS = ["집", "학교", "회사"];
 const LAST_ORIGIN_KEY = "hows-your-day.origin-text.v1";
 const LAST_DESTINATION_KEY = "hows-your-day.destination-text.v1";
+const SAVED_PLACES_KEY = "hows-your-day.saved-places.v1";
 const PROFILE_PLACEHOLDER = {
   nickname: "균이",
   email: "로그인 후 표시"
@@ -118,6 +120,14 @@ const POI_PREFERENCES = [
 type PreferenceVote = "like" | "dislike";
 type PreferenceSignal = PreferenceVote | "similar-like" | "similar-dislike" | null;
 type AppView = "planner" | "taste" | "profile";
+type SavedPlaceKind = "home" | "school" | "work" | "favorite";
+type SavedPlaceEntry = {
+  id: string;
+  name: string;
+  address: string;
+  kind: SavedPlaceKind;
+  updatedAt: string;
+};
 type PreferencePoint = {
   id: string;
   name: string;
@@ -154,15 +164,33 @@ export default function HomePage() {
   const [activeView, setActiveView] = useState<AppView>("planner");
   const [locationStatus, setLocationStatus] =
     useState("주소 또는 장소명 입력 필요");
+  const [savedPlaces, setSavedPlaces] = useState<SavedPlaceEntry[]>([]);
+  const [savedPlaceDraft, setSavedPlaceDraft] = useState({
+    name: "",
+    address: "",
+    kind: "favorite" as SavedPlaceKind
+  });
+  const [savedPlaceNotice, setSavedPlaceNotice] = useState("");
 
   useEffect(() => {
     const storedOriginText = window.localStorage.getItem(LAST_ORIGIN_KEY);
     const storedDestinationText = window.localStorage.getItem(LAST_DESTINATION_KEY);
+    const storedSavedPlaces = window.localStorage.getItem(SAVED_PLACES_KEY);
     if (storedOriginText) {
       setOriginText(storedOriginText);
     }
     if (storedDestinationText) {
       setDestinationText(storedDestinationText);
+    }
+    if (storedSavedPlaces) {
+      try {
+        const parsed = JSON.parse(storedSavedPlaces);
+        if (Array.isArray(parsed)) {
+          setSavedPlaces(parsed.filter(isSavedPlaceEntry));
+        }
+      } catch {
+        window.localStorage.removeItem(SAVED_PLACES_KEY);
+      }
     }
   }, []);
 
@@ -216,6 +244,95 @@ export default function HomePage() {
       window.clearTimeout(timer);
     };
   }, [text, originEdited, destinationEdited, originText, destinationText]);
+
+  function persistSavedPlaces(nextPlaces: SavedPlaceEntry[]) {
+    setSavedPlaces(nextPlaces);
+    window.localStorage.setItem(SAVED_PLACES_KEY, JSON.stringify(nextPlaces));
+  }
+
+  function handleSavedPlaceDraftChange(
+    field: "name" | "address" | "kind",
+    value: string
+  ) {
+    setSavedPlaceDraft((current) => ({
+      ...current,
+      [field]: field === "kind" ? (value as SavedPlaceKind) : value
+    }));
+  }
+
+  function handleAddSavedPlace() {
+    const name = savedPlaceDraft.name.trim();
+    const address = savedPlaceDraft.address.trim();
+
+    if (!name || !address) {
+      setSavedPlaceNotice("장소 이름과 주소를 입력해야 합니다.");
+      return;
+    }
+
+    savePlace({
+      name,
+      address,
+      kind: savedPlaceDraft.kind
+    });
+    setSavedPlaceDraft({
+      name: "",
+      address: "",
+      kind: "favorite"
+    });
+  }
+
+  function handleSaveCurrentPlace(role: "origin" | "destination") {
+    const address = role === "origin" ? originText.trim() : destinationText.trim();
+
+    if (!address) {
+      setSavedPlaceNotice(
+        role === "origin"
+          ? "먼저 출발지를 입력해야 합니다."
+          : "먼저 도착지를 입력해야 합니다."
+      );
+      return;
+    }
+
+    savePlace({
+      name: role === "origin" ? "기본 출발지" : "최근 도착지",
+      address,
+      kind: role === "origin" ? "favorite" : guessSavedPlaceKind(address)
+    });
+  }
+
+  function savePlace(place: Omit<SavedPlaceEntry, "id" | "updatedAt">) {
+    const normalizedAddress = normalizePlaceText(place.address);
+    const nextPlace: SavedPlaceEntry = {
+      ...place,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      updatedAt: new Date().toISOString()
+    };
+    const withoutDuplicate = savedPlaces.filter(
+      (savedPlace) => normalizePlaceText(savedPlace.address) !== normalizedAddress
+    );
+    persistSavedPlaces([nextPlace, ...withoutDuplicate].slice(0, 12));
+    setSavedPlaceNotice(`${place.name} 저장 완료`);
+  }
+
+  function handleRemoveSavedPlace(id: string) {
+    const removed = savedPlaces.find((place) => place.id === id);
+    persistSavedPlaces(savedPlaces.filter((place) => place.id !== id));
+    setSavedPlaceNotice(
+      removed ? `${removed.name} 삭제 완료` : "저장 장소 삭제 완료"
+    );
+  }
+
+  function handleUseSavedPlace(place: SavedPlaceEntry, target: "origin" | "destination") {
+    if (target === "origin") {
+      setOriginText(place.address);
+      setOriginEdited(true);
+    } else {
+      setDestinationText(place.address);
+      setDestinationEdited(true);
+    }
+    setLocationStatus(`${place.name}을 ${target === "origin" ? "출발지" : "도착지"}로 설정`);
+    setActiveView("planner");
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -616,7 +733,15 @@ export default function HomePage() {
             destinationText={destinationText}
             originText={originText}
             plan={plan}
+            savedPlaceDraft={savedPlaceDraft}
+            savedPlaceNotice={savedPlaceNotice}
+            savedPlaces={savedPlaces}
+            onAddSavedPlace={handleAddSavedPlace}
+            onRemoveSavedPlace={handleRemoveSavedPlace}
+            onSavedPlaceDraftChange={handleSavedPlaceDraftChange}
+            onSaveCurrentPlace={handleSaveCurrentPlace}
             onOpenPlanner={() => setActiveView("planner")}
+            onUseSavedPlace={handleUseSavedPlace}
           />
         )}
       </form>
@@ -797,15 +922,37 @@ function TasteIntroCard({
 function ProfilePage({
   activeMood,
   destinationText,
+  onAddSavedPlace,
   originText,
+  onOpenPlanner,
+  onRemoveSavedPlace,
+  onSaveCurrentPlace,
+  onSavedPlaceDraftChange,
+  onUseSavedPlace,
   plan,
-  onOpenPlanner
+  savedPlaceDraft,
+  savedPlaceNotice,
+  savedPlaces
 }: {
   activeMood: string;
   destinationText: string;
   originText: string;
   plan: DailyPlan | null;
+  savedPlaceDraft: { name: string; address: string; kind: SavedPlaceKind };
+  savedPlaceNotice: string;
+  savedPlaces: SavedPlaceEntry[];
+  onAddSavedPlace: () => void;
   onOpenPlanner: () => void;
+  onRemoveSavedPlace: (id: string) => void;
+  onSaveCurrentPlace: (role: "origin" | "destination") => void;
+  onSavedPlaceDraftChange: (
+    field: "name" | "address" | "kind",
+    value: string
+  ) => void;
+  onUseSavedPlace: (
+    place: SavedPlaceEntry,
+    target: "origin" | "destination"
+  ) => void;
 }) {
   return (
     <section className="grid gap-4 px-5 py-5 lg:grid-cols-[360px_1fr] lg:px-0">
@@ -825,23 +972,24 @@ function ProfilePage({
           </div>
         </article>
 
-        <article className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-ink/62">저장 장소</p>
-              <p className="mt-1 text-xs text-ink/45">자주 쓰는 출발지와 도착지</p>
-            </div>
-            <Settings2 className="text-ink/36" size={18} aria-hidden />
-          </div>
-          <div className="mt-4 grid gap-2">
-            <SavedPlace icon={<Home size={16} aria-hidden />} label="집" value={destinationText || "아직 없음"} />
-            <SavedPlace icon={<MapPin size={16} aria-hidden />} label="기본 출발지" value={originText || "아직 없음"} />
-            <SavedPlace icon={<Building2 size={16} aria-hidden />} label="학교/회사" value="필요할 때 입력" />
-          </div>
-        </article>
+        <PlaceSaverCard
+          destinationText={destinationText}
+          draft={savedPlaceDraft}
+          notice={savedPlaceNotice}
+          originText={originText}
+          onAdd={onAddSavedPlace}
+          onDraftChange={onSavedPlaceDraftChange}
+          onSaveCurrent={onSaveCurrentPlace}
+        />
       </div>
 
       <div className="grid gap-4">
+        <SavedPlacesPanel
+          places={savedPlaces}
+          onRemove={onRemoveSavedPlace}
+          onUse={onUseSavedPlace}
+        />
+
         <article className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -943,24 +1091,221 @@ function ProfileStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SavedPlace({
-  icon,
-  label,
-  value
+function PlaceSaverCard({
+  destinationText,
+  draft,
+  notice,
+  originText,
+  onAdd,
+  onDraftChange,
+  onSaveCurrent
 }: {
-  icon: ReactNode;
-  label: string;
-  value: string;
+  destinationText: string;
+  draft: { name: string; address: string; kind: SavedPlaceKind };
+  notice: string;
+  originText: string;
+  onAdd: () => void;
+  onDraftChange: (field: "name" | "address" | "kind", value: string) => void;
+  onSaveCurrent: (role: "origin" | "destination") => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-[#fffdf8] px-3 py-3 ring-1 ring-ink/7">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#ddf3eb] text-moss">
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-xs font-semibold text-ink/42">{label}</span>
-        <span className="block truncate text-sm font-semibold text-ink/76">{value}</span>
-      </span>
+    <article className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-tide">장소 저장</p>
+          <h2 className="mt-1 text-xl font-semibold [word-break:keep-all]">
+            자주 가는 곳
+          </h2>
+        </div>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#fde2ef] text-tide">
+          <MapPinned size={19} aria-hidden />
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        <label className="grid gap-1 text-xs font-semibold text-ink/48">
+          이름
+          <input
+            className="min-h-11 rounded-xl border border-ink/10 bg-[#fffdf8] px-3 text-sm font-semibold text-ink outline-none transition placeholder:text-ink/32 focus:border-tide focus:bg-white"
+            value={draft.name}
+            onChange={(event) => onDraftChange("name", event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onAdd();
+              }
+            }}
+            placeholder="예: 집, 학교, 스터디 카페"
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-ink/48">
+          주소 또는 장소명
+          <input
+            className="min-h-11 rounded-xl border border-ink/10 bg-[#fffdf8] px-3 text-sm font-semibold text-ink outline-none transition placeholder:text-ink/32 focus:border-tide focus:bg-white"
+            value={draft.address}
+            onChange={(event) => onDraftChange("address", event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onAdd();
+              }
+            }}
+            placeholder="예: 성균관대학교 서울캠퍼스"
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-ink/48">
+          분류
+          <select
+            className="min-h-11 rounded-xl border border-ink/10 bg-[#fffdf8] px-3 text-sm font-semibold text-ink outline-none transition focus:border-tide focus:bg-white"
+            value={draft.kind}
+            onChange={(event) => onDraftChange("kind", event.target.value)}
+          >
+            <option value="favorite">자주 감</option>
+            <option value="home">집</option>
+            <option value="school">학교</option>
+            <option value="work">회사</option>
+          </select>
+        </label>
+      </div>
+
+      <button
+        className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition active:scale-[0.98]"
+        type="button"
+        onClick={onAdd}
+      >
+        <Plus size={17} aria-hidden />
+        저장하기
+      </button>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          className="min-h-10 rounded-xl bg-[#ddf3eb] px-3 text-sm font-semibold text-moss transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+          type="button"
+          disabled={!originText.trim()}
+          onClick={() => onSaveCurrent("origin")}
+        >
+          출발지 저장
+        </button>
+        <button
+          className="min-h-10 rounded-xl bg-[#fde2ef] px-3 text-sm font-semibold text-tide transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+          type="button"
+          disabled={!destinationText.trim()}
+          onClick={() => onSaveCurrent("destination")}
+        >
+          도착지 저장
+        </button>
+      </div>
+
+      {notice ? (
+        <p className="mt-3 rounded-xl bg-[#fff9ed] px-3 py-2 text-xs font-semibold text-ink/55">
+          {notice}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+function SavedPlacesPanel({
+  places,
+  onRemove,
+  onUse
+}: {
+  places: SavedPlaceEntry[];
+  onRemove: (id: string) => void;
+  onUse: (place: SavedPlaceEntry, target: "origin" | "destination") => void;
+}) {
+  return (
+    <article className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-tide">저장 장소</p>
+          <h2 className="mt-1 text-xl font-semibold [word-break:keep-all]">
+            이동할 때 바로 꺼내기
+          </h2>
+        </div>
+        <span className="rounded-xl bg-[#fff9ed] px-2.5 py-1 text-xs font-semibold text-ink/55">
+          {places.length}개
+        </span>
+      </div>
+
+      {places.length ? (
+        <div className="mt-4 grid gap-3">
+          {places.map((place) => (
+            <SavedPlace
+              key={place.id}
+              place={place}
+              onRemove={onRemove}
+              onUse={onUse}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-2xl bg-[#fffdf8] p-5 text-center ring-1 ring-ink/7">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ddf3eb] text-moss">
+            <MapPin size={21} aria-hidden />
+          </span>
+          <p className="mt-3 text-base font-semibold">저장한 장소 없음</p>
+          <p className="mt-1 text-sm leading-6 text-ink/48 [word-break:keep-all]">
+            자주 가는 곳을 저장하면 다음 경로 입력이 훨씬 짧아집니다.
+          </p>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function SavedPlace({
+  place,
+  onRemove,
+  onUse
+}: {
+  place: SavedPlaceEntry;
+  onRemove: (id: string) => void;
+  onUse: (place: SavedPlaceEntry, target: "origin" | "destination") => void;
+}) {
+  return (
+    <div className="rounded-2xl bg-[#fffdf8] p-3 ring-1 ring-ink/7">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#ddf3eb] text-moss">
+          {savedPlaceIcon(place.kind)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-semibold text-tide">
+            {savedPlaceKindLabel(place.kind)}
+          </span>
+          <span className="mt-0.5 block truncate text-base font-semibold text-ink">
+            {place.name}
+          </span>
+          <span className="mt-1 block truncate text-sm text-ink/50">
+            {place.address}
+          </span>
+        </span>
+        <button
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-ink/38 transition hover:text-tide active:scale-95"
+          type="button"
+          aria-label={`${place.name} 삭제`}
+          onClick={() => onRemove(place.id)}
+        >
+          <Trash2 size={16} aria-hidden />
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          className="min-h-10 rounded-xl bg-[#ddf3eb] px-3 text-sm font-semibold text-moss transition active:scale-[0.98]"
+          type="button"
+          onClick={() => onUse(place, "origin")}
+        >
+          출발지로
+        </button>
+        <button
+          className="min-h-10 rounded-xl bg-[#fde2ef] px-3 text-sm font-semibold text-tide transition active:scale-[0.98]"
+          type="button"
+          onClick={() => onUse(place, "destination")}
+        >
+          도착지로
+        </button>
+      </div>
     </div>
   );
 }
@@ -1853,6 +2198,83 @@ function PreferenceVisual({
       </div>
     </div>
   );
+}
+
+function isSavedPlaceKind(value: unknown): value is SavedPlaceKind {
+  return (
+    value === "home" ||
+    value === "school" ||
+    value === "work" ||
+    value === "favorite"
+  );
+}
+
+function isSavedPlaceEntry(value: unknown): value is SavedPlaceEntry {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const place = value as Partial<SavedPlaceEntry>;
+  return (
+    typeof place.id === "string" &&
+    typeof place.name === "string" &&
+    typeof place.address === "string" &&
+    isSavedPlaceKind(place.kind) &&
+    typeof place.updatedAt === "string"
+  );
+}
+
+function normalizePlaceText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, "");
+}
+
+function guessSavedPlaceKind(value: string): SavedPlaceKind {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("집") || normalized.includes("home")) {
+    return "home";
+  }
+  if (
+    normalized.includes("학교") ||
+    normalized.includes("대학교") ||
+    normalized.includes("campus") ||
+    normalized.includes("school")
+  ) {
+    return "school";
+  }
+  if (
+    normalized.includes("회사") ||
+    normalized.includes("오피스") ||
+    normalized.includes("office")
+  ) {
+    return "work";
+  }
+  return "favorite";
+}
+
+function savedPlaceKindLabel(kind: SavedPlaceKind) {
+  if (kind === "home") {
+    return "집";
+  }
+  if (kind === "school") {
+    return "학교";
+  }
+  if (kind === "work") {
+    return "회사";
+  }
+  return "자주 감";
+}
+
+function savedPlaceIcon(kind: SavedPlaceKind) {
+  if (kind === "home") {
+    return <Home size={18} aria-hidden />;
+  }
+  if (kind === "school") {
+    return <Building2 size={18} aria-hidden />;
+  }
+  if (kind === "work") {
+    return <Coffee size={18} aria-hidden />;
+  }
+  return <MapPin size={18} aria-hidden />;
 }
 
 function preferenceDisplayTags(
