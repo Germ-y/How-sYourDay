@@ -25,8 +25,15 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
+}
+
+input,
+textarea,
+select {
+  font-size: 16px !important;
 }
 
 button {

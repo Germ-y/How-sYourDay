@@ -566,6 +566,10 @@ export default function HomePage() {
   }
 
   function handleUseSavedPlace(place: SavedPlaceEntry, target: "origin" | "destination") {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
     if (target === "origin") {
       setOriginText(place.address);
       setOriginEdited(true);
@@ -577,6 +581,12 @@ export default function HomePage() {
     }
     setLocationStatus(`${place.name}을 ${target === "origin" ? "출발지" : "도착지"}로 설정`);
     setActiveView("planner");
+    window.requestAnimationFrame(() => {
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    });
   }
 
   function handleLocationCandidateSelect(
