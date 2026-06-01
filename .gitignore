@@ -10,6 +10,7 @@ dist/
 build/
 *.egg-info/
 apps/web/next-dev*.log
+server/api-dev*.log
 
 # Environment
 .env
