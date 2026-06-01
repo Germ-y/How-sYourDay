@@ -29,6 +29,17 @@ export type RouteExtractionResult = {
   source: string;
 };
 
+export type PreviewInsight = {
+  label: string;
+  value: string;
+  kind: "route" | "time" | "stop" | "task" | "mood" | string;
+};
+
+export type PreviewInsightsResult = {
+  insights: PreviewInsight[];
+  source: string;
+};
+
 export type PreferencePointsResult = {
   points: PoiCandidate[];
   source: string;
@@ -289,6 +300,27 @@ export async function extractRouteLocations(
 
   if (!response.ok) {
     throw new Error(`Route extraction failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function fetchPreviewInsights(payload: {
+  user_text: string;
+  origin_text?: string;
+  destination_text?: string;
+  active_mood?: string;
+}): Promise<PreviewInsightsResult> {
+  const response = await fetch(`${API_BASE_URL}/preview-insights`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Preview insights failed with ${response.status}`);
   }
 
   return response.json();

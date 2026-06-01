@@ -14,6 +14,8 @@ from api.schemas import (
     PlanResponse,
     PreferencePointsRequest,
     PreferencePointsResponse,
+    PreviewInsightsRequest,
+    PreviewInsightsResponse,
     RouteExtractionRequest,
     RouteExtractionResponse,
 )
@@ -21,6 +23,7 @@ from memory.preferences import record_route_feedback
 from tools.extract_route_locations import extract_route_locations
 from tools.geocode import geocode_location, search_location_candidates
 from tools.preference_points import search_preference_points
+from tools.preview_insights import build_preview_insights
 
 app = FastAPI(title="How's Your Day API")
 
@@ -78,6 +81,17 @@ def extract_route(request: RouteExtractionRequest) -> RouteExtractionResponse:
         destination_text=hints.destination_text,
         source=hints.source,
     )
+
+
+@app.post("/preview-insights", response_model=PreviewInsightsResponse)
+def preview_insights(request: PreviewInsightsRequest) -> PreviewInsightsResponse:
+    insights, source = build_preview_insights(
+        request.user_text,
+        request.origin_text,
+        request.destination_text,
+        request.active_mood,
+    )
+    return PreviewInsightsResponse(insights=insights, source=source)
 
 
 @app.post("/preference-points", response_model=PreferencePointsResponse)

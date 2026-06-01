@@ -17,6 +17,7 @@ from tools.search_poi import search_poi_candidates
 from tools.extract_intent import extract_intent
 from tools.extract_route_locations import extract_route_locations
 from tools.geocode import geocode_location, search_location_candidates
+from tools.preview_insights import build_preview_insights
 
 
 def setup_module() -> None:
@@ -188,6 +189,22 @@ def test_location_search_returns_known_candidates_without_api_key(monkeypatch) -
     assert candidates
     assert candidates[0].label == "집"
     assert candidates[0].source == "known"
+
+
+def test_preview_insights_reflect_route_and_time(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    insights, source = build_preview_insights(
+        "성균관대학교에서 서울역까지 18시 전 도착",
+        "성균관대학교",
+        "서울역",
+        "피곤",
+    )
+
+    assert source == "rules"
+    assert insights[0].label == "이동"
+    assert "성균관대학교" in insights[0].value
+    assert any(insight.kind == "time" for insight in insights)
 
 
 def test_route_location_extraction_handles_korean_from_to(monkeypatch) -> None:

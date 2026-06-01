@@ -56,6 +56,24 @@ class RouteExtractionResponse(BaseModel):
     source: str
 
 
+class PreviewInsightsRequest(BaseModel):
+    user_text: str = ""
+    origin_text: str | None = None
+    destination_text: str | None = None
+    active_mood: str | None = None
+
+
+class PreviewInsight(BaseModel):
+    label: str
+    value: str
+    kind: str
+
+
+class PreviewInsightsResponse(BaseModel):
+    insights: list[PreviewInsight]
+    source: str
+
+
 class FeedbackRequest(BaseModel):
     route_id: str
     liked: bool

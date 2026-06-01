@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import {
   extractRouteLocations,
+  fetchPreviewInsights,
   fetchPreferencePoints,
   geocodeLocation,
   requestDailyPlan,
@@ -42,6 +43,7 @@ import {
   type LocationCandidate,
   type MapViewModel,
   type PoiCandidate,
+  type PreviewInsight,
   type RouteCandidate
 } from "@/lib/api";
 
@@ -187,6 +189,11 @@ export default function HomePage() {
   const [locationSearchLoading, setLocationSearchLoading] = useState<
     "origin" | "destination" | null
   >(null);
+  const [previewInsights, setPreviewInsights] = useState<PreviewInsight[]>(
+    defaultPreviewInsights()
+  );
+  const [previewSource, setPreviewSource] = useState("rules");
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   useEffect(() => {
     const storedOriginText = window.localStorage.getItem(LAST_ORIGIN_KEY);
@@ -260,6 +267,41 @@ export default function HomePage() {
       window.clearTimeout(timer);
     };
   }, [text, originEdited, destinationEdited, originText, destinationText]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsPreviewLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await fetchPreviewInsights({
+          user_text: text,
+          origin_text: originText,
+          destination_text: destinationText,
+          active_mood: activeMood
+        });
+        if (!cancelled) {
+          setPreviewInsights(result.insights);
+          setPreviewSource(result.source);
+        }
+      } catch {
+        if (!cancelled) {
+          setPreviewInsights(
+            buildLocalPreviewInsights(text, originText, destinationText, activeMood)
+          );
+          setPreviewSource("local");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsPreviewLoading(false);
+        }
+      }
+    }, 420);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [text, originText, destinationText, activeMood]);
 
   useEffect(() => {
     const query = originText.trim();
@@ -825,11 +867,11 @@ export default function HomePage() {
             ) : (
               <>
                 <PlanPreview
-                  activeMood={activeMood}
                   destinationText={destinationText}
-                  dislikedCount={dislikedCount}
-                  likedCount={likedCount}
+                  insights={previewInsights}
+                  isLoading={isPreviewLoading}
                   originText={originText}
+                  source={previewSource}
                 />
                 <button
                   className="hidden min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 font-semibold text-white shadow-[0_12px_30px_rgba(23,26,24,0.14)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45 lg:flex"
@@ -1563,17 +1605,17 @@ function ComposerTitle({
 }
 
 function PlanPreview({
-  activeMood,
   destinationText,
-  dislikedCount,
-  likedCount,
-  originText
+  insights,
+  isLoading,
+  originText,
+  source
 }: {
-  activeMood: string;
   destinationText: string;
-  dislikedCount: number;
-  likedCount: number;
+  insights: PreviewInsight[];
+  isLoading: boolean;
   originText: string;
+  source: string;
 }) {
   return (
     <section className="rounded-[24px] bg-white p-4 shadow-[0_14px_40px_rgba(23,26,24,0.055)] ring-1 ring-ink/8">
@@ -1585,7 +1627,7 @@ function PlanPreview({
           </h2>
         </div>
         <span className="rounded-xl bg-[#ddf3eb] px-2.5 py-1 text-xs font-semibold text-moss">
-          준비
+          {isLoading ? "읽는 중" : previewSourceLabel(source)}
         </span>
       </div>
 
@@ -1603,27 +1645,17 @@ function PlanPreview({
         </div>
       </div>
 
-      <div className="mt-3 divide-y divide-ink/8 rounded-2xl border border-ink/8 bg-white">
-        <PreviewRow label="컨디션" value={activeMood} />
-        <PreviewRow label="선호 장소" value={`${likedCount}개`} />
-        <PreviewRow label="비선호 장소" value={`${dislikedCount}개`} />
-      </div>
-
       <div className="mt-4 grid gap-2">
-        <PlannerCue icon={<HeartPulse size={15} aria-hidden />} label="피로도와 혼잡도 반영" />
-        <PlannerCue icon={<Coffee size={15} aria-hidden />} label="선호 장소는 경유 후보로만 사용" />
-        <PlannerCue icon={<Clock3 size={15} aria-hidden />} label="시간 제약 시 우회 최소화" />
+        {insights.map((insight, index) => (
+          <PlannerCue
+            icon={previewInsightIcon(insight.kind)}
+            key={`${insight.label}-${insight.value}-${index}`}
+            label={insight.label}
+            value={insight.value}
+          />
+        ))}
       </div>
     </section>
-  );
-}
-
-function PreviewRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex min-h-11 items-center justify-between gap-3 px-3 py-2">
-      <span className="text-xs font-semibold text-ink/42">{label}</span>
-      <span className="min-w-0 truncate text-sm font-semibold text-ink/74">{value}</span>
-    </div>
   );
 }
 
@@ -2064,13 +2096,26 @@ function RouteList({
   );
 }
 
-function PlannerCue({ icon, label }: { icon: ReactNode; label: string }) {
+function PlannerCue({
+  icon,
+  label,
+  value
+}: {
+  icon: ReactNode;
+  label: string;
+  value?: string;
+}) {
   return (
-    <div className="flex min-h-10 items-center gap-2 rounded-xl bg-[#fffdf8] px-3 text-sm font-semibold text-ink/64 ring-1 ring-ink/7">
+    <div className="flex min-h-12 items-center gap-2 rounded-xl bg-[#fffdf8] px-3 text-sm font-semibold text-ink/64 ring-1 ring-ink/7">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#fde2ef] text-tide/80">
         {icon}
       </span>
-      <span>{label}</span>
+      <span className="min-w-0">
+        <span className="block text-[11px] font-semibold text-ink/38">{label}</span>
+        <span className="block truncate text-sm font-semibold text-ink/72">
+          {value ?? label}
+        </span>
+      </span>
     </div>
   );
 }
@@ -2823,6 +2868,74 @@ async function resolveLocationInput(
 
 function shouldSearchLocationInput(query: string) {
   return query.length >= 2 || ["집", "학교", "회사"].includes(query);
+}
+
+function defaultPreviewInsights(): PreviewInsight[] {
+  return [
+    { label: "이동", value: "출발지와 도착지 확인", kind: "route" },
+    { label: "조건", value: "시간 조건 입력 시 반영", kind: "time" },
+    { label: "취향", value: "선호 장소는 후보로 반영", kind: "stop" }
+  ];
+}
+
+function buildLocalPreviewInsights(
+  text: string,
+  originText: string,
+  destinationText: string,
+  activeMood: string
+): PreviewInsight[] {
+  const normalized = text.toLowerCase();
+  const insights: PreviewInsight[] = [
+    {
+      label: "이동",
+      value: `${originText || "출발지"} → ${destinationText || "도착지"}`,
+      kind: "route"
+    }
+  ];
+
+  if (/[0-9]+시|까지|전|deadline/.test(normalized)) {
+    insights.push({ label: "시간", value: "도착 시간 조건 반영", kind: "time" });
+  }
+  if (/(쉬|카페|휴식|조용|rest|cafe|coffee)/.test(normalized)) {
+    insights.push({ label: "경유", value: "쉴 만한 장소 후보 확인", kind: "stop" });
+  }
+  if (/(피곤|지쳐|tired|exhausted)/.test(normalized)) {
+    insights.push({ label: "상태", value: "피로 낮은 길 우선", kind: "mood" });
+  }
+
+  insights.push({
+    label: "컨디션",
+    value: `${activeMood} 기준으로 경로 비교`,
+    kind: "mood"
+  });
+
+  return [...insights, ...defaultPreviewInsights()].slice(0, 3);
+}
+
+function previewSourceLabel(source: string) {
+  if (source === "llm") {
+    return "분석됨";
+  }
+  if (source === "local") {
+    return "입력 반영";
+  }
+  return "준비";
+}
+
+function previewInsightIcon(kind: string) {
+  if (kind === "route") {
+    return <Navigation size={15} aria-hidden />;
+  }
+  if (kind === "time") {
+    return <Clock3 size={15} aria-hidden />;
+  }
+  if (kind === "stop") {
+    return <Coffee size={15} aria-hidden />;
+  }
+  if (kind === "task") {
+    return <MapPinned size={15} aria-hidden />;
+  }
+  return <HeartPulse size={15} aria-hidden />;
 }
 
 function normalizeLocationText(value: string) {
