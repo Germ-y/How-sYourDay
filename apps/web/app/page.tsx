@@ -24,7 +24,6 @@ import {
   ThumbsDown,
   ThumbsUp,
   UserRound,
-  ShieldCheck,
   Zap,
   type LucideIcon
 } from "lucide-react";
@@ -49,8 +48,7 @@ const LAST_ORIGIN_KEY = "hows-your-day.origin-text.v1";
 const LAST_DESTINATION_KEY = "hows-your-day.destination-text.v1";
 const PROFILE_PLACEHOLDER = {
   nickname: "균이",
-  email: "로그인 연동 예정",
-  authStatus: "JWT 연결 대기"
+  email: "로그인 후 표시"
 };
 const MOOD_PRESETS = [
   {
@@ -908,11 +906,6 @@ function AccountCard() {
           icon={<Mail size={16} aria-hidden />}
           label="이메일"
           value={PROFILE_PLACEHOLDER.email}
-        />
-        <AccountRow
-          icon={<ShieldCheck size={16} aria-hidden />}
-          label="인증"
-          value={PROFILE_PLACEHOLDER.authStatus}
         />
       </div>
     </article>
