@@ -361,6 +361,7 @@ def _origin_hint_from_text(user_text: str) -> str | None:
 
 def _specific_destination_hint_from_text(user_text: str) -> str | None:
     patterns = [
+        r"(?:\d{1,2}시(?:\s*\d{1,2}분)?(?:에)?\s*)?([가-힣A-Za-z0-9\s]+?(?:식당|카페|역|학교|병원|도서관|공원|장소|곳))에서\s*(?:\d{1,2}시|친구|약속|보기|만나|예약)",
         r"([가-힣A-Za-z0-9\s]+?)(?:이라는|라는)\s*(?:식당|카페|장소|곳)?에서\s*(?:\d{1,2}시|친구|약속|보기|만나)",
         r"([가-힣A-Za-z0-9\s]+?(?:식당|카페|역|학교|병원|도서관|공원))에서\s*(?:\d{1,2}시|친구|약속|보기|만나)",
     ]
@@ -388,6 +389,7 @@ def _clean_query(value: str | None) -> str | None:
         return None
 
     cleaned = value.strip()
+    cleaned = re.sub(r"^\d{1,2}시(?:\s*\d{1,2}분)?(?:에)?\s*", "", cleaned)
     cleaned = re.sub(r"^.*(?:가고\s*싶어|가고싶어|싶어)\s+", "", cleaned)
     cleaned = re.sub(
         r"^.*(?:에서|부터)\s*(?:출발해서|출발하고|출발|시작해서|시작)?\s*",
@@ -400,6 +402,7 @@ def _clean_query(value: str | None) -> str | None:
         cleaned,
         flags=re.IGNORECASE,
     )
+    cleaned = re.sub(r"\s*(?:이라는|라는)\s*(?:식당|카페|장소|곳)$", "", cleaned)
     cleaned = re.sub(r"\s*(가야|갈|가기|가려고|도착|출발|시작).*$", "", cleaned)
     cleaned = re.sub(r"\s*(에서|부터|으로|로|까지|에)$", "", cleaned)
     cleaned = cleaned.strip()

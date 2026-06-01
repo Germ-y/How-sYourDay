@@ -177,6 +177,7 @@ def _known_destination_hint(text: str) -> str | None:
 
 def _specific_commitment_destination_hint(text: str) -> str | None:
     patterns = [
+        r"(?:\d{1,2}시(?:\s*\d{1,2}분)?(?:에)?\s*)?([가-힣A-Za-z0-9\s]+?(?:식당|카페|역|학교|병원|도서관|공원|장소|곳))에서\s*(?:\d{1,2}시|친구|약속|보기|만나|예약)",
         r"([가-힣A-Za-z0-9\s]+?)(?:이라는|라는)\s*(?:식당|카페|장소|곳)?에서\s*(?:\d{1,2}시|친구|약속|보기|만나)",
         r"([가-힣A-Za-z0-9\s]+?(?:식당|카페|역|학교|병원|도서관|공원))에서\s*(?:\d{1,2}시|친구|약속|보기|만나)",
     ]
@@ -204,8 +205,10 @@ def _clean_location_hint(value) -> str | None:
         return None
 
     cleaned = value.strip()
+    cleaned = re.sub(r"^\d{1,2}시(?:\s*\d{1,2}분)?(?:에)?\s*", "", cleaned)
     cleaned = re.sub(r"^.*(?:가고\s*싶어|가고싶어|싶어)\s+", "", cleaned)
     cleaned = re.sub(r"^(오늘|내일|지금|일단|그리고|나는|나|제가|저는|i)\s+", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*(?:이라는|라는)\s*(?:식당|카페|장소|곳)$", "", cleaned)
     cleaned = re.sub(r"\s*(가야|갈|가기|가려고|도착|출발|시작).*$", "", cleaned)
     cleaned = re.sub(r"\s*(에서|부터|으로|로|까지|에)$", "", cleaned)
     cleaned = cleaned.strip()

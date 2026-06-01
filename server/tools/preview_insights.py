@@ -1,6 +1,42 @@
+import json
+import os
+import re
+
+from pydantic import ValidationError
+
 from api.schemas import PreviewInsight
 from tools.extract_intent import extract_intent
 from tools.extract_route_locations import extract_route_locations
+from tools.kakao_local import _get_env_value
+from tools.llm_intent import DEFAULT_INTENT_MODEL, _post_openai, _response_text
+from tools.prompt_loader import kst_runtime_context, load_prompt
+
+
+PREVIEW_INSIGHTS_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["insights"],
+    "properties": {
+        "insights": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["label", "value", "kind"],
+                "properties": {
+                    "label": {"type": "string"},
+                    "value": {"type": "string"},
+                    "kind": {
+                        "type": "string",
+                        "enum": ["route", "time", "stop", "task", "mood"],
+                    },
+                },
+            },
+        }
+    },
+}
 
 
 def build_preview_insights(
@@ -19,6 +55,16 @@ def build_preview_insights(
         intent.constraints.destination if intent else None,
         destination_text,
     )
+    llm_insights = _preview_insights_with_llm(
+        text=text,
+        origin=origin,
+        destination=destination,
+        active_mood=active_mood,
+        intent=intent,
+    )
+    if llm_insights:
+        mood_candidates = intent.mood_candidates if intent else _default_mood_candidates()
+        return llm_insights[:4], "llm", mood_candidates[:4]
 
     insights: list[PreviewInsight] = []
     if origin or destination:
@@ -43,7 +89,7 @@ def build_preview_insights(
             PreviewInsight(label="시간", value="시간 조건 감지", kind="time")
         )
 
-    stop_points = _stop_insights(text)
+    stop_points = _stop_insights(text, destination)
     insights.extend(stop_points)
 
     if intent:
@@ -72,6 +118,124 @@ def build_preview_insights(
     return insights[:4], source, mood_candidates[:4]
 
 
+def _preview_insights_with_llm(
+    text: str,
+    origin: str | None,
+    destination: str | None,
+    active_mood: str | None,
+    intent,
+) -> list[PreviewInsight] | None:
+    if not text:
+        return None
+    if (os.environ.get("HYS_DISABLE_LLM") or _get_env_value("HYS_DISABLE_LLM")) == "1":
+        return None
+
+    api_key = _get_env_value("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    model = (
+        os.environ.get("OPENAI_PREVIEW_MODEL")
+        or _get_env_value("OPENAI_PREVIEW_MODEL")
+        or os.environ.get("OPENAI_INTENT_MODEL")
+        or _get_env_value("OPENAI_INTENT_MODEL")
+        or DEFAULT_INTENT_MODEL
+    )
+    payload = {
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": load_prompt("preview_insights"),
+            },
+            {
+                "role": "system",
+                "content": kst_runtime_context(),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "user_text": text,
+                        "origin_text": origin,
+                        "destination_text": destination,
+                        "active_mood": active_mood,
+                        "deadline": intent.constraints.deadline if intent else None,
+                        "emotion_primary": intent.emotion.primary if intent else None,
+                        "tasks": [
+                            {
+                                "kind": task.kind,
+                                "label": task.label,
+                                "poi_query": task.poi_query,
+                                "required": task.required,
+                            }
+                            for task in (intent.tasks if intent else [])
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "preview_insights",
+                "strict": True,
+                "schema": PREVIEW_INSIGHTS_SCHEMA,
+            }
+        },
+        "max_output_tokens": 600,
+    }
+
+    raw = _post_openai(api_key, payload)
+    if raw is None:
+        return None
+
+    text_output = _response_text(raw)
+    if not text_output:
+        return None
+
+    try:
+        data = json.loads(text_output)
+        insights = [
+            PreviewInsight(**insight) for insight in data.get("insights", [])
+        ]
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+    return _repair_preview_insights(insights, origin, destination)
+
+
+def _repair_preview_insights(
+    insights: list[PreviewInsight],
+    origin: str | None,
+    destination: str | None,
+) -> list[PreviewInsight] | None:
+    if not insights:
+        return None
+
+    repaired = list(insights)
+    route_value = f"{origin or '출발지'} → {destination or '도착지'}"
+    if repaired[0].kind != "route":
+        repaired.insert(0, PreviewInsight(label="경로", value=route_value, kind="route"))
+    elif origin or destination:
+        repaired[0] = PreviewInsight(label=repaired[0].label, value=route_value, kind="route")
+
+    unique: list[PreviewInsight] = []
+    seen: set[str] = set()
+    for insight in repaired:
+        key = f"{insight.kind}:{insight.label}:{insight.value}"
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(insight)
+
+    while len(unique) < 4:
+        unique.append(_empty_insight(len(unique)))
+
+    return unique[:4]
+
+
 def _task_insight(tasks) -> PreviewInsight | None:
     if not tasks:
         return None
@@ -86,9 +250,19 @@ def _task_insight(tasks) -> PreviewInsight | None:
     return PreviewInsight(label="할 일", value=primary.label, kind="task")
 
 
-def _stop_insights(text: str) -> list[PreviewInsight]:
+def _stop_insights(text: str, destination: str | None = None) -> list[PreviewInsight]:
     insights: list[PreviewInsight] = []
-    area = _area_hint(text)
+    waypoint = _waypoint_hint(text, destination)
+    area = waypoint or _area_hint(text)
+
+    if waypoint:
+        insights.append(
+            PreviewInsight(
+                label="경유 후보",
+                value=f"{waypoint} 주변 확인",
+                kind="stop",
+            )
+        )
 
     if any(marker in text for marker in ["걷", "산책", "돌아다니", "주변", "근처", "선선"]):
         value = f"{area} 주변 산책" if area else "주변 산책 후보"
@@ -147,9 +321,21 @@ def _has_time_hint(text: str) -> bool:
     return any(marker in text for marker in ["시", "분", "까지", "전", "deadline"])
 
 
-def _area_hint(text: str) -> str | None:
-    import re
+def _waypoint_hint(text: str, destination: str | None = None) -> str | None:
+    patterns = [
+        r"(?:에서|부터)\s*([가-힣A-Za-z0-9\s]+?)(?:까지|으로|로|에)\s*(?:가서|간\s*뒤|갔다가|들러|들렀다가|경유)",
+        r"([가-힣A-Za-z0-9\s]+?)(?:까지|으로|로|에)\s*(?:가서|간\s*뒤|갔다가|들러|들렀다가|경유)",
+    ]
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        for value in reversed(matches):
+            cleaned = _clean_hint(value)
+            if cleaned and _normalize(cleaned) != _normalize(destination or ""):
+                return cleaned
+    return None
 
+
+def _area_hint(text: str) -> str | None:
     direct = re.search(r"([가-힣A-Za-z0-9]+)\s*(?:주변|근처)", text)
     if direct:
         return direct.group(1)
@@ -162,3 +348,20 @@ def _area_hint(text: str) -> str | None:
         return destination.group(1)
 
     return None
+
+
+def _clean_hint(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = re.split(r"(?:하다가|그리고|,|\.|;)", value)[-1]
+    cleaned = re.sub(
+        r"^.*(?:에서|부터)\s*(?:출발해서|출발하고|출발|시작해서|시작)?\s*",
+        "",
+        cleaned.strip(),
+    )
+    cleaned = re.sub(r"\s*(에서|부터|으로|로|까지|에)$", "", cleaned).strip()
+    return cleaned if len(cleaned) >= 2 else None
+
+
+def _normalize(value: str) -> str:
+    return value.lower().replace(" ", "")

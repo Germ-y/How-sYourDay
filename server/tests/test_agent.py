@@ -297,6 +297,24 @@ def test_preview_insights_extracts_multiple_stop_candidates(monkeypatch) -> None
     assert mood_candidates[:3] == ["바쁨", "산책", "휴식"]
 
 
+def test_preview_insights_uses_final_appointment_and_waypoints(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    insights, _, _ = build_preview_insights(
+        "오목교에서 홍대입구역으로 가서 과제를 좀 카페에서 하다가 5시에 수림식당에서 약속있어 거기 가야해",
+        None,
+        None,
+        "집중",
+    )
+
+    values = [insight.value for insight in insights]
+
+    assert values[0] == "오목교 → 수림식당"
+    assert any("17:00" in value for value in values)
+    assert any("홍대입구역" in value for value in values)
+    assert any("카페 작업" in value for value in values)
+
+
 def test_route_location_extraction_handles_korean_from_to(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
