@@ -1185,11 +1185,7 @@ function ProfilePage({
   return (
     <section className="grid gap-4 px-5 py-5 lg:grid-cols-[360px_1fr] lg:px-0">
       <div className="grid gap-4 lg:self-start lg:sticky lg:top-20">
-        <AccountCard
-          activeMood={activeMood}
-          destinationText={destinationText}
-          originText={originText}
-        />
+        <AccountCard />
       </div>
 
       <div className="grid gap-4">
@@ -1239,15 +1235,7 @@ function ProfilePage({
   );
 }
 
-function AccountCard({
-  activeMood,
-  destinationText,
-  originText
-}: {
-  activeMood: string;
-  destinationText: string;
-  originText: string;
-}) {
+function AccountCard() {
   return (
     <article className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_46px_rgba(23,26,24,0.06)] ring-1 ring-ink/8">
       <div className="bg-[#ddf3eb] px-5 py-5">
@@ -1279,17 +1267,6 @@ function AccountCard({
           label="이메일"
           value={PROFILE_PLACEHOLDER.email}
         />
-        <div className="rounded-2xl bg-[#fff9ed] p-3 ring-1 ring-ink/7">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-tide">이동 요약</span>
-            <Navigation size={15} className="text-tide/70" aria-hidden />
-          </div>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            <ProfileStat label="컨디션" value={activeMood} />
-            <ProfileStat label="출발" value={originText || "미지정"} />
-            <ProfileStat label="도착" value={destinationText || "미지정"} />
-          </div>
-        </div>
       </div>
     </article>
   );
