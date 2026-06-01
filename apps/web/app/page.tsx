@@ -228,6 +228,7 @@ export default function HomePage() {
   );
   const [previewSource, setPreviewSource] = useState("rules");
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isRouteConfirming, setIsRouteConfirming] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
@@ -324,55 +325,10 @@ export default function HomePage() {
   }, [authUser]);
 
   useEffect(() => {
-    const trimmed = text.trim();
-    if (!trimmed) {
-      setLocationStatus("주소 또는 장소명 입력 필요");
-      return;
+    if (!text.trim()) {
+      setLocationStatus("이동 요청을 입력한 뒤 내용 확인");
     }
-
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      try {
-        const hints = await extractRouteLocations(trimmed);
-        if (cancelled) {
-          return;
-        }
-        let changed = false;
-
-        if (hints.origin_text && !originEdited && originText !== hints.origin_text) {
-          setOriginText(hints.origin_text);
-          changed = true;
-        }
-        if (
-          hints.destination_text &&
-          !destinationEdited &&
-          destinationText !== hints.destination_text
-        ) {
-          setDestinationText(hints.destination_text);
-          changed = true;
-        }
-
-        if (changed) {
-          setLocationStatus(
-            hints.source === "llm"
-              ? "문장에서 경로 후보 추출"
-              : "문장에서 경로 후보 감지"
-          );
-        } else if (!hints.origin_text && !hints.destination_text) {
-          setLocationStatus("경로 후보 없음. 직접 입력 가능");
-        }
-      } catch {
-        if (!cancelled) {
-          setLocationStatus("자동 추출 실패. 직접 입력 가능");
-        }
-      }
-    }, 450);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [text, originEdited, destinationEdited, originText, destinationText]);
+  }, [text]);
 
   useEffect(() => {
     if (!moodEdited && moodCandidates[0]?.label) {
@@ -665,6 +621,49 @@ export default function HomePage() {
     setActiveView("planner");
   }
 
+  async function handleRouteTextConfirm() {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setLocationStatus("이동 요청을 먼저 입력해주세요");
+      return;
+    }
+
+    setIsRouteConfirming(true);
+    setLocationStatus("문장에서 경로 확인 중");
+
+    try {
+      const hints = await extractRouteLocations(trimmed);
+      let changed = false;
+
+      if (hints.origin_text) {
+        setOriginText(hints.origin_text);
+        setOriginEdited(false);
+        setSelectedOriginLocation(null);
+        changed = true;
+      }
+      if (hints.destination_text) {
+        setDestinationText(hints.destination_text);
+        setDestinationEdited(false);
+        setSelectedDestinationLocation(null);
+        changed = true;
+      }
+
+      if (changed) {
+        setLocationStatus(
+          hints.source === "llm"
+            ? "문장에서 출발지와 도착지 확인"
+            : "문장에서 경로 후보 확인"
+        );
+      } else {
+        setLocationStatus("찾은 경로 후보 없음. 직접 입력 가능");
+      }
+    } catch {
+      setLocationStatus("내용 확인 실패. 직접 입력 가능");
+    } finally {
+      setIsRouteConfirming(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
@@ -935,6 +934,15 @@ export default function HomePage() {
                   value={text}
                   onChange={(event) => setText(event.target.value)}
                 />
+                <button
+                  className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#ddf3eb] px-4 text-sm font-semibold text-moss shadow-sm ring-1 ring-moss/15 transition hover:bg-[#d2eee4] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+                  type="button"
+                  disabled={!text.trim() || isRouteConfirming}
+                  onClick={handleRouteTextConfirm}
+                >
+                  {isRouteConfirming ? "확인 중" : "내용 확인"}
+                  <ArrowRight size={17} aria-hidden />
+                </button>
               </section>
 
               <div className="h-px bg-ink/8" />
