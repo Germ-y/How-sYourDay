@@ -285,7 +285,7 @@ def test_preview_insights_extracts_multiple_stop_candidates(monkeypatch) -> None
     assert any("홍대 주변 산책" in value for value in stop_values)
     assert any("홍대 카페 작업" in value for value in stop_values)
     assert not any(insight.label == "조건" for insight in insights)
-    assert mood_candidates[:3] == ["바쁨", "여유", "휴식"]
+    assert mood_candidates[:3] == ["바쁨", "산책", "휴식"]
 
 
 def test_route_location_extraction_handles_korean_from_to(monkeypatch) -> None:

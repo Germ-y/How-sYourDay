@@ -73,14 +73,29 @@ const MOOD_PRESETS = [
     keywords: ["바쁨", "급", "빨리", "늦", "촉박", "시간", "까지", "전", "시", "약속", "보기로", "만나", "도착", "urgent", "hurry"]
   },
   {
+    label: "급함",
+    sentence: "즉시 이동 필요. 지연과 우회를 최소화.",
+    keywords: ["급", "빨리", "늦", "촉박", "urgent", "hurry"]
+  },
+  {
     label: "여유",
     sentence: "시간 여유 있음. 편안한 장소 경유 허용.",
-    keywords: ["여유", "천천", "산책", "둘러", "걸을", "걷", "돌아다니", "선선", "괜찮", "slow", "walk"]
+    keywords: ["여유", "천천", "둘러", "괜찮", "slow"]
+  },
+  {
+    label: "산책",
+    sentence: "걷기 의향 있음. 주변 탐색과 짧은 경유 허용.",
+    keywords: ["산책", "걸을", "걷", "돌아다니", "선선", "walk"]
   },
   {
     label: "휴식",
     sentence: "휴식 필요. 조용한 카페나 공원 후보 반영.",
-    keywords: ["휴식", "쉬", "카페", "조용", "편한", "회복", "rest", "cafe", "coffee"]
+    keywords: ["휴식", "쉬", "카페", "커피", "편한", "rest", "cafe", "coffee"]
+  },
+  {
+    label: "회복",
+    sentence: "에너지 회복 필요. 부담 낮은 경유 후보 반영.",
+    keywords: ["회복", "충전", "리셋", "쉬", "recover", "rest"]
   },
   {
     label: "불안",
@@ -88,9 +103,19 @@ const MOOD_PRESETS = [
     keywords: ["불안", "긴장", "복잡", "사람", "혼잡", "무서", "anxious", "nervous"]
   },
   {
+    label: "혼잡",
+    sentence: "사람 많은 구간 회피. 밀도 낮은 동선 우선.",
+    keywords: ["혼잡", "사람", "붐비", "복잡", "crowd"]
+  },
+  {
     label: "집중",
     sentence: "집중 필요. 목적지까지 예측 가능한 동선을 우선.",
     keywords: ["집중", "공부", "과제", "작업", "시험", "회의", "업무", "focus", "study", "work"]
+  },
+  {
+    label: "몰입",
+    sentence: "작업 흐름 유지. 조용하고 예측 가능한 경유 우선.",
+    keywords: ["몰입", "과제", "작업", "공부", "집중", "focus"]
   },
   {
     label: "조용",
@@ -98,9 +123,24 @@ const MOOD_PRESETS = [
     keywords: ["조용", "소음", "시끄", "quiet", "noise"]
   },
   {
-    label: "가벼움",
-    sentence: "컨디션 안정. 걷기와 짧은 경유를 적당히 허용.",
-    keywords: ["가볍", "괜찮", "좋아", "상쾌", "steady", "fine"]
+    label: "쾌적",
+    sentence: "쾌적한 이동 선호. 날씨와 보행감 좋은 구간 반영.",
+    keywords: ["쾌적", "선선", "상쾌", "좋아", "pleasant"]
+  },
+  {
+    label: "익숙",
+    sentence: "익숙한 동선 선호. 낯선 환승과 복잡도 축소.",
+    keywords: ["익숙", "아는", "편한 길", "familiar"]
+  },
+  {
+    label: "편안",
+    sentence: "부담 낮은 이동 선호. 무리 없는 경로 우선.",
+    keywords: ["편안", "편한", "부담", "무리", "comfortable"]
+  },
+  {
+    label: "안정",
+    sentence: "컨디션 안정. 과한 우회 없이 균형 있게 반영.",
+    keywords: ["안정", "괜찮", "차분", "steady", "fine"]
   }
 ];
 const DEFAULT_MOOD_LABELS = ["피곤", "바쁨", "여유", "휴식"];

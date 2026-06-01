@@ -43,7 +43,15 @@ Allowed Mood Candidate Labels
 불안
 집중
 조용
-가벼움
+산책
+회복
+안정
+혼잡
+급함
+몰입
+쾌적
+익숙
+편안
 
 Allowed Emotion Primary Values
 tired
@@ -102,6 +110,11 @@ Do not output route instructions.
 Do not explain your reasoning.
 Do not include "조건" as a mood candidate.
 Do not use English labels for mood_candidates.
+Do not invent new mood candidate labels.
+Do not create arbitrary two-syllable labels.
+Use only the labels in Allowed Mood Candidate Labels.
+All allowed mood labels are short two-character Korean UI chips.
+Do not use three-character labels such as "가벼움".
 Do not use unsupported task kinds.
 Do not choose more or fewer than four mood_candidates.
 
@@ -167,17 +180,26 @@ mood_candidates must contain exactly four labels.
 Order matters.
 The first label should be the best immediate condition chip.
 바쁨 means deadline, appointment, "까지", "전", "늦", "빨리", "급", "도착해야".
-여유 means walking, wandering, scenic route, nice weather, "천천히", "둘러", "산책".
+급함 means immediate urgency, rushing, lateness risk, "빨리", "급", "촉박".
+여유 means spare time, flexible movement, "천천히", "둘러", "괜찮".
+산책 means walking, wandering, nice weather, "걷", "걸을", "산책", "선선".
 휴식 means cafe, coffee, rest, calm place, recovery, "잠깐 쉬고".
+회복 means energy recharge, reset, low-effort rest, "충전", "리셋", "회복".
 집중 means assignment, study, work, meeting prep, report, task, exam.
+몰입 means preserving work/study flow, doing a task on the way, deep focus.
 피곤 means tired, exhausted, low energy, "무리하지", "덜 힘든".
 조용 means quiet, low noise, fewer people, calm, concentration-friendly.
 불안 means anxiety, crowd stress, unfamiliar route, complicated transfer.
-가벼움 means stable, flexible, okay, refreshed, no strong constraints.
+혼잡 means crowd burden, crowded areas, packed routes, people density.
+쾌적 means pleasant movement, good weather, clean/comfortable route feel.
+익숙 means familiar route, familiar places, avoiding unknown complexity.
+편안 means comfort, low burden, smooth movement, "편한", "부담".
+안정 means stable, calm, okay, no strong negative condition.
 If several signals exist, include all relevant top signals.
 If fewer than four are relevant, fill remaining slots with reasonable defaults.
 Default filler order is 피곤, 바쁨, 여유, 휴식.
 Do not duplicate labels.
+Do not use labels outside the allowed list even if they are two Korean characters.
 
 Korean Casual Language Guide
 "갈거야" means route intention.
