@@ -887,7 +887,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen max-w-full overflow-x-hidden bg-[#fff9ed] text-ink">
+    <main className="planner-shell min-h-screen max-w-full overflow-x-hidden bg-[#fff9ed] text-ink">
       <form
         className="mx-auto flex min-h-screen w-full max-w-full flex-col overflow-x-hidden pb-24 sm:max-w-md lg:max-w-6xl lg:px-6"
         onSubmit={handleSubmit}

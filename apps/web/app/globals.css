@@ -47,6 +47,8 @@ input,
 textarea,
 select {
   font-size: 16px !important;
+  min-width: 0;
+  max-width: 100%;
 }
 
 button {
@@ -70,4 +72,13 @@ textarea {
 
 .preference-card {
   animation: card-pop 180ms ease-out;
+}
+
+.planner-shell,
+.planner-shell * {
+  min-width: 0;
+}
+
+.planner-shell {
+  overflow-x: clip;
 }
