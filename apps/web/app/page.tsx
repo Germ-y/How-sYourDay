@@ -1241,7 +1241,7 @@ function AuthPage({
                     닉네임
                   </span>
                   <div className="flex min-h-12 items-center justify-center rounded-xl bg-[#fffdf8] px-3 text-sm font-semibold text-ink/42 ring-1 ring-ink/8">
-                    회원가입 시 닉네임 설정
+                    어서오세요
                   </div>
                 </div>
               )}
