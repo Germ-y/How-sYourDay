@@ -1183,41 +1183,44 @@ function AuthPage({
         className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md flex-col justify-center"
         onSubmit={onSubmit}
       >
-        <section className="overflow-hidden rounded-[30px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.08)] ring-1 ring-ink/8">
-          <div className="bg-[#ddf3eb] px-5 py-5">
+        <section className="overflow-hidden rounded-[28px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8">
+          <div className="bg-[#eef8f2] px-5 py-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-moss">How's Your Day</p>
                 <h1 className="mt-1 text-[30px] font-semibold leading-tight [word-break:keep-all]">
-                  내 이동 기록으로 시작
+                  계정으로 계속하기
                 </h1>
                 <p className="mt-2 text-sm font-medium leading-6 text-ink/55 [word-break:keep-all]">
-                  감정, 장소 취향, 저장 장소를 내 계정에 따로 보관합니다.
+                  저장 장소와 취향 데이터를 계정에 연결합니다.
                 </p>
               </div>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-tide shadow-sm ring-1 ring-ink/8">
-                <MapPinned size={23} aria-hidden />
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-moss shadow-sm ring-1 ring-ink/8">
+                <UserRound size={23} aria-hidden />
               </span>
             </div>
           </div>
 
-          <div className="grid gap-5 p-5">
-            <div className="grid grid-cols-2 rounded-2xl bg-[#fff9ed] p-1 ring-1 ring-ink/8">
+          <div className="grid gap-5 p-5 pt-0">
+            <div className="-mx-5 grid grid-cols-2 border-b border-ink/8 bg-white px-5">
               {[
                 { id: "login" as const, label: "로그인" },
                 { id: "signup" as const, label: "회원가입" }
               ].map((item) => (
                 <button
-                  className={`min-h-10 rounded-xl text-sm font-semibold transition ${
+                  className={`relative min-h-14 text-sm font-semibold transition ${
                     mode === item.id
-                      ? "bg-[#fde2ef] text-tide shadow-sm"
-                      : "text-ink/48 hover:bg-white/70"
+                      ? "text-ink"
+                      : "text-ink/42 hover:text-ink/70"
                   }`}
                   key={item.id}
                   type="button"
                   onClick={() => onModeChange(item.id)}
                 >
                   {item.label}
+                  {mode === item.id ? (
+                    <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-tide" />
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -1257,11 +1260,11 @@ function AuthPage({
             ) : null}
 
             <button
-              className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-ink px-4 font-semibold text-white shadow-[0_12px_30px_rgba(23,26,24,0.14)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45"
+              className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 font-semibold text-white shadow-[0_12px_30px_rgba(23,26,24,0.12)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45"
               type="submit"
               disabled={isLoading}
             >
-              {isLoading ? "확인 중" : isSignup ? "회원가입하고 시작" : "로그인"}
+              {isLoading ? "확인 중" : isSignup ? "회원가입" : "로그인"}
               <ArrowRight size={18} aria-hidden />
             </button>
           </div>
@@ -1289,8 +1292,8 @@ function AuthField({
   return (
     <label className="grid gap-2">
       <span className="text-sm font-semibold text-ink/68">{label}</span>
-      <span className="flex min-h-12 items-center gap-3 rounded-2xl bg-[#fffdf8] px-3 ring-1 ring-ink/9 transition focus-within:ring-tide/55">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fde2ef] text-tide">
+      <span className="flex min-h-12 items-center gap-3 rounded-xl bg-[#fffdf8] px-3 ring-1 ring-ink/10 transition focus-within:ring-tide/45">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#f7e8f0] text-tide">
           {icon}
         </span>
         <input
