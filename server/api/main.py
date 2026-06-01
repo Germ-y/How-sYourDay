@@ -16,6 +16,9 @@ from api.schemas import (
     LocationSearchResponse,
     PlanRequest,
     PlanResponse,
+    PlacePreferenceCreate,
+    PlacePreferenceResponse,
+    PlacePreferencesResponse,
     PreferencePointsRequest,
     PreferencePointsResponse,
     PreviewInsightsRequest,
@@ -31,6 +34,7 @@ from auth.router import router as auth_router
 from auth.security import decode_access_token
 from db.session import get_db, init_db
 from memory.preferences import record_route_feedback
+from repositories.place_preferences import list_place_preferences, upsert_place_preference
 from repositories.saved_places import create_saved_place, delete_saved_place, list_saved_places
 from tools.extract_route_locations import extract_route_locations
 from tools.geocode import geocode_location, search_location_candidates
@@ -98,6 +102,20 @@ def saved_place_response(place) -> SavedPlaceResponse:
         lng=place.lng,
         created_at=place.created_at.isoformat(),
         updated_at=place.updated_at.isoformat(),
+    )
+
+
+def place_preference_response(preference) -> PlacePreferenceResponse:
+    return PlacePreferenceResponse(
+        id=preference.id,
+        poi_provider_id=preference.poi_provider_id,
+        name=preference.name,
+        category=preference.category,
+        lat=preference.lat,
+        lng=preference.lng,
+        preference=preference.preference,
+        created_at=preference.created_at.isoformat(),
+        updated_at=preference.updated_at.isoformat(),
     )
 
 
@@ -176,6 +194,29 @@ def preference_points(request: PreferencePointsRequest) -> PreferencePointsRespo
         points=points,
         source="kakao" if points else "empty",
     )
+
+
+@app.get("/me/place-preferences", response_model=PlacePreferencesResponse)
+def get_my_place_preferences(
+    user_id: str = Depends(current_user_id),
+    db: Session = Depends(database),
+) -> PlacePreferencesResponse:
+    preferences = list_place_preferences(db, user_id)
+    return PlacePreferencesResponse(
+        preferences=[
+            place_preference_response(preference) for preference in preferences
+        ]
+    )
+
+
+@app.post("/me/place-preferences", response_model=PlacePreferenceResponse)
+def save_my_place_preference(
+    request: PlacePreferenceCreate,
+    user_id: str = Depends(current_user_id),
+    db: Session = Depends(database),
+) -> PlacePreferenceResponse:
+    preference = upsert_place_preference(db, user_id, request)
+    return place_preference_response(preference)
 
 
 @app.post("/feedback", response_model=FeedbackResponse)

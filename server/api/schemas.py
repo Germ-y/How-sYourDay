@@ -125,6 +125,31 @@ class SavedPlacesResponse(BaseModel):
     places: list[SavedPlaceResponse]
 
 
+class PlacePreferenceCreate(BaseModel):
+    poi_provider_id: str | None = Field(default=None, max_length=120)
+    name: str = Field(min_length=1, max_length=160)
+    category: str | None = Field(default=None, max_length=120)
+    lat: float | None = None
+    lng: float | None = None
+    preference: str = Field(pattern="^(like|dislike)$")
+
+
+class PlacePreferenceResponse(BaseModel):
+    id: str
+    poi_provider_id: str | None = None
+    name: str
+    category: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    preference: str
+    created_at: str
+    updated_at: str
+
+
+class PlacePreferencesResponse(BaseModel):
+    preferences: list[PlacePreferenceResponse]
+
+
 class Task(BaseModel):
     kind: str
     label: str

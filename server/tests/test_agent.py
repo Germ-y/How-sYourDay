@@ -6,6 +6,7 @@ from api.schemas import (
     Location,
     LocationCandidate,
     PlanRequest,
+    PlacePreferenceCreate,
     PoiCandidate,
     RouteCandidate,
     RouteSegment,
@@ -19,6 +20,7 @@ from auth.security import (
 )
 from db.models import Base
 from planner.evaluate_tradeoffs import evaluate_tradeoffs
+from repositories.place_preferences import list_place_preferences, upsert_place_preference
 from repositories.saved_places import create_saved_place, list_saved_places
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -227,6 +229,58 @@ def test_saved_places_are_scoped_by_user() -> None:
 
     assert [place.name for place in user_a_places] == ["집"]
     assert [place.name for place in user_b_places] == ["학교"]
+
+
+def test_place_preferences_are_scoped_and_upserted_by_user() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine)
+
+    with SessionLocal() as db:
+        upsert_place_preference(
+            db,
+            "user-a",
+            PlacePreferenceCreate(
+                poi_provider_id="poi-1",
+                name="Quiet Cafe",
+                category="cafe",
+                lat=37.5,
+                lng=126.9,
+                preference="like",
+            ),
+        )
+        upsert_place_preference(
+            db,
+            "user-a",
+            PlacePreferenceCreate(
+                poi_provider_id="poi-1",
+                name="Quiet Cafe",
+                category="cafe",
+                lat=37.5,
+                lng=126.9,
+                preference="dislike",
+            ),
+        )
+        upsert_place_preference(
+            db,
+            "user-b",
+            PlacePreferenceCreate(
+                poi_provider_id="poi-1",
+                name="Quiet Cafe",
+                category="cafe",
+                lat=37.5,
+                lng=126.9,
+                preference="like",
+            ),
+        )
+
+        user_a_preferences = list_place_preferences(db, "user-a")
+        user_b_preferences = list_place_preferences(db, "user-b")
+
+    assert len(user_a_preferences) == 1
+    assert user_a_preferences[0].preference == "dislike"
+    assert len(user_b_preferences) == 1
+    assert user_b_preferences[0].preference == "like"
 
 
 def test_auth_security_hashes_password_and_decodes_token() -> None:

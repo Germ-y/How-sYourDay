@@ -246,6 +246,25 @@ export type SavedPlacesResult = {
   places: SavedPlaceRecord[];
 };
 
+export type PlacePreferencePayload = {
+  poi_provider_id?: string | null;
+  name: string;
+  category?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  preference: "like" | "dislike";
+};
+
+export type PlacePreferenceRecord = PlacePreferencePayload & {
+  id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlacePreferencesResult = {
+  preferences: PlacePreferenceRecord[];
+};
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -463,6 +482,37 @@ export async function deleteSavedPlace(id: string): Promise<void> {
   if (!response.ok) {
     throw new Error(`Saved place delete failed with ${response.status}`);
   }
+}
+
+export async function fetchPlacePreferences(): Promise<PlacePreferencesResult> {
+  const response = await fetch(`${API_BASE_URL}/me/place-preferences`, {
+    headers: userHeaders()
+  });
+
+  if (!response.ok) {
+    throw new Error(`Place preferences request failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function savePlacePreference(
+  payload: PlacePreferencePayload
+): Promise<PlacePreferenceRecord> {
+  const response = await fetch(`${API_BASE_URL}/me/place-preferences`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...userHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Place preference save failed with ${response.status}`);
+  }
+
+  return response.json();
 }
 
 export async function signup(payload: {

@@ -34,6 +34,7 @@ import {
   deleteSavedPlace,
   fetchMe,
   fetchPreviewInsights,
+  fetchPlacePreferences,
   fetchPreferencePoints,
   fetchSavedPlaces,
   geocodeLocation,
@@ -41,6 +42,7 @@ import {
   logout as logoutUser,
   requestDailyPlan,
   resolveRouteLocations,
+  savePlacePreference,
   sendRouteFeedback,
   searchLocations,
   signup as signupUser,
@@ -54,6 +56,7 @@ import {
   type PoiCandidate,
   type PreviewInsight,
   type RouteCandidate,
+  type PlacePreferenceRecord,
   type SavedPlaceRecord
 } from "@/lib/api";
 
@@ -144,53 +147,6 @@ const MOOD_PRESETS = [
   }
 ];
 const DEFAULT_MOOD_LABELS = ["피곤", "바쁨", "여유", "휴식"];
-const POI_PREFERENCES = [
-  {
-    id: "quiet-cafe",
-    name: "학림다방",
-    kind: "카페",
-    detail: "대학로 인근의 조용한 회복 후보",
-    icon: Coffee,
-    tags: ["회복", "실내"],
-    lat: 37.5817,
-    lng: 127.0011,
-    source: "예시"
-  },
-  {
-    id: "small-park",
-    name: "마로니에공원",
-    kind: "공원",
-    detail: "짧게 환기할 수 있는 외부 장소",
-    icon: Leaf,
-    tags: ["산책", "환기"],
-    lat: 37.5803,
-    lng: 127.0023,
-    source: "예시"
-  },
-  {
-    id: "campus-street",
-    name: "성균관대 정문 앞",
-    kind: "학교 주변",
-    detail: "익숙하지만 시간대에 따라 혼잡한 지점",
-    icon: Building2,
-    tags: ["익숙함", "혼잡"],
-    lat: 37.5882,
-    lng: 126.9936,
-    source: "예시"
-  },
-  {
-    id: "station-area",
-    name: "혜화역 4번 출구",
-    kind: "역세권",
-    detail: "빠르지만 소음과 유동 인구가 큰 지점",
-    icon: Navigation,
-    tags: ["빠름", "혼잡"],
-    lat: 37.5821,
-    lng: 127.0018,
-    source: "예시"
-  }
-];
-
 type PreferenceVote = "like" | "dislike";
 type PreferenceSignal = PreferenceVote | "similar-like" | "similar-dislike" | null;
 type AppView = "planner" | "taste" | "profile";
@@ -360,6 +316,31 @@ export default function HomePage() {
       .catch(() => {
         if (!cancelled) {
           setSavedPlaceNotice("");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  useEffect(() => {
+    if (!authUser) {
+      setPoiVotes({});
+      return;
+    }
+
+    let cancelled = false;
+    fetchPlacePreferences()
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        setPoiVotes(placePreferenceRecordsToVotes(result.preferences));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPoiVotes({});
         }
       });
 
@@ -661,6 +642,9 @@ export default function HomePage() {
     setAuthUser(null);
     setSavedPlaces([]);
     setSavedPlaceNotice("");
+    setNearbyPreferencePoints([]);
+    setPoiVotes({});
+    setPoiPreferenceIndex(0);
     setActiveView("planner");
   }
 
@@ -907,11 +891,12 @@ export default function HomePage() {
           setPreferenceStatus(
             result.points.length > 0
               ? `내 주변 실제 장소 ${result.points.length}개`
-              : "예시 장소 표시"
+              : "내 주변 실제 장소 없음"
           );
           setPoiPreferenceIndex(0);
         } catch {
-          setPreferenceStatus("예시 장소 표시");
+          setNearbyPreferencePoints([]);
+          setPreferenceStatus("실제 장소를 불러오지 못했어요");
         } finally {
           setIsPreferenceLoading(false);
         }
@@ -956,6 +941,7 @@ export default function HomePage() {
   }
 
   function handlePoiVote(id: string, vote: PreferenceVote) {
+    const point = preferencePoints.find((item) => item.id === id);
     setPoiVotes((current) => ({
       ...current,
       [id]: vote
@@ -963,6 +949,18 @@ export default function HomePage() {
     setPoiPreferenceIndex(
       (current) => (current + 1) % Math.max(1, preferencePoints.length)
     );
+    if (point) {
+      void savePlacePreference({
+        poi_provider_id: point.id,
+        name: point.name,
+        category: point.kind,
+        lat: point.lat,
+        lng: point.lng,
+        preference: vote
+      }).catch(() => {
+        setPreferenceStatus("취향 저장 실패");
+      });
+    }
   }
 
   function handlePoiSkip() {
@@ -972,7 +970,6 @@ export default function HomePage() {
   }
 
   function handlePoiReset() {
-    setPoiVotes({});
     setPoiPreferenceIndex(0);
   }
 
@@ -981,11 +978,8 @@ export default function HomePage() {
     (vote) => vote === "dislike"
   ).length;
   const preferencePoints = useMemo(
-    () =>
-      nearbyPreferencePoints.length > 0
-        ? nearbyPreferencePoints
-        : buildPreferencePoints(plan),
-    [nearbyPreferencePoints, plan]
+    () => nearbyPreferencePoints,
+    [nearbyPreferencePoints]
   );
   useEffect(() => {
     if (poiPreferenceIndex >= preferencePoints.length) {
@@ -1607,17 +1601,25 @@ function TastePage({
           </div>
         </article>
 
-        <PreferenceDeck
-          activeIndex={activeIndex}
-          points={points}
-          votes={votes}
-          onReset={onReset}
-          onSkip={onSkip}
-          onVote={onVote}
-        />
+        {isLoading ? (
+          <PreferenceDeckSkeleton />
+        ) : (
+          <PreferenceDeck
+            activeIndex={activeIndex}
+            points={points}
+            votes={votes}
+            onReset={onReset}
+            onSkip={onSkip}
+            onVote={onVote}
+          />
+        )}
       </div>
 
-      <PreferenceMap points={points} votes={votes} />
+      {isLoading ? (
+        <PreferenceMapSkeleton />
+      ) : (
+        <PreferenceMap points={points} votes={votes} />
+      )}
     </section>
   );
 }
@@ -1664,6 +1666,82 @@ function TasteIntroCard({
         <MiniStat label="반영" value={`${affectedCount}개`} />
       </div>
     </article>
+  );
+}
+
+function PreferenceDeckSkeleton() {
+  return (
+    <article className="order-1 overflow-hidden rounded-[24px] border border-ink/8 bg-white p-4 shadow-[0_18px_48px_rgba(23,26,24,0.07)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid gap-2">
+          <div className="h-4 w-20 animate-pulse rounded-full bg-ink/8" />
+          <div className="h-3 w-12 animate-pulse rounded-full bg-ink/8" />
+        </div>
+        <div className="h-9 w-9 animate-pulse rounded-xl bg-[#fff9ed]" />
+      </div>
+      <div className="mt-4 h-[430px] animate-pulse rounded-[24px] bg-[#fff9ed] p-3">
+        <div className="h-full rounded-[22px] bg-white ring-1 ring-ink/7">
+          <div className="h-48 rounded-t-[22px] bg-gradient-to-br from-[#fde2ef] via-[#fff5cf] to-[#ddf3eb]" />
+          <div className="space-y-3 p-4">
+            <div className="h-4 w-16 rounded-full bg-ink/8" />
+            <div className="h-7 w-3/4 rounded-full bg-ink/10" />
+            <div className="h-4 w-full rounded-full bg-ink/7" />
+            <div className="h-4 w-2/3 rounded-full bg-ink/7" />
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function PreferenceEmptyDeck() {
+  return (
+    <article className="order-1 rounded-[24px] border border-ink/8 bg-white p-5 text-center shadow-[0_18px_48px_rgba(23,26,24,0.07)]">
+      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#ddf3eb] text-moss">
+        <MapPin size={22} aria-hidden />
+      </span>
+      <h2 className="mt-4 text-xl font-semibold">가져온 장소가 없어요</h2>
+      <p className="mt-2 text-sm leading-6 text-ink/54 [word-break:keep-all]">
+        내 주변 실제 장소를 불러오면 바로 스와이프를 시작할 수 있어요.
+      </p>
+    </article>
+  );
+}
+
+function PreferenceMapSkeleton() {
+  return (
+    <section className="overflow-hidden rounded-[24px] bg-white shadow-[0_14px_40px_rgba(23,26,24,0.055)] ring-1 ring-ink/8">
+      <div className="flex items-start justify-between gap-3 px-5 py-4">
+        <div className="grid gap-2">
+          <div className="h-3 w-16 animate-pulse rounded-full bg-ink/8" />
+          <div className="h-6 w-24 animate-pulse rounded-full bg-ink/10" />
+        </div>
+        <div className="h-7 w-24 animate-pulse rounded-xl bg-[#ddf3eb]" />
+      </div>
+      <div className="relative mx-5 h-[300px] overflow-hidden rounded-2xl bg-[#fff9ed] ring-1 ring-ink/8">
+        <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,rgba(23,26,24,0.05)_1px,transparent_1px),linear-gradient(rgba(23,26,24,0.05)_1px,transparent_1px)] bg-[size:36px_36px]" />
+        <div className="absolute left-[22%] top-[28%] h-7 w-7 animate-pulse rounded-full bg-[#ddf3eb]" />
+        <div className="absolute left-[52%] top-[50%] h-8 w-8 animate-pulse rounded-full bg-[#fde2ef]" />
+        <div className="absolute left-[70%] top-[62%] h-7 w-7 animate-pulse rounded-full bg-[#ddf3eb]" />
+      </div>
+      <div className="p-5">
+        <div className="h-16 animate-pulse rounded-2xl bg-[#fffdf8] ring-1 ring-ink/7" />
+      </div>
+    </section>
+  );
+}
+
+function PreferenceMapEmpty() {
+  return (
+    <section className="overflow-hidden rounded-[24px] bg-white p-5 text-center shadow-[0_14px_40px_rgba(23,26,24,0.055)] ring-1 ring-ink/8">
+      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fff9ed] text-tide">
+        <MapPinned size={22} aria-hidden />
+      </span>
+      <h2 className="mt-4 text-xl font-semibold">선호 지도를 준비 중이에요</h2>
+      <p className="mt-2 text-sm leading-6 text-ink/54 [word-break:keep-all]">
+        실제 장소를 불러온 뒤 선호/비선호를 고르면 지도 색이 바뀝니다.
+      </p>
+    </section>
   );
 }
 
@@ -2663,7 +2741,11 @@ function PreferenceMap({
   points: PreferencePoint[];
   votes: Record<string, PreferenceVote>;
 }) {
-  const visiblePoints = points.length > 0 ? points : POI_PREFERENCES;
+  if (points.length === 0) {
+    return <PreferenceMapEmpty />;
+  }
+
+  const visiblePoints = points;
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const [mapStatus, setMapStatus] = useState<KakaoStatus>("loading");
   const [selectedPointId, setSelectedPointId] = useState(visiblePoints[0]?.id ?? "");
@@ -2803,7 +2885,11 @@ function PreferenceDeck({
   onSkip: () => void;
   onVote: (id: string, vote: PreferenceVote) => void;
 }) {
-  const visiblePoints = points.length > 0 ? points : POI_PREFERENCES;
+  if (points.length === 0) {
+    return <PreferenceEmptyDeck />;
+  }
+
+  const visiblePoints = points;
   const active = visiblePoints[activeIndex % visiblePoints.length];
   const Icon = active.icon;
   const liked = visiblePoints.filter((item) => votes[item.id] === "like");
@@ -3045,6 +3131,26 @@ function savedPlaceRecordToEntry(record: SavedPlaceRecord): SavedPlaceEntry {
   };
 }
 
+function placePreferenceRecordsToVotes(
+  records: PlacePreferenceRecord[]
+): Record<string, PreferenceVote> {
+  return records.reduce<Record<string, PreferenceVote>>((votes, record) => {
+    if (record.preference === "like" || record.preference === "dislike") {
+      votes[placePreferenceRecordKey(record)] = record.preference;
+    }
+    return votes;
+  }, {});
+}
+
+function placePreferenceRecordKey(record: PlacePreferenceRecord) {
+  if (record.poi_provider_id) {
+    return record.poi_provider_id;
+  }
+  const lat = typeof record.lat === "number" ? record.lat.toFixed(5) : "na";
+  const lng = typeof record.lng === "number" ? record.lng.toFixed(5) : "na";
+  return `poi-${record.name}-${lat}-${lng}`;
+}
+
 function normalizePlaceText(value: string) {
   return value.toLowerCase().replace(/\s+/g, "");
 }
@@ -3180,33 +3286,6 @@ function preferencePointFromCandidate(candidate: PoiCandidate): PreferencePoint 
     lng: candidate.lng,
     source: sourceLabel(candidate.source_confidence)
   };
-}
-
-function buildPreferencePoints(plan: DailyPlan | null): PreferencePoint[] {
-  if (!plan) {
-    return POI_PREFERENCES;
-  }
-
-  const candidates = [
-    ...plan.stops,
-    ...plan.routes.flatMap((route) => route.stops)
-  ];
-  const pointsById = new Map<string, PreferencePoint>();
-
-  candidates.forEach((candidate) => {
-    if (!Number.isFinite(candidate.lat) || !Number.isFinite(candidate.lng)) {
-      return;
-    }
-
-    const id = createPointId(candidate);
-    if (pointsById.has(id)) {
-      return;
-    }
-
-    pointsById.set(id, preferencePointFromCandidate(candidate));
-  });
-
-  return pointsById.size > 0 ? Array.from(pointsById.values()) : POI_PREFERENCES;
 }
 
 function createPointId(candidate: PoiCandidate) {
