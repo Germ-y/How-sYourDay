@@ -644,15 +644,16 @@ export default function HomePage() {
     setAuthStatus("");
 
     try {
+      const email = authForm.email.trim();
       if (authMode === "signup") {
         await signupUser({
-          email: authForm.email.trim(),
+          email,
           password: authForm.password,
-          nickname: authForm.nickname.trim()
+          nickname: authForm.nickname.trim() || buildSignupNickname(email)
         });
       }
       await loginUser({
-        email: authForm.email.trim(),
+        email,
         password: authForm.password
       });
       const user = await fetchMe();
@@ -1226,15 +1227,6 @@ function AuthPage({
             </div>
 
             <div className="grid gap-3">
-              {isSignup ? (
-                <AuthField
-                  icon={<UserRound size={16} aria-hidden />}
-                  label="닉네임"
-                  placeholder="예: 균이"
-                  value={form.nickname}
-                  onChange={(value) => onChange("nickname", value)}
-                />
-              ) : null}
               <AuthField
                 icon={<Mail size={16} aria-hidden />}
                 label="이메일"
@@ -1324,6 +1316,11 @@ function getAuthErrorMessage(caught: unknown) {
     return "이메일, 비밀번호, 닉네임을 형식에 맞게 입력해주세요.";
   }
   return "인증 요청에 실패했습니다. 잠시 후 다시 시도해주세요.";
+}
+
+function buildSignupNickname(email: string) {
+  const name = email.split("@")[0]?.trim();
+  return name || "사용자";
 }
 
 function ServiceTopBar({
