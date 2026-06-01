@@ -29,9 +29,12 @@ import {
   type LucideIcon
 } from "lucide-react";
 import {
+  createSavedPlace,
+  deleteSavedPlace,
   extractRouteLocations,
   fetchPreviewInsights,
   fetchPreferencePoints,
+  fetchSavedPlaces,
   geocodeLocation,
   requestDailyPlan,
   sendRouteFeedback,
@@ -44,7 +47,8 @@ import {
   type MapViewModel,
   type PoiCandidate,
   type PreviewInsight,
-  type RouteCandidate
+  type RouteCandidate,
+  type SavedPlaceRecord
 } from "@/lib/api";
 
 const starterText = "";
@@ -130,6 +134,8 @@ type SavedPlaceEntry = {
   name: string;
   address: string;
   kind: SavedPlaceKind;
+  lat?: number | null;
+  lng?: number | null;
   updatedAt: string;
 };
 type PreferencePoint = {
@@ -215,6 +221,17 @@ export default function HomePage() {
         window.localStorage.removeItem(SAVED_PLACES_KEY);
       }
     }
+
+    fetchSavedPlaces()
+      .then((result) => {
+        const nextPlaces = result.places.map(savedPlaceRecordToEntry);
+        setSavedPlaces(nextPlaces);
+        window.localStorage.setItem(SAVED_PLACES_KEY, JSON.stringify(nextPlaces));
+        setSavedPlaceNotice("DB 저장소 연결됨");
+      })
+      .catch(() => {
+        setSavedPlaceNotice("로컬 임시 저장 사용 중");
+      });
   }, []);
 
   useEffect(() => {
@@ -390,7 +407,7 @@ export default function HomePage() {
     }));
   }
 
-  function handleAddSavedPlace() {
+  async function handleAddSavedPlace() {
     const name = savedPlaceDraft.name.trim();
     const address = savedPlaceDraft.address.trim();
 
@@ -399,7 +416,7 @@ export default function HomePage() {
       return;
     }
 
-    savePlace({
+    await savePlace({
       name,
       address,
       kind: savedPlaceDraft.kind
@@ -411,8 +428,10 @@ export default function HomePage() {
     });
   }
 
-  function handleSaveCurrentPlace(role: "origin" | "destination") {
+  async function handleSaveCurrentPlace(role: "origin" | "destination") {
     const address = role === "origin" ? originText.trim() : destinationText.trim();
+    const selectedLocation =
+      role === "origin" ? selectedOriginLocation : selectedDestinationLocation;
 
     if (!address) {
       setSavedPlaceNotice(
@@ -423,33 +442,59 @@ export default function HomePage() {
       return;
     }
 
-    savePlace({
+    await savePlace({
       name: role === "origin" ? "기본 출발지" : "최근 도착지",
       address,
-      kind: role === "origin" ? "favorite" : guessSavedPlaceKind(address)
+      kind: role === "origin" ? "favorite" : guessSavedPlaceKind(address),
+      lat: selectedLocation?.lat ?? null,
+      lng: selectedLocation?.lng ?? null
     });
   }
 
-  function savePlace(place: Omit<SavedPlaceEntry, "id" | "updatedAt">) {
+  async function savePlace(place: Omit<SavedPlaceEntry, "id" | "updatedAt">) {
     const normalizedAddress = normalizePlaceText(place.address);
-    const nextPlace: SavedPlaceEntry = {
-      ...place,
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      updatedAt: new Date().toISOString()
-    };
-    const withoutDuplicate = savedPlaces.filter(
-      (savedPlace) => normalizePlaceText(savedPlace.address) !== normalizedAddress
-    );
-    persistSavedPlaces([nextPlace, ...withoutDuplicate].slice(0, 12));
-    setSavedPlaceNotice(`${place.name} 저장 완료`);
+    try {
+      const saved = await createSavedPlace({
+        name: place.name,
+        address: place.address,
+        kind: place.kind,
+        lat: place.lat ?? null,
+        lng: place.lng ?? null
+      });
+      const nextPlace = savedPlaceRecordToEntry(saved);
+      const withoutDuplicate = savedPlaces.filter(
+        (savedPlace) => normalizePlaceText(savedPlace.address) !== normalizedAddress
+      );
+      persistSavedPlaces([nextPlace, ...withoutDuplicate].slice(0, 12));
+      setSavedPlaceNotice(`${place.name} DB 저장 완료`);
+    } catch {
+      const nextPlace: SavedPlaceEntry = {
+        ...place,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        updatedAt: new Date().toISOString()
+      };
+      const withoutDuplicate = savedPlaces.filter(
+        (savedPlace) => normalizePlaceText(savedPlace.address) !== normalizedAddress
+      );
+      persistSavedPlaces([nextPlace, ...withoutDuplicate].slice(0, 12));
+      setSavedPlaceNotice(`${place.name} 로컬 저장 완료`);
+    }
   }
 
-  function handleRemoveSavedPlace(id: string) {
+  async function handleRemoveSavedPlace(id: string) {
     const removed = savedPlaces.find((place) => place.id === id);
-    persistSavedPlaces(savedPlaces.filter((place) => place.id !== id));
-    setSavedPlaceNotice(
-      removed ? `${removed.name} 삭제 완료` : "저장 장소 삭제 완료"
-    );
+    try {
+      await deleteSavedPlace(id);
+      persistSavedPlaces(savedPlaces.filter((place) => place.id !== id));
+      setSavedPlaceNotice(
+        removed ? `${removed.name} DB 삭제 완료` : "저장 장소 삭제 완료"
+      );
+    } catch {
+      persistSavedPlaces(savedPlaces.filter((place) => place.id !== id));
+      setSavedPlaceNotice(
+        removed ? `${removed.name} 로컬 삭제 완료` : "저장 장소 삭제 완료"
+      );
+    }
   }
 
   function handleUseSavedPlace(place: SavedPlaceEntry, target: "origin" | "destination") {
@@ -2515,6 +2560,18 @@ function isSavedPlaceEntry(value: unknown): value is SavedPlaceEntry {
     isSavedPlaceKind(place.kind) &&
     typeof place.updatedAt === "string"
   );
+}
+
+function savedPlaceRecordToEntry(record: SavedPlaceRecord): SavedPlaceEntry {
+  return {
+    id: record.id,
+    name: record.name,
+    address: record.address,
+    kind: isSavedPlaceKind(record.kind) ? record.kind : "favorite",
+    lat: record.lat,
+    lng: record.lng,
+    updatedAt: record.updated_at
+  };
 }
 
 function normalizePlaceText(value: string) {

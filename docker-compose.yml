@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hows-your-day-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hows_your_day
+      POSTGRES_USER: hows_your_day
+      POSTGRES_PASSWORD: hows_your_day
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hows_your_day -d hows_your_day"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

@@ -90,6 +90,29 @@ class FeedbackResponse(BaseModel):
     recovery_affinity: float
 
 
+class SavedPlaceCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    address: str = Field(min_length=1, max_length=300)
+    kind: str = Field(default="favorite", max_length=30)
+    lat: float | None = None
+    lng: float | None = None
+
+
+class SavedPlaceResponse(BaseModel):
+    id: str
+    name: str
+    address: str
+    kind: str
+    lat: float | None = None
+    lng: float | None = None
+    created_at: str
+    updated_at: str
+
+
+class SavedPlacesResponse(BaseModel):
+    places: list[SavedPlaceResponse]
+
+
 class Task(BaseModel):
     kind: str
     label: str

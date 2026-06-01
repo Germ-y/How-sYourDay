@@ -57,6 +57,7 @@ docs            planner contract와 설계 문서
 ### API
 
 ```bash
+docker compose up -d db
 cd server
 python -m venv .venv
 .venv\Scripts\activate
@@ -76,6 +77,19 @@ npm run dev
 JavaScript SDK는 등록된 도메인에서만 동작하므로 Kakao Developers의 Web
 플랫폼 도메인에도 `http://localhost:3000`을 등록해야 합니다.
 
+### DB
+
+PostgreSQL을 사용합니다. 로컬 기본값은 `docker-compose.yml`과 `.env.example`에
+맞춰져 있습니다.
+
+```text
+DATABASE_URL=postgresql+psycopg://hows_your_day:hows_your_day@localhost:5432/hows_your_day
+```
+
+현재는 회원가입/JWT 연결 전이라 저장 장소 API가 `X-User-Id` 헤더로 사용자
+공간을 나눕니다. 헤더가 없으면 `demo-user`로 저장됩니다. JWT가 붙으면 이
+부분만 로그인 사용자 ID로 교체하면 됩니다.
+
 ## 환경 변수
 
 root `.env`:
@@ -84,6 +98,7 @@ root `.env`:
 KAKAO_REST_API_KEY=
 TMAP_APP_KEY=
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8010
+DATABASE_URL=postgresql+psycopg://hows_your_day:hows_your_day@localhost:5432/hows_your_day
 ```
 
 `apps/web/.env.local`:

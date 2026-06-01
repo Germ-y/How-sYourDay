@@ -216,8 +216,27 @@ export type FeedbackPayload = {
   reason?: string;
 };
 
+export type SavedPlacePayload = {
+  name: string;
+  address: string;
+  kind: string;
+  lat?: number | null;
+  lng?: number | null;
+};
+
+export type SavedPlaceRecord = SavedPlacePayload & {
+  id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SavedPlacesResult = {
+  places: SavedPlaceRecord[];
+};
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8010";
+const DEMO_USER_ID = "demo-user";
 
 export async function requestDailyPlan(
   userText: string,
@@ -360,4 +379,52 @@ export async function sendRouteFeedback(payload: FeedbackPayload): Promise<void>
   if (!response.ok) {
     throw new Error(`Feedback request failed with ${response.status}`);
   }
+}
+
+export async function fetchSavedPlaces(): Promise<SavedPlacesResult> {
+  const response = await fetch(`${API_BASE_URL}/me/saved-places`, {
+    headers: userHeaders()
+  });
+
+  if (!response.ok) {
+    throw new Error(`Saved places request failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function createSavedPlace(
+  payload: SavedPlacePayload
+): Promise<SavedPlaceRecord> {
+  const response = await fetch(`${API_BASE_URL}/me/saved-places`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...userHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Saved place create failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function deleteSavedPlace(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/me/saved-places/${id}`, {
+    method: "DELETE",
+    headers: userHeaders()
+  });
+
+  if (!response.ok) {
+    throw new Error(`Saved place delete failed with ${response.status}`);
+  }
+}
+
+function userHeaders() {
+  return {
+    "X-User-Id": DEMO_USER_ID
+  };
 }

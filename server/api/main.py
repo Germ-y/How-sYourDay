@@ -1,6 +1,10 @@
+from fastapi import Depends
 from fastapi import FastAPI
+from fastapi import Header
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from agent.daily_planning_agent import DailyPlanningAgent
 from api.schemas import (
@@ -18,8 +22,13 @@ from api.schemas import (
     PreviewInsightsResponse,
     RouteExtractionRequest,
     RouteExtractionResponse,
+    SavedPlaceCreate,
+    SavedPlaceResponse,
+    SavedPlacesResponse,
 )
+from db.session import get_db, init_db
 from memory.preferences import record_route_feedback
+from repositories.saved_places import create_saved_place, delete_saved_place, list_saved_places
 from tools.extract_route_locations import extract_route_locations
 from tools.geocode import geocode_location, search_location_candidates
 from tools.preference_points import search_preference_points
@@ -41,11 +50,43 @@ app.add_middleware(
 )
 
 agent = DailyPlanningAgent()
+_db_initialized = False
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def current_user_id(x_user_id: str | None = Header(default=None, alias="X-User-Id")) -> str:
+    return x_user_id or "demo-user"
+
+
+def database(db: Session = Depends(get_db)) -> Session:
+    global _db_initialized
+    try:
+        if not _db_initialized:
+            init_db()
+            _db_initialized = True
+        return db
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="DB 연결이 필요합니다. Postgres 실행 후 DATABASE_URL을 확인해주세요.",
+        ) from exc
+
+
+def saved_place_response(place) -> SavedPlaceResponse:
+    return SavedPlaceResponse(
+        id=place.id,
+        name=place.name,
+        address=place.address,
+        kind=place.kind,
+        lat=place.lat,
+        lng=place.lng,
+        created_at=place.created_at.isoformat(),
+        updated_at=place.updated_at.isoformat(),
+    )
 
 
 @app.post("/plan", response_model=PlanResponse)
@@ -119,3 +160,33 @@ def submit_feedback(request: FeedbackRequest) -> FeedbackResponse:
         transfer_sensitivity=weights.transfer_sensitivity,
         recovery_affinity=weights.recovery_affinity,
     )
+
+
+@app.get("/me/saved-places", response_model=SavedPlacesResponse)
+def get_my_saved_places(
+    user_id: str = Depends(current_user_id),
+    db: Session = Depends(database),
+) -> SavedPlacesResponse:
+    places = list_saved_places(db, user_id)
+    return SavedPlacesResponse(places=[saved_place_response(place) for place in places])
+
+
+@app.post("/me/saved-places", response_model=SavedPlaceResponse)
+def add_my_saved_place(
+    request: SavedPlaceCreate,
+    user_id: str = Depends(current_user_id),
+    db: Session = Depends(database),
+) -> SavedPlaceResponse:
+    place = create_saved_place(db, user_id, request)
+    return saved_place_response(place)
+
+
+@app.delete("/me/saved-places/{place_id}", status_code=204)
+def remove_my_saved_place(
+    place_id: str,
+    user_id: str = Depends(current_user_id),
+    db: Session = Depends(database),
+) -> None:
+    deleted = delete_saved_place(db, user_id, place_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="저장 장소를 찾지 못했어요.")

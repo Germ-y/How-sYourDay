@@ -8,8 +8,13 @@ from api.schemas import (
     PoiCandidate,
     RouteCandidate,
     RouteSegment,
+    SavedPlaceCreate,
 )
+from db.models import Base
 from planner.evaluate_tradeoffs import evaluate_tradeoffs
+from repositories.saved_places import create_saved_place, list_saved_places
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from tools.emotion_score import score_route_for_emotion
 from tools.landmark_emotion_prior import LANDMARK_PRIORS
 from tools.route_path import build_route_candidates
@@ -189,6 +194,30 @@ def test_location_search_returns_known_candidates_without_api_key(monkeypatch) -
     assert candidates
     assert candidates[0].label == "집"
     assert candidates[0].source == "known"
+
+
+def test_saved_places_are_scoped_by_user() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine)
+
+    with SessionLocal() as db:
+        create_saved_place(
+            db,
+            "user-a",
+            SavedPlaceCreate(name="집", address="서울시 성북구", kind="home"),
+        )
+        create_saved_place(
+            db,
+            "user-b",
+            SavedPlaceCreate(name="학교", address="성균관대학교", kind="school"),
+        )
+
+        user_a_places = list_saved_places(db, "user-a")
+        user_b_places = list_saved_places(db, "user-b")
+
+    assert [place.name for place in user_a_places] == ["집"]
+    assert [place.name for place in user_b_places] == ["학교"]
 
 
 def test_preview_insights_reflect_route_and_time(monkeypatch) -> None:
