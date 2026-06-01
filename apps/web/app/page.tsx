@@ -675,14 +675,14 @@ export default function HomePage() {
             </div>
 
             <div className="grid gap-5 p-5">
-              <section>
+              <section className="rounded-[22px] bg-[#fff8e6] p-3 shadow-[0_10px_26px_rgba(217,151,76,0.08)] ring-1 ring-[#f2d89d]">
                 <ComposerTitle
                   icon={<MessageCircle size={17} aria-hidden />}
                   label="이동 요청"
                   support="일정, 장소, 시간 조건을 한 번에 입력"
                 />
                 <textarea
-                  className="mt-3 min-h-28 w-full resize-none rounded-2xl border border-ink/10 bg-[#fffdf8] p-4 text-[15px] leading-6 outline-none transition placeholder:text-ink/35 focus:border-tide focus:bg-white"
+                  className="mt-3 min-h-28 w-full resize-none rounded-2xl border border-[#ecd29a] bg-white p-4 text-[15px] leading-6 shadow-sm outline-none transition placeholder:text-ink/35 focus:border-tide focus:bg-white"
                   placeholder="예: 성균관대학교에서 서울역까지, 18시 전 도착. 조용한 카페 경유 가능."
                   value={text}
                   onChange={(event) => setText(event.target.value)}
@@ -691,7 +691,7 @@ export default function HomePage() {
 
               <div className="h-px bg-ink/8" />
 
-              <section>
+              <section className="rounded-[22px] bg-[#f3fbf7] p-3 ring-1 ring-moss/18">
                 <div className="flex items-start justify-between gap-3">
                   <ComposerTitle
                     icon={<Navigation size={17} aria-hidden />}
@@ -699,7 +699,7 @@ export default function HomePage() {
                     support={`${locationStatus} · 직접 수정 가능`}
                   />
                   <button
-                    className="min-h-9 shrink-0 rounded-xl bg-[#fde2ef] px-3 text-xs font-semibold text-tide transition hover:bg-[#fbd2e6] active:scale-[0.98]"
+                    className="min-h-9 shrink-0 rounded-xl bg-white px-3 text-xs font-semibold text-moss shadow-sm ring-1 ring-moss/15 transition hover:bg-[#ddf3eb] active:scale-[0.98]"
                     type="button"
                     onClick={handleUseCurrentLocation}
                   >
@@ -707,7 +707,7 @@ export default function HomePage() {
                   </button>
                 </div>
 
-                <div className="mt-3 rounded-2xl bg-[#fffdf8] p-3 ring-1 ring-ink/8">
+                <div className="mt-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-moss/14">
                   <div className="grid grid-cols-[24px_1fr] gap-3">
                     <div className="flex flex-col items-center pt-3">
                       <span className="h-2.5 w-2.5 rounded-full bg-moss" />
