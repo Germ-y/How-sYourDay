@@ -58,7 +58,6 @@ import {
 } from "@/lib/api";
 
 const starterText = "";
-const QUICK_DESTINATIONS = ["집", "학교", "회사"];
 const LAST_ORIGIN_KEY = "hows-your-day.origin-text.v1";
 const LAST_DESTINATION_KEY = "hows-your-day.destination-text.v1";
 const SAVED_PLACES_KEY = "hows-your-day.saved-places.v1";
@@ -243,6 +242,10 @@ export default function HomePage() {
   const visibleMoodCandidates = useMemo(
     () => ensureActiveMoodCandidate(moodCandidates, activeMood),
     [activeMood, moodCandidates]
+  );
+  const quickSavedPlaces = useMemo(
+    () => buildQuickSavedPlaces(savedPlaces),
+    [savedPlaces]
   );
 
   useEffect(() => {
@@ -819,10 +822,19 @@ export default function HomePage() {
     );
   }
 
-  function handleDestinationSelect(key: string) {
-    setDestinationText(key);
+  function handleQuickSavedPlaceSelect(place: SavedPlaceEntry) {
+    setDestinationText(place.address);
     setDestinationEdited(true);
-    setSelectedDestinationLocation(null);
+    setSelectedDestinationLocation(
+      typeof place.lat === "number" && typeof place.lng === "number"
+        ? {
+            label: place.name,
+            lat: place.lat,
+            lng: place.lng
+          }
+        : null
+    );
+    setLocationStatus(`${place.name}을 도착지로 설정`);
     setError(null);
   }
 
@@ -1013,22 +1025,38 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {QUICK_DESTINATIONS.map((key) => (
-                    <button
-                      className={`min-h-10 rounded-xl border px-3 text-sm font-semibold transition ${
-                        normalizeLocationText(destinationText) === normalizeLocationText(key)
-                          ? "border-tide bg-tide text-white shadow-sm"
-                          : "border-ink/10 bg-white text-ink/62 hover:border-tide/45"
-                      }`}
-                      key={key}
-                      type="button"
-                      onClick={() => handleDestinationSelect(key)}
-                    >
-                      {key}
-                    </button>
-                  ))}
-                </div>
+                {quickSavedPlaces.length > 0 ? (
+                  <div
+                    className={`mt-3 grid gap-2 ${
+                      quickSavedPlaces.length === 1
+                        ? "grid-cols-1"
+                        : quickSavedPlaces.length === 2
+                          ? "grid-cols-2"
+                          : "grid-cols-3"
+                    }`}
+                  >
+                    {quickSavedPlaces.map((place) => {
+                      const selected =
+                        normalizeLocationText(destinationText) ===
+                        normalizeLocationText(place.address);
+                      return (
+                        <button
+                          className={`min-h-10 min-w-0 rounded-xl border px-3 text-sm font-semibold transition ${
+                            selected
+                              ? "border-tide bg-tide text-white shadow-sm"
+                              : "border-ink/10 bg-white text-ink/62 hover:border-tide/45"
+                          }`}
+                          key={place.id}
+                          type="button"
+                          title={place.address}
+                          onClick={() => handleQuickSavedPlaceSelect(place)}
+                        >
+                          <span className="block truncate">{place.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </section>
 
               <div className="h-px bg-ink/8" />
@@ -2944,6 +2972,29 @@ function savedPlaceRecordToEntry(record: SavedPlaceRecord): SavedPlaceEntry {
 
 function normalizePlaceText(value: string) {
   return value.toLowerCase().replace(/\s+/g, "");
+}
+
+function buildQuickSavedPlaces(places: SavedPlaceEntry[]) {
+  const order: SavedPlaceKind[] = ["home", "school", "work", "favorite"];
+  const usedAddresses = new Set<string>();
+  const sorted = [...places].sort((a, b) => {
+    const kindDelta = order.indexOf(a.kind) - order.indexOf(b.kind);
+    if (kindDelta !== 0) {
+      return kindDelta;
+    }
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+
+  return sorted
+    .filter((place) => {
+      const key = normalizePlaceText(place.address);
+      if (!key || usedAddresses.has(key)) {
+        return false;
+      }
+      usedAddresses.add(key);
+      return true;
+    })
+    .slice(0, 3);
 }
 
 function guessSavedPlaceKind(value: string): SavedPlaceKind {
