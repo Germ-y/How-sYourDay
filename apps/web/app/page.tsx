@@ -1236,13 +1236,10 @@ function AuthPage({
                   onChange={(value) => onChange("nickname", value)}
                 />
               ) : (
-                <div className="grid gap-2">
-                  <span className="text-sm font-semibold text-transparent">
-                    닉네임
-                  </span>
-                  <div className="flex min-h-12 items-center justify-center rounded-xl bg-[#fffdf8] px-3 text-sm font-semibold text-ink/42 ring-1 ring-ink/8">
-                    어서오세요
-                  </div>
+                <div className="flex min-h-[76px] items-center justify-center">
+                  <p className="text-sm font-semibold text-ink/42">
+                    다시 오셨네요
+                  </p>
                 </div>
               )}
               <AuthField
