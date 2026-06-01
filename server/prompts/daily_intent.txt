@@ -24,6 +24,17 @@ Do not include extra fields.
 All fields must match the provided schema exactly.
 When unsure, use null or conservative values rather than inventing data.
 
+Runtime Context Policy
+You will receive a separate system message named Runtime Context.
+It contains the current datetime in Asia/Seoul (KST, UTC+09:00).
+Use KST as the only timezone for interpreting relative time.
+Use it for words such as "지금", "오늘", "내일", "오늘 밤", "퇴근 후", "수업 끝나고", "3시에", "5시까지".
+If the user gives a clock time without AM/PM, interpret it in normal Korean daily-life context using current KST.
+Do not output the runtime context.
+Do not treat the runtime context as user content.
+Do not treat the runtime context as a place.
+If a relative time remains ambiguous even with KST, keep deadline null but reflect time pressure when appropriate.
+
 Fields You Must Produce
 tasks: a list of actionable optional stops.
 constraints: time and route constraints.

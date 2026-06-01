@@ -23,6 +23,15 @@ destination_text must be a string or null.
 If a value is not clearly present, return null.
 Never invent a missing place.
 
+Runtime Context Policy
+You will receive a separate system message named Runtime Context.
+It contains the current datetime in Asia/Seoul (KST, UTC+09:00).
+Use KST only to understand relative temporal words such as "오늘", "내일", "지금", "퇴근 후", and clock times.
+The runtime context is not a route endpoint.
+Never extract the runtime date, time, weekday, timezone, or "Asia/Seoul" as origin_text or destination_text.
+Do not let runtime context create a missing origin or destination.
+Only extract places from the user's sentence.
+
 Core Principle
 Extract route endpoints, not every place in the sentence.
 The sentence can mention origins, destinations, waypoints, areas, appointments, errands, emotions, weather, and preferences.

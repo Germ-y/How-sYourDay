@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from api.schemas import Constraints, EmotionState, Task
 from tools.extract_intent import ExtractedIntent
 from tools.kakao_local import _get_env_value
-from tools.prompt_loader import load_prompt
+from tools.prompt_loader import kst_runtime_context, load_prompt
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_INTENT_MODEL = "gpt-5-nano"
@@ -145,7 +145,8 @@ def extract_intent_with_llm(user_text: str) -> ExtractedIntent | None:
         or _get_env_value("OPENAI_INTENT_MODEL")
         or DEFAULT_INTENT_MODEL
     )
-    cache_key = _intent_cache_key(model, user_text)
+    runtime_context = kst_runtime_context()
+    cache_key = _intent_cache_key(model, user_text, runtime_context)
     if cache_key in _LLM_INTENT_CACHE:
         return _LLM_INTENT_CACHE[cache_key]
 
@@ -155,6 +156,10 @@ def extract_intent_with_llm(user_text: str) -> ExtractedIntent | None:
             {
                 "role": "system",
                 "content": load_prompt("daily_intent"),
+            },
+            {
+                "role": "system",
+                "content": runtime_context,
             },
             {"role": "user", "content": user_text},
         ],
@@ -201,8 +206,8 @@ def extract_intent_with_llm(user_text: str) -> ExtractedIntent | None:
         return None
 
 
-def _intent_cache_key(model: str, user_text: str) -> str:
-    return f"{model}:{user_text.strip()}"
+def _intent_cache_key(model: str, user_text: str, runtime_context: str) -> str:
+    return f"{model}:{runtime_context}:{user_text.strip()}"
 
 
 def _remember_intent(cache_key: str, intent: ExtractedIntent) -> None:

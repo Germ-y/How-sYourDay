@@ -7,7 +7,7 @@ from urllib.request import Request, urlopen
 
 from tools.kakao_local import _get_env_value
 from tools.llm_intent import DEFAULT_INTENT_MODEL, OPENAI_RESPONSES_URL, _response_text
-from tools.prompt_loader import load_prompt
+from tools.prompt_loader import kst_runtime_context, load_prompt
 
 
 ROUTE_EXTRACTION_SCHEMA = {
@@ -99,6 +99,10 @@ def _extract_route_locations_with_llm(user_text: str) -> RouteLocationHints | No
             {
                 "role": "system",
                 "content": load_prompt("route_location_extraction"),
+            },
+            {
+                "role": "system",
+                "content": kst_runtime_context(),
             },
             {"role": "user", "content": user_text},
         ],

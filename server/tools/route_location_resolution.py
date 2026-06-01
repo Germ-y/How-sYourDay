@@ -12,7 +12,7 @@ from tools.llm_intent import (
     _post_openai,
     _response_text,
 )
-from tools.prompt_loader import load_prompt
+from tools.prompt_loader import kst_runtime_context, load_prompt
 
 
 LOCATION_SELECTION_SCHEMA = {
@@ -158,6 +158,10 @@ def _select_locations_with_llm(
             {
                 "role": "system",
                 "content": load_prompt("route_location_selection"),
+            },
+            {
+                "role": "system",
+                "content": kst_runtime_context(),
             },
             {
                 "role": "user",

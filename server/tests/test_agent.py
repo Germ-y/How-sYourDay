@@ -30,6 +30,7 @@ from tools.extract_intent import extract_intent
 from tools.extract_route_locations import extract_route_locations
 from tools.geocode import geocode_location, search_location_candidates
 from tools.preview_insights import build_preview_insights
+from tools.prompt_loader import kst_runtime_context
 from tools import route_location_resolution
 
 
@@ -235,6 +236,14 @@ def test_auth_security_hashes_password_and_decodes_token() -> None:
     assert verify_password("password123", hashed)
     assert not verify_password("wrong-password", hashed)
     assert decode_access_token(create_access_token("user-123")) == "user-123"
+
+
+def test_kst_runtime_context_is_available_for_prompts() -> None:
+    context = kst_runtime_context()
+
+    assert "Asia/Seoul" in context
+    assert "KST" in context
+    assert "Current KST datetime:" in context
 
 
 def test_preview_insights_reflect_route_and_time(monkeypatch) -> None:

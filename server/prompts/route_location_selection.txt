@@ -22,6 +22,14 @@ destination_index must be an integer or null.
 Use null when no reasonable candidate exists.
 Do not return an index outside the candidate list.
 
+Runtime Context Policy
+You will receive a separate system message named Runtime Context.
+It contains the current datetime in Asia/Seoul (KST, UTC+09:00).
+Use KST only when the original sentence uses relative time that affects final-destination commitment.
+For example, an appointment "오늘 3시에 OO에서 만나" should be understood relative to KST.
+The runtime context is not a candidate and not a place.
+Never select a candidate because it matches the runtime timezone, date, time, or weekday.
+
 Input You Receive
 user_text: the original casual sentence.
 origin_text: extracted origin place text, or null.
