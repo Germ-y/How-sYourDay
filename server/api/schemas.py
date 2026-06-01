@@ -27,6 +27,25 @@ class GeocodeResponse(BaseModel):
     source: str
 
 
+class LocationSearchRequest(BaseModel):
+    query: str = Field(min_length=1)
+    size: int = Field(default=5, ge=1, le=10)
+
+
+class LocationCandidate(BaseModel):
+    label: str
+    address: str | None = None
+    lat: float
+    lng: float
+    source: str
+    category: str | None = None
+    distance_meters: int | None = None
+
+
+class LocationSearchResponse(BaseModel):
+    candidates: list[LocationCandidate]
+
+
 class RouteExtractionRequest(BaseModel):
     user_text: str = Field(min_length=1)
 

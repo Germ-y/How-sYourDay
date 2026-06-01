@@ -8,6 +8,8 @@ from api.schemas import (
     FeedbackResponse,
     GeocodeRequest,
     GeocodeResponse,
+    LocationSearchRequest,
+    LocationSearchResponse,
     PlanRequest,
     PlanResponse,
     PreferencePointsRequest,
@@ -17,7 +19,7 @@ from api.schemas import (
 )
 from memory.preferences import record_route_feedback
 from tools.extract_route_locations import extract_route_locations
-from tools.geocode import geocode_location
+from tools.geocode import geocode_location, search_location_candidates
 from tools.preference_points import search_preference_points
 
 app = FastAPI(title="How's Your Day API")
@@ -59,6 +61,13 @@ def geocode(request: GeocodeRequest) -> GeocodeResponse:
 
     location, source = result
     return GeocodeResponse(location=location, source=source)
+
+
+@app.post("/search-locations", response_model=LocationSearchResponse)
+def search_locations(request: LocationSearchRequest) -> LocationSearchResponse:
+    return LocationSearchResponse(
+        candidates=search_location_candidates(request.query, size=request.size)
+    )
 
 
 @app.post("/extract-route", response_model=RouteExtractionResponse)

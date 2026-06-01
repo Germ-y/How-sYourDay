@@ -34,10 +34,12 @@ import {
   geocodeLocation,
   requestDailyPlan,
   sendRouteFeedback,
+  searchLocations,
   type Coordinate,
   type DailyPlan,
   type EmotionCost,
   type Location,
+  type LocationCandidate,
   type MapViewModel,
   type PoiCandidate,
   type RouteCandidate
@@ -171,6 +173,20 @@ export default function HomePage() {
     kind: "favorite" as SavedPlaceKind
   });
   const [savedPlaceNotice, setSavedPlaceNotice] = useState("");
+  const [originCandidates, setOriginCandidates] = useState<LocationCandidate[]>([]);
+  const [destinationCandidates, setDestinationCandidates] = useState<
+    LocationCandidate[]
+  >([]);
+  const [selectedOriginLocation, setSelectedOriginLocation] =
+    useState<Location | null>(null);
+  const [selectedDestinationLocation, setSelectedDestinationLocation] =
+    useState<Location | null>(null);
+  const [activeLocationField, setActiveLocationField] = useState<
+    "origin" | "destination" | null
+  >(null);
+  const [locationSearchLoading, setLocationSearchLoading] = useState<
+    "origin" | "destination" | null
+  >(null);
 
   useEffect(() => {
     const storedOriginText = window.localStorage.getItem(LAST_ORIGIN_KEY);
@@ -244,6 +260,78 @@ export default function HomePage() {
       window.clearTimeout(timer);
     };
   }, [text, originEdited, destinationEdited, originText, destinationText]);
+
+  useEffect(() => {
+    const query = originText.trim();
+    if (!shouldSearchLocationInput(query)) {
+      setOriginCandidates([]);
+      setLocationSearchLoading((current) => (current === "origin" ? null : current));
+      return;
+    }
+
+    let cancelled = false;
+    setLocationSearchLoading("origin");
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await searchLocations(query, 5);
+        if (!cancelled) {
+          setOriginCandidates(result.candidates);
+        }
+      } catch {
+        if (!cancelled) {
+          setOriginCandidates([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLocationSearchLoading((current) =>
+            current === "origin" ? null : current
+          );
+        }
+      }
+    }, 260);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [originText]);
+
+  useEffect(() => {
+    const query = destinationText.trim();
+    if (!shouldSearchLocationInput(query)) {
+      setDestinationCandidates([]);
+      setLocationSearchLoading((current) =>
+        current === "destination" ? null : current
+      );
+      return;
+    }
+
+    let cancelled = false;
+    setLocationSearchLoading("destination");
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await searchLocations(query, 5);
+        if (!cancelled) {
+          setDestinationCandidates(result.candidates);
+        }
+      } catch {
+        if (!cancelled) {
+          setDestinationCandidates([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLocationSearchLoading((current) =>
+            current === "destination" ? null : current
+          );
+        }
+      }
+    }, 260);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [destinationText]);
 
   function persistSavedPlaces(nextPlaces: SavedPlaceEntry[]) {
     setSavedPlaces(nextPlaces);
@@ -326,12 +414,41 @@ export default function HomePage() {
     if (target === "origin") {
       setOriginText(place.address);
       setOriginEdited(true);
+      setSelectedOriginLocation(null);
     } else {
       setDestinationText(place.address);
       setDestinationEdited(true);
+      setSelectedDestinationLocation(null);
     }
     setLocationStatus(`${place.name}을 ${target === "origin" ? "출발지" : "도착지"}로 설정`);
     setActiveView("planner");
+  }
+
+  function handleLocationCandidateSelect(
+    field: "origin" | "destination",
+    candidate: LocationCandidate
+  ) {
+    const location = {
+      label: candidate.label,
+      lat: candidate.lat,
+      lng: candidate.lng
+    };
+
+    if (field === "origin") {
+      setOriginText(candidate.label);
+      setOriginEdited(true);
+      setSelectedOriginLocation(location);
+      setOriginCandidates([]);
+    } else {
+      setDestinationText(candidate.label);
+      setDestinationEdited(true);
+      setSelectedDestinationLocation(location);
+      setDestinationCandidates([]);
+    }
+
+    setActiveLocationField(null);
+    setError(null);
+    setLocationStatus(`${candidate.label} 선택됨`);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -347,8 +464,16 @@ export default function HomePage() {
 
     try {
       setLocationStatus("주소를 좌표로 확인하는 중");
-      const originResult = await resolveLocationInput(originText, currentLocation);
-      const destinationResult = await geocodeLocation(destinationText.trim());
+      const originResult = await resolveLocationInput(
+        originText,
+        currentLocation,
+        selectedOriginLocation
+      );
+      const destinationResult = await resolveLocationInput(
+        destinationText,
+        currentLocation,
+        selectedDestinationLocation
+      );
       const planningText = buildPlanningText(
         text,
         activeMood,
@@ -390,6 +515,8 @@ export default function HomePage() {
         setCurrentLocation(location);
         setOriginText("현재 위치");
         setOriginEdited(true);
+        setSelectedOriginLocation(location);
+        setOriginCandidates([]);
         setLocationStatus("현재 위치 사용 중");
       },
       () => {
@@ -464,6 +591,7 @@ export default function HomePage() {
   function handleDestinationSelect(key: string) {
     setDestinationText(key);
     setDestinationEdited(true);
+    setSelectedDestinationLocation(null);
     setError(null);
   }
 
@@ -590,34 +718,50 @@ export default function HomePage() {
                       <span className="h-2.5 w-2.5 rounded-full bg-tide" />
                     </div>
                     <div className="grid gap-3">
-                      <label className="block" htmlFor="origin">
-                        <span className="text-xs font-semibold text-ink/46">출발지</span>
-                        <input
-                          className="mt-1 min-h-11 w-full rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold outline-none transition placeholder:text-ink/35 focus:border-tide"
-                          id="origin"
-                          placeholder="예: 성균관대학교 서울캠퍼스"
-                          value={originText}
-                          onChange={(event) => {
-                            setOriginText(event.target.value);
-                            setOriginEdited(true);
-                            setError(null);
-                          }}
-                        />
-                      </label>
-                      <label className="block" htmlFor="destination">
-                        <span className="text-xs font-semibold text-ink/46">도착지</span>
-                        <input
-                          className="mt-1 min-h-11 w-full rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold outline-none transition placeholder:text-ink/35 focus:border-tide"
-                          id="destination"
-                          placeholder="예: 서울역, 집, 회사"
-                          value={destinationText}
-                          onChange={(event) => {
-                            setDestinationText(event.target.value);
-                            setDestinationEdited(true);
-                            setError(null);
-                          }}
-                        />
-                      </label>
+                      <LocationSearchInput
+                        active={activeLocationField === "origin"}
+                        candidates={originCandidates}
+                        id="origin"
+                        isLoading={locationSearchLoading === "origin"}
+                        label="출발지"
+                        placeholder="예: 성균관대학교 서울캠퍼스"
+                        value={originText}
+                        onBlur={() => {
+                          window.setTimeout(() => setActiveLocationField(null), 120);
+                        }}
+                        onChange={(value) => {
+                          setOriginText(value);
+                          setOriginEdited(true);
+                          setSelectedOriginLocation(null);
+                          setError(null);
+                        }}
+                        onFocus={() => setActiveLocationField("origin")}
+                        onSelect={(candidate) =>
+                          handleLocationCandidateSelect("origin", candidate)
+                        }
+                      />
+                      <LocationSearchInput
+                        active={activeLocationField === "destination"}
+                        candidates={destinationCandidates}
+                        id="destination"
+                        isLoading={locationSearchLoading === "destination"}
+                        label="도착지"
+                        placeholder="예: 서울역, 집, 회사"
+                        value={destinationText}
+                        onBlur={() => {
+                          window.setTimeout(() => setActiveLocationField(null), 120);
+                        }}
+                        onChange={(value) => {
+                          setDestinationText(value);
+                          setDestinationEdited(true);
+                          setSelectedDestinationLocation(null);
+                          setError(null);
+                        }}
+                        onFocus={() => setActiveLocationField("destination")}
+                        onSelect={(candidate) =>
+                          handleLocationCandidateSelect("destination", candidate)
+                        }
+                      />
                     </div>
                   </div>
                 </div>
@@ -1307,6 +1451,83 @@ function SavedPlace({
         </button>
       </div>
     </div>
+  );
+}
+
+function LocationSearchInput({
+  active,
+  candidates,
+  id,
+  isLoading,
+  label,
+  onBlur,
+  onChange,
+  onFocus,
+  onSelect,
+  placeholder,
+  value
+}: {
+  active: boolean;
+  candidates: LocationCandidate[];
+  id: string;
+  isLoading: boolean;
+  label: string;
+  placeholder: string;
+  value: string;
+  onBlur: () => void;
+  onChange: (value: string) => void;
+  onFocus: () => void;
+  onSelect: (candidate: LocationCandidate) => void;
+}) {
+  const showPanel = active && (isLoading || candidates.length > 0);
+
+  return (
+    <label className="relative block" htmlFor={id}>
+      <span className="text-xs font-semibold text-ink/46">{label}</span>
+      <input
+        autoComplete="off"
+        className="mt-1 min-h-11 w-full rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold outline-none transition placeholder:text-ink/35 focus:border-tide"
+        id={id}
+        placeholder={placeholder}
+        value={value}
+        onBlur={onBlur}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={onFocus}
+      />
+      {showPanel ? (
+        <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl bg-white shadow-[0_16px_40px_rgba(23,26,24,0.13)] ring-1 ring-ink/10">
+          {isLoading ? (
+            <div className="px-3 py-3 text-sm font-semibold text-ink/42">
+              장소 검색 중
+            </div>
+          ) : null}
+          {candidates.map((candidate) => (
+            <button
+              className="flex w-full items-start gap-3 px-3 py-3 text-left transition hover:bg-[#fff9ed] active:bg-[#fde2ef]"
+              key={`${candidate.source}-${candidate.label}-${candidate.lat}-${candidate.lng}`}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onSelect(candidate)}
+            >
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#ddf3eb] text-moss">
+                <MapPin size={17} aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-ink">
+                  {candidate.label}
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-ink/46">
+                  {locationCandidateMeta(candidate)}
+                </span>
+              </span>
+              <span className="mt-1 rounded-lg bg-[#fde2ef] px-2 py-1 text-[11px] font-semibold text-tide">
+                선택
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </label>
   );
 }
 
@@ -2569,9 +2790,17 @@ function preferenceMapTone(signal: PreferenceSignal) {
 
 async function resolveLocationInput(
   rawText: string,
-  currentLocation: Location | null
+  currentLocation: Location | null,
+  selectedLocation: Location | null = null
 ) {
   const normalized = normalizeLocationText(rawText);
+  if (selectedLocation && normalized === normalizeLocationText(selectedLocation.label)) {
+    return {
+      location: selectedLocation,
+      source: "selected-search"
+    };
+  }
+
   if (
     currentLocation &&
     ["현재위치", "내위치", "currentlocation"].includes(normalized)
@@ -2585,8 +2814,36 @@ async function resolveLocationInput(
   return geocodeLocation(rawText.trim());
 }
 
+function shouldSearchLocationInput(query: string) {
+  return query.length >= 2 || ["집", "학교", "회사"].includes(query);
+}
+
 function normalizeLocationText(value: string) {
   return value.toLowerCase().replace(/\s+/g, "");
+}
+
+function locationCandidateMeta(candidate: LocationCandidate) {
+  const parts = [
+    locationSourceLabel(candidate.source),
+    candidate.category,
+    candidate.address,
+    candidate.distance_meters ? `약 ${candidate.distance_meters}m` : null
+  ].filter(Boolean);
+
+  return parts.join(" · ") || "장소 후보";
+}
+
+function locationSourceLabel(source: string) {
+  if (source === "kakao-address") {
+    return "주소";
+  }
+  if (source === "kakao-keyword") {
+    return "장소";
+  }
+  if (source === "known") {
+    return "바로가기";
+  }
+  return "검색";
 }
 
 function buildPlanningText(

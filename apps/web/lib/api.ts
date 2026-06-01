@@ -12,6 +12,17 @@ export type GeocodeResult = {
   source: string;
 };
 
+export type LocationCandidate = Location & {
+  address: string | null;
+  source: string;
+  category: string | null;
+  distance_meters: number | null;
+};
+
+export type LocationSearchResult = {
+  candidates: LocationCandidate[];
+};
+
 export type RouteExtractionResult = {
   origin_text: string | null;
   destination_text: string | null;
@@ -241,6 +252,25 @@ export async function geocodeLocation(query: string): Promise<GeocodeResult> {
       // Keep the status-based fallback message.
     }
     throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function searchLocations(
+  query: string,
+  size = 5
+): Promise<LocationSearchResult> {
+  const response = await fetch(`${API_BASE_URL}/search-locations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ query, size })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Location search failed with ${response.status}`);
   }
 
   return response.json();

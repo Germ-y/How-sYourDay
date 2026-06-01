@@ -16,7 +16,7 @@ from tools.route_path import build_route_candidates
 from tools.search_poi import search_poi_candidates
 from tools.extract_intent import extract_intent
 from tools.extract_route_locations import extract_route_locations
-from tools.geocode import geocode_location
+from tools.geocode import geocode_location, search_location_candidates
 
 
 def setup_module() -> None:
@@ -178,6 +178,16 @@ def test_geocode_uses_known_location_without_api_key(monkeypatch) -> None:
     location, source = result
     assert source == "known"
     assert location.label == "집"
+
+
+def test_location_search_returns_known_candidates_without_api_key(monkeypatch) -> None:
+    monkeypatch.delenv("KAKAO_REST_API_KEY", raising=False)
+
+    candidates = search_location_candidates("집")
+
+    assert candidates
+    assert candidates[0].label == "집"
+    assert candidates[0].source == "known"
 
 
 def test_route_location_extraction_handles_korean_from_to(monkeypatch) -> None:
