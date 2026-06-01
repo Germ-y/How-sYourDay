@@ -1145,22 +1145,19 @@ function ProfilePage({
           destinationText={destinationText}
           originText={originText}
         />
-
-        <PlaceSaverCard
-          destinationText={destinationText}
-          draft={savedPlaceDraft}
-          notice={savedPlaceNotice}
-          originText={originText}
-          onAdd={onAddSavedPlace}
-          onDraftChange={onSavedPlaceDraftChange}
-          onSaveCurrent={onSaveCurrentPlace}
-        />
       </div>
 
       <div className="grid gap-4">
         <SavedPlacesPanel
+          destinationText={destinationText}
+          draft={savedPlaceDraft}
+          notice={savedPlaceNotice}
+          originText={originText}
           places={savedPlaces}
+          onAdd={onAddSavedPlace}
+          onDraftChange={onSavedPlaceDraftChange}
           onRemove={onRemoveSavedPlace}
+          onSaveCurrent={onSaveCurrentPlace}
           onUse={onUseSavedPlace}
         />
 
@@ -1284,127 +1281,27 @@ function ProfileStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlaceSaverCard({
+function SavedPlacesPanel({
   destinationText,
   draft,
   notice,
   originText,
+  places,
   onAdd,
   onDraftChange,
-  onSaveCurrent
+  onRemove,
+  onSaveCurrent,
+  onUse
 }: {
   destinationText: string;
   draft: { name: string; address: string; kind: SavedPlaceKind };
   notice: string;
   originText: string;
+  places: SavedPlaceEntry[];
   onAdd: () => void;
   onDraftChange: (field: "name" | "address" | "kind", value: string) => void;
-  onSaveCurrent: (role: "origin" | "destination") => void;
-}) {
-  return (
-    <article className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-tide">장소 저장</p>
-          <h2 className="mt-1 text-xl font-semibold [word-break:keep-all]">
-            자주 가는 곳
-          </h2>
-        </div>
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#fde2ef] text-tide">
-          <MapPinned size={19} aria-hidden />
-        </span>
-      </div>
-
-      <div className="mt-4 grid gap-2">
-        <label className="grid gap-1 text-xs font-semibold text-ink/48">
-          이름
-          <input
-            className="min-h-11 rounded-xl border border-ink/10 bg-[#fffdf8] px-3 text-sm font-semibold text-ink outline-none transition placeholder:text-ink/32 focus:border-tide focus:bg-white"
-            value={draft.name}
-            onChange={(event) => onDraftChange("name", event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onAdd();
-              }
-            }}
-            placeholder="예: 집, 학교, 스터디 카페"
-          />
-        </label>
-        <label className="grid gap-1 text-xs font-semibold text-ink/48">
-          주소 또는 장소명
-          <input
-            className="min-h-11 rounded-xl border border-ink/10 bg-[#fffdf8] px-3 text-sm font-semibold text-ink outline-none transition placeholder:text-ink/32 focus:border-tide focus:bg-white"
-            value={draft.address}
-            onChange={(event) => onDraftChange("address", event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onAdd();
-              }
-            }}
-            placeholder="예: 성균관대학교 서울캠퍼스"
-          />
-        </label>
-        <label className="grid gap-1 text-xs font-semibold text-ink/48">
-          분류
-          <select
-            className="min-h-11 rounded-xl border border-ink/10 bg-[#fffdf8] px-3 text-sm font-semibold text-ink outline-none transition focus:border-tide focus:bg-white"
-            value={draft.kind}
-            onChange={(event) => onDraftChange("kind", event.target.value)}
-          >
-            <option value="favorite">자주 감</option>
-            <option value="home">집</option>
-            <option value="school">학교</option>
-            <option value="work">회사</option>
-          </select>
-        </label>
-      </div>
-
-      <button
-        className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition active:scale-[0.98]"
-        type="button"
-        onClick={onAdd}
-      >
-        <Plus size={17} aria-hidden />
-        저장하기
-      </button>
-
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button
-          className="min-h-10 rounded-xl bg-[#ddf3eb] px-3 text-sm font-semibold text-moss transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
-          type="button"
-          disabled={!originText.trim()}
-          onClick={() => onSaveCurrent("origin")}
-        >
-          출발지 저장
-        </button>
-        <button
-          className="min-h-10 rounded-xl bg-[#fde2ef] px-3 text-sm font-semibold text-tide transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
-          type="button"
-          disabled={!destinationText.trim()}
-          onClick={() => onSaveCurrent("destination")}
-        >
-          도착지 저장
-        </button>
-      </div>
-
-      {notice ? (
-        <p className="mt-3 rounded-xl bg-[#fff9ed] px-3 py-2 text-xs font-semibold text-ink/55">
-          {notice}
-        </p>
-      ) : null}
-    </article>
-  );
-}
-
-function SavedPlacesPanel({
-  places,
-  onRemove,
-  onUse
-}: {
-  places: SavedPlaceEntry[];
   onRemove: (id: string) => void;
+  onSaveCurrent: (role: "origin" | "destination") => void;
   onUse: (place: SavedPlaceEntry, target: "origin" | "destination") => void;
 }) {
   return (
@@ -1420,6 +1317,16 @@ function SavedPlacesPanel({
           {places.length}개
         </span>
       </div>
+
+      <SavedPlaceAddCard
+        destinationText={destinationText}
+        draft={draft}
+        notice={notice}
+        originText={originText}
+        onAdd={onAdd}
+        onDraftChange={onDraftChange}
+        onSaveCurrent={onSaveCurrent}
+      />
 
       {places.length ? (
         <div className="mt-4 grid gap-3">
@@ -1444,6 +1351,119 @@ function SavedPlacesPanel({
         </div>
       )}
     </article>
+  );
+}
+
+function SavedPlaceAddCard({
+  destinationText,
+  draft,
+  notice,
+  originText,
+  onAdd,
+  onDraftChange,
+  onSaveCurrent
+}: {
+  destinationText: string;
+  draft: { name: string; address: string; kind: SavedPlaceKind };
+  notice: string;
+  originText: string;
+  onAdd: () => void;
+  onDraftChange: (field: "name" | "address" | "kind", value: string) => void;
+  onSaveCurrent: (role: "origin" | "destination") => void;
+}) {
+  return (
+    <div className="mt-4 rounded-2xl bg-[#fff9ed] p-3 ring-1 ring-ink/7">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-tide">주소 추가하기</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink/78">
+            자주 쓰는 장소를 저장
+          </p>
+        </div>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fde2ef] text-tide">
+          <Plus size={17} aria-hidden />
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-[1fr_1.45fr_120px]">
+        <label className="grid gap-1 text-xs font-semibold text-ink/48">
+          이름
+          <input
+            className="min-h-10 rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold text-ink outline-none transition placeholder:text-ink/32 focus:border-tide"
+            value={draft.name}
+            onChange={(event) => onDraftChange("name", event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onAdd();
+              }
+            }}
+            placeholder="집, 학교"
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-ink/48">
+          주소 또는 장소명
+          <input
+            className="min-h-10 rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold text-ink outline-none transition placeholder:text-ink/32 focus:border-tide"
+            value={draft.address}
+            onChange={(event) => onDraftChange("address", event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onAdd();
+              }
+            }}
+            placeholder="성균관대학교 서울캠퍼스"
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-ink/48">
+          분류
+          <select
+            className="min-h-10 rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold text-ink outline-none transition focus:border-tide"
+            value={draft.kind}
+            onChange={(event) => onDraftChange("kind", event.target.value)}
+          >
+            <option value="favorite">자주 감</option>
+            <option value="home">집</option>
+            <option value="school">학교</option>
+            <option value="work">회사</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_120px_120px]">
+        <button
+          className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition active:scale-[0.98]"
+          type="button"
+          onClick={onAdd}
+        >
+          <Plus size={16} aria-hidden />
+          저장
+        </button>
+        <button
+          className="min-h-10 rounded-xl bg-[#ddf3eb] px-3 text-sm font-semibold text-moss transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+          type="button"
+          disabled={!originText.trim()}
+          onClick={() => onSaveCurrent("origin")}
+        >
+          출발지
+        </button>
+        <button
+          className="min-h-10 rounded-xl bg-[#fde2ef] px-3 text-sm font-semibold text-tide transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+          type="button"
+          disabled={!destinationText.trim()}
+          onClick={() => onSaveCurrent("destination")}
+        >
+          도착지
+        </button>
+      </div>
+
+      {notice ? (
+        <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-ink/55 ring-1 ring-ink/7">
+          {notice}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
