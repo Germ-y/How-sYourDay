@@ -2184,7 +2184,7 @@ function PlanPreview({
       <div className="mt-4 grid gap-2">
         {cueInsights.map((insight, index) => (
           <PlannerCue
-            icon={previewInsightIcon(insight.kind)}
+            icon={previewInsightIcon(insight)}
             key={`${insight.label}-${insight.value}-${index}`}
             label={insight.label}
             value={insight.value}
@@ -3733,17 +3733,24 @@ function previewSourceLabel(source: string) {
   return "준비";
 }
 
-function previewInsightIcon(kind: string) {
-  if (kind === "route") {
+function previewInsightIcon(insight: PreviewInsight) {
+  const text = `${insight.label} ${insight.value}`;
+  if (insight.kind === "route") {
     return <Navigation size={15} aria-hidden />;
   }
-  if (kind === "time") {
+  if (insight.kind === "time") {
     return <Clock3 size={15} aria-hidden />;
   }
-  if (kind === "stop") {
+  if (insight.kind === "stop" && /(카페|커피|과제|작업)/.test(text)) {
     return <Coffee size={15} aria-hidden />;
   }
-  if (kind === "task") {
+  if (insight.kind === "stop" && /(산책|공원|걷|걸)/.test(text)) {
+    return <Leaf size={15} aria-hidden />;
+  }
+  if (insight.kind === "stop") {
+    return <MapPin size={15} aria-hidden />;
+  }
+  if (insight.kind === "task") {
     return <MapPinned size={15} aria-hidden />;
   }
   return <HeartPulse size={15} aria-hidden />;

@@ -242,7 +242,7 @@ def _task_insight(tasks) -> PreviewInsight | None:
 
     primary = tasks[0]
     if primary.kind == "recovery":
-        return PreviewInsight(label="경유", value="쉴 만한 장소 후보 확인", kind="stop")
+        return PreviewInsight(label="쉴 곳", value="잠깐 쉬어갈 장소", kind="stop")
     if primary.kind == "print":
         return PreviewInsight(label="할 일", value="인쇄 가능한 지점 반영", kind="task")
     if primary.kind == "clinic":
@@ -258,23 +258,23 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
     if waypoint:
         insights.append(
             PreviewInsight(
-                label="경유 후보",
-                value=f"{waypoint} 주변 확인",
+                label="거쳐 갈 곳",
+                value=f"{waypoint} 주변",
                 kind="stop",
             )
         )
 
     if any(marker in text for marker in ["걷", "산책", "돌아다니", "주변", "근처", "선선"]):
-        value = f"{area} 주변 산책" if area else "주변 산책 후보"
-        insights.append(PreviewInsight(label="경유 후보", value=value, kind="stop"))
+        value = f"{area} 주변 산책" if area else "가볍게 걸을 곳"
+        insights.append(PreviewInsight(label="산책 후보", value=value, kind="stop"))
 
     if any(marker in text for marker in ["카페", "커피", "과제", "공부", "작업"]):
-        value = f"{area} 카페 작업" if area else "카페 작업 후보"
-        insights.append(PreviewInsight(label="경유 후보", value=value, kind="stop"))
+        value = f"{area} 근처" if area else "카페에서 과제"
+        insights.append(PreviewInsight(label="작업할 카페", value=value, kind="stop"))
 
     if any(marker in text for marker in ["쉬", "휴식", "조용"]):
-        value = f"{area} 휴식 장소" if area else "쉴 만한 장소 후보"
-        insights.append(PreviewInsight(label="경유 후보", value=value, kind="stop"))
+        value = f"{area} 근처 조용한 곳" if area else "잠깐 쉬어갈 곳"
+        insights.append(PreviewInsight(label="쉴 곳", value=value, kind="stop"))
 
     unique: list[PreviewInsight] = []
     seen: set[str] = set()
@@ -299,7 +299,7 @@ def _emotion_insight(primary: str) -> PreviewInsight | None:
 def _empty_insight(index: int) -> PreviewInsight:
     defaults = [
         PreviewInsight(label="이동", value="출발지와 도착지 확인", kind="route"),
-        PreviewInsight(label="경유 후보", value="선호 장소 후보 확인", kind="stop"),
+        PreviewInsight(label="들를 곳", value="선호 장소를 후보로 확인", kind="stop"),
         PreviewInsight(label="상태", value="컨디션 기준으로 경로 비교", kind="mood"),
         PreviewInsight(label="취향", value="선호 지도 반영", kind="stop"),
     ]
