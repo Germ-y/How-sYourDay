@@ -149,7 +149,7 @@ const MOOD_PRESETS = [
 const DEFAULT_MOOD_LABELS = ["피곤", "바쁨", "여유", "휴식"];
 type PreferenceVote = "like" | "dislike";
 type PreferenceSignal = PreferenceVote | "similar-like" | "similar-dislike" | null;
-type AppView = "planner" | "taste" | "profile";
+type AppView = "planner" | "result" | "taste" | "profile";
 type AuthMode = "login" | "signup";
 type SavedPlaceKind = "home" | "school" | "work" | "favorite";
 type SavedPlaceEntry = {
@@ -815,6 +815,7 @@ export default function HomePage() {
         `${originResult.location.label} → ${destinationResult.location.label}`
       );
       setPlan(result);
+      setActiveView("result");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "경로 생성 실패");
     } finally {
@@ -855,6 +856,11 @@ export default function HomePage() {
   }
 
   function handleViewChange(view: AppView) {
+    if (view === "result" && !plan) {
+      setActiveView("planner");
+      return;
+    }
+
     setActiveView(view);
     if (
       view === "taste" &&
@@ -1012,7 +1018,11 @@ export default function HomePage() {
         className="mx-auto flex min-h-screen w-full max-w-full flex-col overflow-x-hidden sm:max-w-md lg:max-w-6xl lg:px-6"
         onSubmit={handleSubmit}
       >
-        <ServiceTopBar activeView={activeView} onChange={handleViewChange} />
+        <ServiceTopBar
+          activeView={activeView}
+          hasPlan={Boolean(plan)}
+          onChange={handleViewChange}
+        />
         {activeView === "planner" ? (
           <>
         <header className="px-5 pb-5 pt-5 lg:px-0">
@@ -1205,27 +1215,21 @@ export default function HomePage() {
           </article>
 
           <div className="grid gap-4 lg:self-start">
-            {plan ? (
-              <MobilePlanResult plan={plan} />
-            ) : (
-              <>
-                <PlanPreview
-                  destinationText={destinationText}
-                  insights={previewInsights}
-                  isLoading={isPreviewLoading}
-                  originText={originText}
-                  source={previewSource}
-                />
-                <button
-                  className="hidden min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 font-semibold text-white shadow-[0_12px_30px_rgba(23,26,24,0.14)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45 lg:flex"
-                  type="submit"
-                  disabled={isLoading}
-                >
-                  {primaryLabel}
-                  <ArrowRight size={18} aria-hidden />
-                </button>
-              </>
-            )}
+            <PlanPreview
+              destinationText={destinationText}
+              insights={previewInsights}
+              isLoading={isPreviewLoading}
+              originText={originText}
+              source={previewSource}
+            />
+            <button
+              className="hidden min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 font-semibold text-white shadow-[0_12px_30px_rgba(23,26,24,0.14)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45 lg:flex"
+              type="submit"
+              disabled={isLoading}
+            >
+              {primaryLabel}
+              <ArrowRight size={18} aria-hidden />
+            </button>
           </div>
         </section>
 
@@ -1241,6 +1245,11 @@ export default function HomePage() {
         </div>
 
           </>
+        ) : activeView === "result" && plan ? (
+          <RouteResultPage
+            plan={plan}
+            onBackToPlanner={() => setActiveView("planner")}
+          />
         ) : activeView === "taste" ? (
           <TastePage
             activeIndex={poiPreferenceIndex}
@@ -1493,16 +1502,20 @@ function buildSignupNickname(email: string) {
 
 function ServiceTopBar({
   activeView,
+  hasPlan,
   onChange
 }: {
   activeView: AppView;
+  hasPlan: boolean;
   onChange: (view: AppView) => void;
 }) {
-  const items = [
+  const items: Array<{ id: AppView; label: string; icon: LucideIcon }> = [
     { id: "planner" as const, label: "오늘", icon: CalendarDays },
+    ...(hasPlan ? [{ id: "result" as const, label: "경로", icon: Navigation }] : []),
     { id: "taste" as const, label: "취향", icon: MapPin },
     { id: "profile" as const, label: "마이", icon: UserRound }
   ];
+  const gridClass = hasPlan ? "grid-cols-4" : "grid-cols-3";
 
   return (
     <nav className="sticky top-0 z-30 border-b border-ink/8 bg-[#fff9ed]/88 px-4 py-3 backdrop-blur sm:px-5 lg:px-0">
@@ -1523,7 +1536,9 @@ function ServiceTopBar({
           </span>
         </button>
 
-        <div className="grid shrink-0 grid-cols-3 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-ink/8">
+        <div
+          className={`grid shrink-0 ${gridClass} rounded-2xl bg-white p-1 shadow-sm ring-1 ring-ink/8`}
+        >
           {items.map((item) => {
             const selected = activeView === item.id;
             const Icon = item.icon;
@@ -2212,6 +2227,54 @@ function ComposerTitle({
         ) : null}
       </span>
     </div>
+  );
+}
+
+function RouteResultPage({
+  plan,
+  onBackToPlanner
+}: {
+  plan: DailyPlan;
+  onBackToPlanner: () => void;
+}) {
+  return (
+    <section className="grid gap-5 px-5 pb-8 pt-5 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:px-0">
+      <header className="rounded-[28px] bg-[#eef8f2] p-5 shadow-[0_16px_42px_rgba(23,26,24,0.055)] ring-1 ring-ink/8 lg:sticky lg:top-20">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-moss">경로 추천</p>
+            <h1 className="mt-1 text-[28px] font-semibold leading-tight [word-break:keep-all]">
+              추천 경로 확인
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-ink/55 [word-break:keep-all]">
+              이동 조건과 컨디션을 반영한 결과입니다.
+            </p>
+          </div>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-tide shadow-sm ring-1 ring-ink/8">
+            <Navigation size={23} aria-hidden />
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <MiniStat label="이동" value={durationLabel(plan.selected_route)} />
+          <MiniStat label="걷기" value={`${plan.selected_route.walking_minutes}분`} />
+          <MiniStat label="편안함" value={`${plan.emotional_cost.comfort_score}`} />
+        </div>
+
+        <button
+          className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-moss shadow-sm ring-1 ring-moss/15 transition hover:bg-[#ddf3eb] active:scale-[0.99]"
+          type="button"
+          onClick={onBackToPlanner}
+        >
+          입력 수정
+          <ArrowRight size={16} aria-hidden />
+        </button>
+      </header>
+
+      <div className="grid gap-4">
+        <MobilePlanResult plan={plan} />
+      </div>
+    </section>
   );
 }
 
