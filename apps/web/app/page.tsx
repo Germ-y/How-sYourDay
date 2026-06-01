@@ -523,29 +523,6 @@ export default function HomePage() {
     });
   }
 
-  async function handleSaveCurrentPlace(role: "origin" | "destination") {
-    const address = role === "origin" ? originText.trim() : destinationText.trim();
-    const selectedLocation =
-      role === "origin" ? selectedOriginLocation : selectedDestinationLocation;
-
-    if (!address) {
-      setSavedPlaceNotice(
-        role === "origin"
-          ? "먼저 출발지를 입력해야 합니다."
-          : "먼저 도착지를 입력해야 합니다."
-      );
-      return;
-    }
-
-    await savePlace({
-      name: role === "origin" ? "기본 출발지" : "최근 도착지",
-      address,
-      kind: role === "origin" ? "favorite" : guessSavedPlaceKind(address),
-      lat: selectedLocation?.lat ?? null,
-      lng: selectedLocation?.lng ?? null
-    });
-  }
-
   async function savePlace(place: Omit<SavedPlaceEntry, "id" | "updatedAt">) {
     const normalizedAddress = normalizePlaceText(place.address);
     try {
@@ -561,7 +538,7 @@ export default function HomePage() {
         (savedPlace) => normalizePlaceText(savedPlace.address) !== normalizedAddress
       );
       persistSavedPlaces([nextPlace, ...withoutDuplicate].slice(0, 12));
-      setSavedPlaceNotice(`${place.name} DB 저장 완료`);
+      setSavedPlaceNotice(`${place.name} 저장했어요`);
     } catch {
       const nextPlace: SavedPlaceEntry = {
         ...place,
@@ -572,7 +549,7 @@ export default function HomePage() {
         (savedPlace) => normalizePlaceText(savedPlace.address) !== normalizedAddress
       );
       persistSavedPlaces([nextPlace, ...withoutDuplicate].slice(0, 12));
-      setSavedPlaceNotice(`${place.name} 로컬 저장 완료`);
+      setSavedPlaceNotice(`${place.name} 저장했어요`);
     }
   }
 
@@ -582,12 +559,12 @@ export default function HomePage() {
       await deleteSavedPlace(id);
       persistSavedPlaces(savedPlaces.filter((place) => place.id !== id));
       setSavedPlaceNotice(
-        removed ? `${removed.name} DB 삭제 완료` : "저장 장소 삭제 완료"
+        removed ? `${removed.name} 삭제했어요` : "저장 장소를 삭제했어요"
       );
     } catch {
       persistSavedPlaces(savedPlaces.filter((place) => place.id !== id));
       setSavedPlaceNotice(
-        removed ? `${removed.name} 로컬 삭제 완료` : "저장 장소 삭제 완료"
+        removed ? `${removed.name} 삭제했어요` : "저장 장소를 삭제했어요"
       );
     }
   }
@@ -1149,8 +1126,6 @@ export default function HomePage() {
         ) : (
           <ProfilePage
             authUser={authUser}
-            destinationText={destinationText}
-            originText={originText}
             plan={plan}
             savedPlaceDraft={savedPlaceDraft}
             savedPlaceNotice={savedPlaceNotice}
@@ -1158,7 +1133,6 @@ export default function HomePage() {
             onAddSavedPlace={handleAddSavedPlace}
             onRemoveSavedPlace={handleRemoveSavedPlace}
             onSavedPlaceDraftChange={handleSavedPlaceDraftChange}
-            onSaveCurrentPlace={handleSaveCurrentPlace}
             onLogout={handleLogout}
             onOpenPlanner={() => setActiveView("planner")}
             onUseSavedPlace={handleUseSavedPlace}
@@ -1559,13 +1533,10 @@ function TasteIntroCard({
 
 function ProfilePage({
   authUser,
-  destinationText,
   onAddSavedPlace,
   onLogout,
-  originText,
   onOpenPlanner,
   onRemoveSavedPlace,
-  onSaveCurrentPlace,
   onSavedPlaceDraftChange,
   onUseSavedPlace,
   plan,
@@ -1574,8 +1545,6 @@ function ProfilePage({
   savedPlaces
 }: {
   authUser: AuthUser;
-  destinationText: string;
-  originText: string;
   plan: DailyPlan | null;
   savedPlaceDraft: { name: string; address: string; kind: SavedPlaceKind };
   savedPlaceNotice: string;
@@ -1584,7 +1553,6 @@ function ProfilePage({
   onLogout: () => void;
   onOpenPlanner: () => void;
   onRemoveSavedPlace: (id: string) => void;
-  onSaveCurrentPlace: (role: "origin" | "destination") => void;
   onSavedPlaceDraftChange: (
     field: "name" | "address" | "kind",
     value: string
@@ -1602,15 +1570,12 @@ function ProfilePage({
 
       <div className="grid gap-4">
         <SavedPlacesPanel
-          destinationText={destinationText}
           draft={savedPlaceDraft}
           notice={savedPlaceNotice}
-          originText={originText}
           places={savedPlaces}
           onAdd={onAddSavedPlace}
           onDraftChange={onSavedPlaceDraftChange}
           onRemove={onRemoveSavedPlace}
-          onSaveCurrent={onSaveCurrentPlace}
           onUse={onUseSavedPlace}
         />
 
@@ -1723,26 +1688,20 @@ function ProfileStat({ label, value }: { label: string; value: string }) {
 }
 
 function SavedPlacesPanel({
-  destinationText,
   draft,
   notice,
-  originText,
   places,
   onAdd,
   onDraftChange,
   onRemove,
-  onSaveCurrent,
   onUse
 }: {
-  destinationText: string;
   draft: { name: string; address: string; kind: SavedPlaceKind };
   notice: string;
-  originText: string;
   places: SavedPlaceEntry[];
   onAdd: () => void;
   onDraftChange: (field: "name" | "address" | "kind", value: string) => void;
   onRemove: (id: string) => void;
-  onSaveCurrent: (role: "origin" | "destination") => void;
   onUse: (place: SavedPlaceEntry, target: "origin" | "destination") => void;
 }) {
   return (
@@ -1760,13 +1719,10 @@ function SavedPlacesPanel({
       </div>
 
       <SavedPlaceAddCard
-        destinationText={destinationText}
         draft={draft}
         notice={notice}
-        originText={originText}
         onAdd={onAdd}
         onDraftChange={onDraftChange}
-        onSaveCurrent={onSaveCurrent}
       />
 
       {places.length ? (
@@ -1796,21 +1752,15 @@ function SavedPlacesPanel({
 }
 
 function SavedPlaceAddCard({
-  destinationText,
   draft,
   notice,
-  originText,
   onAdd,
-  onDraftChange,
-  onSaveCurrent
+  onDraftChange
 }: {
-  destinationText: string;
   draft: { name: string; address: string; kind: SavedPlaceKind };
   notice: string;
-  originText: string;
   onAdd: () => void;
   onDraftChange: (field: "name" | "address" | "kind", value: string) => void;
-  onSaveCurrent: (role: "origin" | "destination") => void;
 }) {
   return (
     <div className="mt-4 rounded-2xl bg-[#fff9ed] p-3 ring-1 ring-ink/7">
@@ -1872,30 +1822,14 @@ function SavedPlaceAddCard({
         </label>
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_120px_120px]">
+      <div className="mt-3">
         <button
-          className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition active:scale-[0.98]"
+          className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition active:scale-[0.98]"
           type="button"
           onClick={onAdd}
         >
           <Plus size={16} aria-hidden />
           저장
-        </button>
-        <button
-          className="min-h-10 rounded-xl bg-[#ddf3eb] px-3 text-sm font-semibold text-moss transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
-          type="button"
-          disabled={!originText.trim()}
-          onClick={() => onSaveCurrent("origin")}
-        >
-          출발지
-        </button>
-        <button
-          className="min-h-10 rounded-xl bg-[#fde2ef] px-3 text-sm font-semibold text-tide transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
-          type="button"
-          disabled={!destinationText.trim()}
-          onClick={() => onSaveCurrent("destination")}
-        >
-          도착지
         </button>
       </div>
 
