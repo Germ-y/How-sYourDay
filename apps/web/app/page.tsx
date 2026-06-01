@@ -582,10 +582,7 @@ export default function HomePage() {
     setLocationStatus(`${place.name}을 ${target === "origin" ? "출발지" : "도착지"}로 설정`);
     setActiveView("planner");
     window.requestAnimationFrame(() => {
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-      });
+      resetPlannerScroll();
     });
   }
 
@@ -2912,6 +2909,27 @@ function savedPlaceRecordToEntry(record: SavedPlaceRecord): SavedPlaceEntry {
 
 function normalizePlaceText(value: string) {
   return value.toLowerCase().replace(/\s+/g, "");
+}
+
+function resetPlannerScroll() {
+  if (document.scrollingElement) {
+    document.scrollingElement.scrollLeft = 0;
+  }
+  document.documentElement.scrollLeft = 0;
+  document.body.scrollLeft = 0;
+  window.scrollTo({
+    left: 0,
+    top: 0,
+    behavior: "auto"
+  });
+
+  window.requestAnimationFrame(() => {
+    if (document.scrollingElement) {
+      document.scrollingElement.scrollLeft = 0;
+    }
+    document.documentElement.scrollLeft = 0;
+    document.body.scrollLeft = 0;
+  });
 }
 
 function buildQuickSavedPlaces(places: SavedPlaceEntry[]) {
