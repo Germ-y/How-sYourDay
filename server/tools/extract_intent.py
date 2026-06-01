@@ -23,6 +23,25 @@ TASK_RULES = {
 
 
 def extract_intent(user_text: str) -> ExtractedIntent:
+    fallback = _extract_intent_with_rules(user_text)
+
+    from tools.llm_intent import extract_intent_with_llm
+
+    llm_intent = extract_intent_with_llm(user_text)
+    if llm_intent is None:
+        return fallback
+
+    if not llm_intent.tasks:
+        return ExtractedIntent(
+            tasks=fallback.tasks,
+            constraints=llm_intent.constraints,
+            emotion=llm_intent.emotion,
+        )
+
+    return llm_intent
+
+
+def _extract_intent_with_rules(user_text: str) -> ExtractedIntent:
     lowered = user_text.lower()
     tasks: list[Task] = []
 

@@ -5,11 +5,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#17211d",
-        field: "#f5f1e8",
-        moss: "#6f8b63",
-        tide: "#4f8a9b",
-        coral: "#d96f5d"
+        ink: "#171a18",
+        field: "#fff9ed",
+        moss: "#62a58f",
+        tide: "#d978a6",
+        coral: "#d96f9a"
       }
     }
   },
@@ -17,4 +17,3 @@ const config: Config = {
 };
 
 export default config;
-

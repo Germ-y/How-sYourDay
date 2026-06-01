@@ -81,7 +81,7 @@ def _planner_objective(
 ) -> float:
     duration = _route_duration(route)
     if emotion.time_pressure_tolerance == "high":
-        return score.total_emotional_cost + duration * 3.0
+        return score.total_emotional_cost * 0.7 + duration * 4.5
 
     if emotion.primary == "tired":
         return score.total_emotional_cost + duration * 0.2

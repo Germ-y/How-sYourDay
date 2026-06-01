@@ -10,7 +10,7 @@ def score_route_for_emotion(
     preference_weights: UserPreferenceWeights | None = None,
 ) -> EmotionCost:
     weights = preference_weights or UserPreferenceWeights()
-    fatigue_cost = _fatigue_cost(emotion)
+    fatigue_cost = _fatigue_cost(route, emotion)
     walking_cost = round(_walking_cost(route, emotion) * weights.walking_sensitivity)
     crowd_cost = round(_crowd_cost(route, emotion) * weights.crowd_sensitivity)
     transfer_cost = round(_transfer_cost(route, emotion) * weights.transfer_sensitivity)
@@ -53,12 +53,23 @@ def score_route_for_emotion(
     )
 
 
-def _fatigue_cost(emotion: EmotionState) -> int:
+def _fatigue_cost(route: RouteCandidate, emotion: EmotionState) -> int:
     if emotion.primary == "tired":
-        return 12
-    if emotion.primary == "anxious":
-        return 7
-    return 4
+        base = 12
+        weight = 0.7
+    elif emotion.primary == "anxious":
+        base = 7
+        weight = 0.5
+    else:
+        base = 4
+        weight = 0.3
+
+    adjustment = _clamp_adjustment(
+        sum(prior.fatigue_modifier for prior, _tags in _route_emotion_context(route)),
+        low=-6,
+        high=8,
+    )
+    return max(0, base + round(adjustment * weight))
 
 
 def _walking_cost(route: RouteCandidate, emotion: EmotionState) -> int:
@@ -83,14 +94,17 @@ def _crowd_cost(route: RouteCandidate, emotion: EmotionState) -> int:
     }.get(emotion.crowd_tolerance, 0.8)
 
     segment_penalty = 0
-    for segment in route.segments:
-        prior = get_landmark_emotion_prior(segment.landmark_type)
-        if "crowded" in prior.emotion_tags or "stressful" in segment.emotion_tags:
+    for prior, tags in _route_emotion_context(route):
+        segment_penalty += prior.crowd_modifier
+        segment_penalty += max(0, prior.noise_modifier)
+        if "crowded" in prior.emotion_tags or "crowded" in tags:
             segment_penalty += 2
-        if "high_noise" in prior.emotion_tags or "high_noise" in segment.emotion_tags:
+        if "stressful" in prior.emotion_tags or "stressful" in tags:
+            segment_penalty += 2
+        if "high_noise" in prior.emotion_tags or "high_noise" in tags:
             segment_penalty += 1
 
-    return round(base * multiplier) + segment_penalty
+    return max(0, round(base * multiplier) + segment_penalty)
 
 
 def _transfer_cost(route: RouteCandidate, emotion: EmotionState) -> int:
@@ -124,21 +138,16 @@ def _time_pressure_cost(
 
 def _familiarity_bonus(route: RouteCandidate) -> int:
     bonus = 0
-    for segment in route.segments:
-        prior = get_landmark_emotion_prior(segment.landmark_type)
-        if "familiar" in prior.emotion_tags or "familiar" in segment.emotion_tags:
+    for prior, tags in _route_emotion_context(route):
+        if "familiar" in prior.emotion_tags or "familiar" in tags:
             bonus += 4
-    for stop in route.stops:
-        if "familiar" in stop.emotion_tags:
-            bonus += 3
     return min(12, bonus)
 
 
 def _recovery_bonus(route: RouteCandidate, emotion: EmotionState) -> int:
     bonus = 0
-    for segment in route.segments:
-        prior = get_landmark_emotion_prior(segment.landmark_type)
-        if "recovery" in prior.emotion_tags or "recovery" in segment.emotion_tags:
+    for prior, tags in _route_emotion_context(route):
+        if "recovery" in prior.emotion_tags or "recovery" in tags:
             bonus += prior.recovery_bonus
     for stop in route.stops:
         if stop.category == "recovery" or "recovery" in stop.emotion_tags:
@@ -150,6 +159,17 @@ def _recovery_bonus(route: RouteCandidate, emotion: EmotionState) -> int:
         bonus = round(bonus * 0.4)
 
     return min(18, bonus)
+
+
+def _route_emotion_context(route: RouteCandidate):
+    for segment in route.segments:
+        yield get_landmark_emotion_prior(segment.landmark_type), segment.emotion_tags
+    for stop in route.stops:
+        yield get_landmark_emotion_prior(stop.landmark_type), stop.emotion_tags
+
+
+def _clamp_adjustment(value: int, low: int, high: int) -> int:
+    return max(low, min(high, value))
 
 
 def _reasons(

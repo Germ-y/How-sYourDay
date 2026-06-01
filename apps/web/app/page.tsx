@@ -1,19 +1,37 @@
 "use client";
 
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, PointerEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Brain,
+  CalendarDays,
   CheckCircle2,
   Clock3,
+  Coffee,
+  Building2,
+  Home,
   HeartPulse,
+  Leaf,
+  LogOut,
+  Mail,
+  MapPin,
   MapPinned,
   MessageCircle,
   Navigation,
+  RotateCcw,
+  Settings2,
   Sparkles,
-  Zap
+  ThumbsDown,
+  ThumbsUp,
+  UserRound,
+  ShieldCheck,
+  Zap,
+  type LucideIcon
 } from "lucide-react";
 import {
+  extractRouteLocations,
+  fetchPreferencePoints,
+  geocodeLocation,
   requestDailyPlan,
   sendRouteFeedback,
   type Coordinate,
@@ -21,90 +39,220 @@ import {
   type EmotionCost,
   type Location,
   type MapViewModel,
+  type PoiCandidate,
   type RouteCandidate
 } from "@/lib/api";
 
-const samplePrompts = [
+const starterText = "";
+const QUICK_DESTINATIONS = ["집", "학교", "회사"];
+const LAST_ORIGIN_KEY = "hows-your-day.origin-text.v1";
+const LAST_DESTINATION_KEY = "hows-your-day.destination-text.v1";
+const PROFILE_PLACEHOLDER = {
+  nickname: "균이",
+  email: "로그인 연동 예정",
+  authStatus: "JWT 연결 대기"
+};
+const MOOD_PRESETS = [
   {
-    label: "피곤한 날",
-    text: "I need to print my report, visit a clinic, and get home by 5. I am tired today."
+    label: "피곤",
+    sentence: "피로도 높음. 보행 시간과 혼잡도를 낮게 우선."
   },
   {
-    label: "급한 날",
-    text: "I am in a hurry and need to get home by 5."
+    label: "바쁨",
+    sentence: "시간 제약 높음. 우회보다 도착 시간을 우선."
   },
   {
-    label: "쉬고 싶은 날",
-    text: "I need to rest before going home."
+    label: "여유",
+    sentence: "시간 여유 있음. 편안한 장소 경유 허용."
+  },
+  {
+    label: "휴식",
+    sentence: "휴식 필요. 조용한 카페나 공원 후보 반영."
+  }
+];
+const POI_PREFERENCES = [
+  {
+    id: "quiet-cafe",
+    name: "학림다방",
+    kind: "카페",
+    detail: "대학로 인근의 조용한 회복 후보",
+    icon: Coffee,
+    tags: ["회복", "실내"],
+    lat: 37.5817,
+    lng: 127.0011,
+    source: "예시"
+  },
+  {
+    id: "small-park",
+    name: "마로니에공원",
+    kind: "공원",
+    detail: "짧게 환기할 수 있는 외부 장소",
+    icon: Leaf,
+    tags: ["산책", "환기"],
+    lat: 37.5803,
+    lng: 127.0023,
+    source: "예시"
+  },
+  {
+    id: "campus-street",
+    name: "성균관대 정문 앞",
+    kind: "학교 주변",
+    detail: "익숙하지만 시간대에 따라 혼잡한 지점",
+    icon: Building2,
+    tags: ["익숙함", "혼잡"],
+    lat: 37.5882,
+    lng: 126.9936,
+    source: "예시"
+  },
+  {
+    id: "station-area",
+    name: "혜화역 4번 출구",
+    kind: "역세권",
+    detail: "빠르지만 소음과 유동 인구가 큰 지점",
+    icon: Navigation,
+    tags: ["빠름", "혼잡"],
+    lat: 37.5821,
+    lng: 127.0018,
+    source: "예시"
   }
 ];
 
-const starterText = samplePrompts[0].text;
-const DEMO_ORIGIN: Location = {
-  label: "Demo origin",
-  lat: 37.5882,
-  lng: 126.9936
+type PreferenceVote = "like" | "dislike";
+type PreferenceSignal = PreferenceVote | "similar-like" | "similar-dislike" | null;
+type AppView = "planner" | "taste" | "profile";
+type PreferencePoint = {
+  id: string;
+  name: string;
+  kind: string;
+  detail: string;
+  icon: LucideIcon;
+  tags: string[];
+  lat: number;
+  lng: number;
+  source: string;
 };
-const DEFAULT_DESTINATIONS: Record<string, Location> = {
-  집: {
-    label: "집",
-    lat: 37.5826,
-    lng: 127.0019
-  },
-  학교: {
-    label: "학교",
-    lat: 37.5882,
-    lng: 126.9936
-  },
-  회사: {
-    label: "회사",
-    lat: 37.5665,
-    lng: 126.978
-  }
-};
-const DESTINATION_STORAGE_KEY = "hows-your-day.destinations.v1";
+const SWIPE_THRESHOLD = 86;
 
 export default function HomePage() {
   const [text, setText] = useState(starterText);
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [origin, setOrigin] = useState<Location>(DEMO_ORIGIN);
-  const [destinations, setDestinations] =
-    useState<Record<string, Location>>(DEFAULT_DESTINATIONS);
-  const [selectedDestinationKey, setSelectedDestinationKey] = useState("집");
-  const [locationStatus, setLocationStatus] = useState("demo 위치 사용 중");
+  const [originText, setOriginText] = useState("");
+  const [destinationText, setDestinationText] = useState("");
+  const [originEdited, setOriginEdited] = useState(false);
+  const [destinationEdited, setDestinationEdited] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
+  const [activeMood, setActiveMood] = useState(MOOD_PRESETS[0].label);
+  const [poiPreferenceIndex, setPoiPreferenceIndex] = useState(0);
+  const [poiVotes, setPoiVotes] = useState<Record<string, PreferenceVote>>({});
+  const [nearbyPreferencePoints, setNearbyPreferencePoints] = useState<
+    PreferencePoint[]
+  >([]);
+  const [isPreferenceLoading, setIsPreferenceLoading] = useState(false);
+  const [preferenceStatus, setPreferenceStatus] = useState(
+    "내 주변 장소 준비"
+  );
+  const [activeView, setActiveView] = useState<AppView>("planner");
+  const [locationStatus, setLocationStatus] =
+    useState("주소 또는 장소명 입력 필요");
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(DESTINATION_STORAGE_KEY);
-    if (!stored) {
+    const storedOriginText = window.localStorage.getItem(LAST_ORIGIN_KEY);
+    const storedDestinationText = window.localStorage.getItem(LAST_DESTINATION_KEY);
+    if (storedOriginText) {
+      setOriginText(storedOriginText);
+    }
+    if (storedDestinationText) {
+      setDestinationText(storedDestinationText);
+    }
+  }, []);
+
+  useEffect(() => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setLocationStatus("주소 또는 장소명 입력 필요");
       return;
     }
 
-    try {
-      setDestinations({
-        ...DEFAULT_DESTINATIONS,
-        ...JSON.parse(stored)
-      });
-    } catch {
-      window.localStorage.removeItem(DESTINATION_STORAGE_KEY);
-    }
-  }, []);
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const hints = await extractRouteLocations(trimmed);
+        if (cancelled) {
+          return;
+        }
+        let changed = false;
+
+        if (hints.origin_text && !originEdited && originText !== hints.origin_text) {
+          setOriginText(hints.origin_text);
+          changed = true;
+        }
+        if (
+          hints.destination_text &&
+          !destinationEdited &&
+          destinationText !== hints.destination_text
+        ) {
+          setDestinationText(hints.destination_text);
+          changed = true;
+        }
+
+        if (changed) {
+          setLocationStatus(
+            hints.source === "llm"
+              ? "문장에서 경로 후보 추출"
+              : "문장에서 경로 후보 감지"
+          );
+        } else if (!hints.origin_text && !hints.destination_text) {
+          setLocationStatus("경로 후보 없음. 직접 입력 가능");
+        }
+      } catch {
+        if (!cancelled) {
+          setLocationStatus("자동 추출 실패. 직접 입력 가능");
+        }
+      }
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [text, originEdited, destinationEdited, originText, destinationText]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
 
+    if (!originText.trim() || !destinationText.trim()) {
+      setIsLoading(false);
+      setError("출발지와 도착지를 입력해야 합니다.");
+      return;
+    }
+
     try {
-      const result = await requestDailyPlan(
+      setLocationStatus("주소를 좌표로 확인하는 중");
+      const originResult = await resolveLocationInput(originText, currentLocation);
+      const destinationResult = await geocodeLocation(destinationText.trim());
+      const planningText = buildPlanningText(
         text,
-        origin,
-        destinations[selectedDestinationKey] ?? DEFAULT_DESTINATIONS["집"]
+        activeMood,
+        poiVotes,
+        preferencePoints
+      );
+      const result = await requestDailyPlan(
+        planningText,
+        originResult.location,
+        destinationResult.location
+      );
+      window.localStorage.setItem(LAST_ORIGIN_KEY, originText.trim());
+      window.localStorage.setItem(LAST_DESTINATION_KEY, destinationText.trim());
+      setLocationStatus(
+        `${originResult.location.label} → ${destinationResult.location.label}`
       );
       setPlan(result);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to plan day.");
+      setError(caught instanceof Error ? caught.message : "경로 생성 실패");
     } finally {
       setIsLoading(false);
     }
@@ -112,23 +260,83 @@ export default function HomePage() {
 
   function handleUseCurrentLocation() {
     if (!navigator.geolocation) {
-      setLocationStatus("현재 위치를 사용할 수 없어 demo 위치를 유지해요");
+      setLocationStatus("현재 위치 사용 불가. 주소 입력 필요");
       return;
     }
 
     setLocationStatus("현재 위치 확인 중");
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setOrigin({
+        const location = {
           label: "현재 위치",
           lat: position.coords.latitude,
           lng: position.coords.longitude
-        });
+        };
+        setCurrentLocation(location);
+        setOriginText("현재 위치");
+        setOriginEdited(true);
         setLocationStatus("현재 위치 사용 중");
       },
       () => {
-        setOrigin(DEMO_ORIGIN);
-        setLocationStatus("권한이 없어 demo 위치 사용 중");
+        setLocationStatus("위치 권한 없음. 주소 입력 필요");
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 60_000,
+        timeout: 8_000
+      }
+    );
+  }
+
+  function handleViewChange(view: AppView) {
+    setActiveView(view);
+    if (
+      view === "taste" &&
+      nearbyPreferencePoints.length === 0 &&
+      !isPreferenceLoading
+    ) {
+      loadNearbyPreferencePoints();
+    }
+  }
+
+  function loadNearbyPreferencePoints() {
+    if (!navigator.geolocation) {
+      setPreferenceStatus("위치 사용 불가");
+      return;
+    }
+
+    setIsPreferenceLoading(true);
+    setPreferenceStatus("위치 확인 중");
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const location = {
+          label: "현재 위치",
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        setCurrentLocation(location);
+        setPreferenceStatus("장소 불러오는 중");
+
+        try {
+          const result = await fetchPreferencePoints(location);
+          setNearbyPreferencePoints(
+            result.points.map((candidate) => preferencePointFromCandidate(candidate))
+          );
+          setPreferenceStatus(
+            result.points.length > 0
+              ? `내 주변 실제 장소 ${result.points.length}개`
+              : "예시 장소 표시"
+          );
+          setPoiPreferenceIndex(0);
+        } catch {
+          setPreferenceStatus("예시 장소 표시");
+        } finally {
+          setIsPreferenceLoading(false);
+        }
+      },
+      () => {
+        setIsPreferenceLoading(false);
+        setPreferenceStatus("위치 권한 필요");
       },
       {
         enableHighAccuracy: true,
@@ -139,145 +347,717 @@ export default function HomePage() {
   }
 
   function handleDestinationSelect(key: string) {
-    setSelectedDestinationKey(key);
-    window.localStorage.setItem(
-      DESTINATION_STORAGE_KEY,
-      JSON.stringify(destinations)
+    setDestinationText(key);
+    setDestinationEdited(true);
+    setError(null);
+  }
+
+  function handleMoodSelect(label: string) {
+    setActiveMood(label);
+  }
+
+  function handlePoiVote(id: string, vote: PreferenceVote) {
+    setPoiVotes((current) => ({
+      ...current,
+      [id]: vote
+    }));
+    setPoiPreferenceIndex(
+      (current) => (current + 1) % Math.max(1, preferencePoints.length)
     );
   }
 
+  function handlePoiSkip() {
+    setPoiPreferenceIndex(
+      (current) => (current + 1) % Math.max(1, preferencePoints.length)
+    );
+  }
+
+  function handlePoiReset() {
+    setPoiVotes({});
+    setPoiPreferenceIndex(0);
+  }
+
+  const likedCount = Object.values(poiVotes).filter((vote) => vote === "like").length;
+  const dislikedCount = Object.values(poiVotes).filter(
+    (vote) => vote === "dislike"
+  ).length;
+  const preferencePoints = useMemo(
+    () =>
+      nearbyPreferencePoints.length > 0
+        ? nearbyPreferencePoints
+        : buildPreferencePoints(plan),
+    [nearbyPreferencePoints, plan]
+  );
+  useEffect(() => {
+    if (poiPreferenceIndex >= preferencePoints.length) {
+      setPoiPreferenceIndex(0);
+    }
+  }, [poiPreferenceIndex, preferencePoints.length]);
+  const primaryLabel = isLoading ? "경로 계산 중" : "경로 추천";
+
   return (
-    <main className="min-h-screen bg-[#f6f8f4] text-ink">
+    <main className="min-h-screen bg-[#fff9ed] text-ink">
       <form
         className="mx-auto flex min-h-screen w-full max-w-md flex-col pb-24 lg:max-w-6xl lg:px-6"
         onSubmit={handleSubmit}
       >
-        <header className="px-5 pb-4 pt-5 lg:px-0">
-          <div className="flex items-center justify-between gap-3">
+        <ServiceTopBar activeView={activeView} onChange={handleViewChange} />
+        {activeView === "planner" ? (
+          <>
+        <header className="px-5 pb-5 pt-5 lg:px-0">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-tide">How&apos;s Your Day</p>
-              <h1 className="mt-1 text-2xl font-semibold leading-tight tracking-normal">
-                오늘 하루를 무리 없이 조율해볼게요.
+              <p className="text-xs font-semibold text-tide">경로 추천</p>
+              <h1 className="mt-1 pr-2 text-[30px] font-semibold leading-tight tracking-normal [word-break:keep-all] sm:text-3xl">
+                어디로 이동하나요
               </h1>
             </div>
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink text-white shadow-sm">
+            <span className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-tide shadow-sm ring-1 ring-ink/8">
               <Brain size={22} aria-hidden />
             </span>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <StatusPill icon={<HeartPulse size={14} aria-hidden />} label="감정 비용" />
-            <StatusPill icon={<Navigation size={14} aria-hidden />} label="동선 조율" />
-            <StatusPill icon={<Clock3 size={14} aria-hidden />} label="시간 제약" />
-          </div>
         </header>
 
-        <section className="grid gap-4 px-5 lg:grid-cols-[380px_1fr] lg:px-0">
-          <div className="grid gap-4 lg:self-start lg:sticky lg:top-6">
-            <article className="rounded-2xl border border-ink/10 bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-2 text-sm font-semibold text-ink/60">
-                <MessageCircle size={17} aria-hidden />
-                오늘 해야 할 일을 말해줘
-              </div>
-              <textarea
-                className="mt-3 min-h-32 w-full resize-none rounded-xl border border-ink/10 bg-[#f9faf7] p-3 text-[15px] leading-6 outline-none transition focus:border-tide focus:bg-white"
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-              />
-              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                {samplePrompts.map((prompt) => (
-                  <button
-                    className="min-h-10 shrink-0 rounded-full border border-ink/10 bg-white px-3 text-sm font-semibold text-ink/70 shadow-sm transition hover:border-tide hover:text-tide"
-                    key={prompt.label}
-                    type="button"
-                    onClick={() => setText(prompt.text)}
-                  >
-                    {prompt.label}
-                  </button>
-                ))}
-              </div>
-            </article>
-
-            <article className="rounded-2xl border border-ink/10 bg-white p-4 shadow-sm">
+        <section className="grid gap-5 px-5 lg:grid-cols-[420px_1fr] lg:items-start lg:px-0">
+          <article className="overflow-hidden rounded-[28px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8 lg:sticky lg:top-20">
+            <div className="border-b border-ink/8 bg-[#fffdf8] px-5 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-ink/60">출발/도착</p>
-                  <p className="mt-1 text-xs text-ink/46">{locationStatus}</p>
+                  <p className="text-sm font-semibold text-tide">이동 요청</p>
+                  <p className="mt-1 text-xs font-medium text-ink/45">
+                    문장에서 출발지와 도착지 추출
+                  </p>
                 </div>
-                <button
-                  className="min-h-10 shrink-0 rounded-full bg-[#eef5f1] px-3 text-sm font-semibold text-tide transition hover:bg-[#e2efe9]"
-                  type="button"
-                  onClick={handleUseCurrentLocation}
-                >
-                  현재 위치 사용
-                </button>
+                <span className="rounded-2xl bg-[#ddf3eb] px-3 py-1.5 text-xs font-semibold text-moss">
+                  수정 가능
+                </span>
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {Object.keys(destinations).map((key) => (
+            </div>
+
+            <div className="grid gap-5 p-5">
+              <section>
+                <ComposerTitle
+                  icon={<MessageCircle size={17} aria-hidden />}
+                  label="이동 요청"
+                  support="일정, 장소, 시간 조건을 한 번에 입력"
+                />
+                <textarea
+                  className="mt-3 min-h-28 w-full resize-none rounded-2xl border border-ink/10 bg-[#fffdf8] p-4 text-[15px] leading-6 outline-none transition placeholder:text-ink/35 focus:border-tide focus:bg-white"
+                  placeholder="예: 성균관대학교에서 서울역까지, 18시 전 도착. 조용한 카페 경유 가능."
+                  value={text}
+                  onChange={(event) => setText(event.target.value)}
+                />
+              </section>
+
+              <div className="h-px bg-ink/8" />
+
+              <section>
+                <div className="flex items-start justify-between gap-3">
+                  <ComposerTitle
+                    icon={<Navigation size={17} aria-hidden />}
+                    label="경로 확인"
+                    support={`${locationStatus} · 직접 수정 가능`}
+                  />
                   <button
-                    className={`min-h-10 rounded-full border px-3 text-sm font-semibold transition ${
-                      selectedDestinationKey === key
-                        ? "border-tide bg-tide text-white"
-                        : "border-ink/10 bg-white text-ink/70"
-                    }`}
-                    key={key}
+                    className="min-h-9 shrink-0 rounded-xl bg-[#fde2ef] px-3 text-xs font-semibold text-tide transition hover:bg-[#fbd2e6] active:scale-[0.98]"
                     type="button"
-                    onClick={() => handleDestinationSelect(key)}
+                    onClick={handleUseCurrentLocation}
                   >
-                    {key}
+                    현재 위치
                   </button>
-                ))}
-              </div>
-              <p className="mt-3 truncate text-xs text-ink/48">
-                {origin.label} → {destinations[selectedDestinationKey]?.label}
-              </p>
-            </article>
+                </div>
 
-            {error ? (
-              <p className="rounded-2xl border border-coral/40 bg-white p-3 text-sm text-coral">
-                {error}
-              </p>
-            ) : null}
+                <div className="mt-3 rounded-2xl bg-[#fffdf8] p-3 ring-1 ring-ink/8">
+                  <div className="grid grid-cols-[24px_1fr] gap-3">
+                    <div className="flex flex-col items-center pt-3">
+                      <span className="h-2.5 w-2.5 rounded-full bg-moss" />
+                      <span className="my-1 h-12 w-px bg-ink/12" />
+                      <span className="h-2.5 w-2.5 rounded-full bg-tide" />
+                    </div>
+                    <div className="grid gap-3">
+                      <label className="block" htmlFor="origin">
+                        <span className="text-xs font-semibold text-ink/46">출발지</span>
+                        <input
+                          className="mt-1 min-h-11 w-full rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold outline-none transition placeholder:text-ink/35 focus:border-tide"
+                          id="origin"
+                          placeholder="예: 성균관대학교 서울캠퍼스"
+                          value={originText}
+                          onChange={(event) => {
+                            setOriginText(event.target.value);
+                            setOriginEdited(true);
+                            setError(null);
+                          }}
+                        />
+                      </label>
+                      <label className="block" htmlFor="destination">
+                        <span className="text-xs font-semibold text-ink/46">도착지</span>
+                        <input
+                          className="mt-1 min-h-11 w-full rounded-xl border border-ink/10 bg-white px-3 text-sm font-semibold outline-none transition placeholder:text-ink/35 focus:border-tide"
+                          id="destination"
+                          placeholder="예: 서울역, 집, 회사"
+                          value={destinationText}
+                          onChange={(event) => {
+                            setDestinationText(event.target.value);
+                            setDestinationEdited(true);
+                            setError(null);
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
 
-            <article className="rounded-2xl bg-ink p-4 text-white shadow-sm">
-              <div className="flex items-center gap-2 text-sm font-semibold text-white/70">
-                <Sparkles size={16} aria-hidden />
-                planner가 보는 것
-              </div>
-              <p className="mt-2 text-sm leading-6 text-white/82">
-                Kakao 장소와 Tmap 경로를 조합하고, 실패한 구간만 fallback으로
-                보완해 감정 비용과 시간 tradeoff를 계산합니다.
-              </p>
-            </article>
-          </div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {QUICK_DESTINATIONS.map((key) => (
+                    <button
+                      className={`min-h-10 rounded-xl border px-3 text-sm font-semibold transition ${
+                        normalizeLocationText(destinationText) === normalizeLocationText(key)
+                          ? "border-tide bg-tide text-white shadow-sm"
+                          : "border-ink/10 bg-white text-ink/62 hover:border-tide/45"
+                      }`}
+                      key={key}
+                      type="button"
+                      onClick={() => handleDestinationSelect(key)}
+                    >
+                      {key}
+                    </button>
+                  ))}
+                </div>
+              </section>
 
-          <div className="grid gap-4">
-            {plan ? <MobilePlanResult plan={plan} /> : <EmptyState />}
+              <div className="h-px bg-ink/8" />
+
+              <section>
+                <ComposerTitle
+                  icon={<HeartPulse size={17} aria-hidden />}
+                  label="컨디션"
+                  support="추천 기준 선택"
+                />
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {MOOD_PRESETS.map((mood) => {
+                    const selected = activeMood === mood.label;
+                    return (
+                      <button
+                        className={`flex min-h-10 items-center justify-center gap-1.5 rounded-xl border px-2 text-sm font-semibold transition active:scale-[0.98] ${
+                          selected
+                            ? "border-tide bg-[#fde2ef] text-tide shadow-sm"
+                            : "border-ink/10 bg-[#fffdf8] text-ink/62 hover:border-tide/45"
+                        }`}
+                        key={mood.label}
+                        type="button"
+                        onClick={() => handleMoodSelect(mood.label)}
+                      >
+                        {selected ? <CheckCircle2 size={14} aria-hidden /> : null}
+                        {mood.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {error ? (
+                <p className="rounded-2xl border border-coral/40 bg-[#fff7fb] p-3 text-sm text-coral">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+          </article>
+
+          <div className="grid gap-4 lg:self-start">
+            {plan ? (
+              <MobilePlanResult plan={plan} />
+            ) : (
+              <>
+                <PlanPreview
+                  activeMood={activeMood}
+                  destinationText={destinationText}
+                  dislikedCount={dislikedCount}
+                  likedCount={likedCount}
+                  originText={originText}
+                />
+                <button
+                  className="hidden min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 font-semibold text-white shadow-[0_12px_30px_rgba(23,26,24,0.14)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45 lg:flex"
+                  type="submit"
+                  disabled={isLoading}
+                >
+                  {primaryLabel}
+                  <ArrowRight size={18} aria-hidden />
+                </button>
+              </>
+            )}
           </div>
         </section>
 
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink/10 bg-white/92 px-5 py-3 shadow-[0_-8px_24px_rgba(23,33,29,0.08)] backdrop-blur lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink/10 bg-white/92 px-5 py-3 shadow-[0_-8px_24px_rgba(23,26,24,0.08)] backdrop-blur lg:hidden">
           <button
             className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-ink/45"
             type="submit"
             disabled={isLoading}
           >
-            {isLoading ? "계획을 계산하는 중" : "하루 계획 만들기"}
+            {primaryLabel}
             <ArrowRight size={18} aria-hidden />
           </button>
         </div>
 
-        <div className="hidden px-5 lg:mt-4 lg:block lg:px-0">
-          <button
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 font-semibold text-white transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45"
-            type="submit"
-            disabled={isLoading}
-          >
-            {isLoading ? "계획을 계산하는 중" : "하루 계획 만들기"}
-            <ArrowRight size={18} aria-hidden />
-          </button>
-        </div>
+          </>
+        ) : activeView === "taste" ? (
+          <TastePage
+            activeIndex={poiPreferenceIndex}
+            isLoading={isPreferenceLoading}
+            points={preferencePoints}
+            status={preferenceStatus}
+            votes={poiVotes}
+            onLoadNearby={loadNearbyPreferencePoints}
+            onReset={handlePoiReset}
+            onSkip={handlePoiSkip}
+            onVote={handlePoiVote}
+          />
+        ) : (
+          <ProfilePage
+            activeMood={activeMood}
+            destinationText={destinationText}
+            originText={originText}
+            plan={plan}
+            onOpenPlanner={() => setActiveView("planner")}
+          />
+        )}
       </form>
     </main>
+  );
+}
+
+function ServiceTopBar({
+  activeView,
+  onChange
+}: {
+  activeView: AppView;
+  onChange: (view: AppView) => void;
+}) {
+  const items = [
+    { id: "planner" as const, label: "오늘", icon: CalendarDays },
+    { id: "taste" as const, label: "취향", icon: MapPin },
+    { id: "profile" as const, label: "마이", icon: UserRound }
+  ];
+
+  return (
+    <nav className="sticky top-0 z-30 border-b border-ink/8 bg-[#fff9ed]/88 px-4 py-3 backdrop-blur sm:px-5 lg:px-0">
+      <div className="flex items-center justify-between gap-2">
+        <button
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          type="button"
+          onClick={() => onChange("planner")}
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white text-tide shadow-sm ring-1 ring-ink/8 sm:h-10 sm:w-10">
+            <MapPinned size={18} aria-hidden />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold leading-4">How's Your Day</span>
+            <span className="block truncate text-[11px] font-medium text-ink/45">
+              감정 기반 경로 추천
+            </span>
+          </span>
+        </button>
+
+        <div className="grid shrink-0 grid-cols-3 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-ink/8">
+          {items.map((item) => {
+            const selected = activeView === item.id;
+            const Icon = item.icon;
+            return (
+              <button
+                className={`flex h-10 min-w-[58px] items-center justify-center gap-1 rounded-xl px-2 text-xs font-semibold transition sm:min-w-[70px] sm:gap-1.5 sm:px-3 sm:text-sm ${
+                  selected
+                    ? "bg-[#fde2ef] text-tide"
+                    : "text-ink/48 hover:bg-[#fff9ed] hover:text-ink/70"
+                }`}
+                key={item.id}
+                type="button"
+                onClick={() => onChange(item.id)}
+              >
+                <Icon className="shrink-0" size={15} aria-hidden />
+                <span className="whitespace-nowrap leading-none">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function TastePage({
+  activeIndex,
+  isLoading,
+  points,
+  status,
+  votes,
+  onLoadNearby,
+  onReset,
+  onSkip,
+  onVote
+}: {
+  activeIndex: number;
+  isLoading: boolean;
+  points: PreferencePoint[];
+  status: string;
+  votes: Record<string, PreferenceVote>;
+  onLoadNearby: () => void;
+  onReset: () => void;
+  onSkip: () => void;
+  onVote: (id: string, vote: PreferenceVote) => void;
+}) {
+  const likedCount = Object.values(votes).filter((vote) => vote === "like").length;
+  const dislikedCount = Object.values(votes).filter((vote) => vote === "dislike").length;
+  const affectedCount = points.filter(
+    (point) => resolvePreferenceSignal(point, points, votes) !== null
+  ).length;
+
+  return (
+    <section className="grid gap-5 px-5 py-5 lg:grid-cols-[420px_1fr] lg:items-start lg:px-0">
+      <div className="grid gap-4 lg:sticky lg:top-20">
+        <TasteIntroCard
+          affectedCount={affectedCount}
+          dislikedCount={dislikedCount}
+          isLoading={isLoading}
+          likedCount={likedCount}
+          onLoadNearby={onLoadNearby}
+          status={status}
+        />
+        <article className="hidden">
+          <p className="text-xs font-semibold text-tide">장소 취향</p>
+          <h1 className="mt-1 text-[28px] font-semibold leading-tight [word-break:keep-all]">
+            실제 위치를 기준으로 학습
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-ink/52 [word-break:keep-all]">
+            추천 경로 주변의 장소 포인트를 선호/비선호로 분류합니다. 이후 경유 후보와 감정 비용 계산에 내부적으로 반영됩니다.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <MiniStat label="선호" value={`${likedCount}개`} />
+            <MiniStat label="비선호" value={`${dislikedCount}개`} />
+          </div>
+        </article>
+
+        <PreferenceDeck
+          activeIndex={activeIndex}
+          points={points}
+          votes={votes}
+          onReset={onReset}
+          onSkip={onSkip}
+          onVote={onVote}
+        />
+      </div>
+
+      <PreferenceMap points={points} votes={votes} />
+    </section>
+  );
+}
+
+function TasteIntroCard({
+  affectedCount,
+  dislikedCount,
+  isLoading,
+  likedCount,
+  onLoadNearby,
+  status
+}: {
+  affectedCount: number;
+  dislikedCount: number;
+  isLoading: boolean;
+  likedCount: number;
+  onLoadNearby: () => void;
+  status: string;
+}) {
+  return (
+    <article className="order-2 rounded-[20px] bg-white p-4 shadow-[0_10px_28px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-tide">장소 취향</p>
+              <h1 className="mt-1 text-xl font-semibold leading-tight [word-break:keep-all]">
+                내 주변 취향
+              </h1>
+        </div>
+        <button
+          className="min-h-10 shrink-0 rounded-2xl bg-[#ddf3eb] px-3 text-xs font-semibold text-moss transition active:scale-[0.98] disabled:opacity-55"
+          type="button"
+          onClick={onLoadNearby}
+          disabled={isLoading}
+        >
+          {isLoading ? "확인 중" : "내 주변"}
+        </button>
+      </div>
+      <p className="mt-3 rounded-2xl bg-[#fffdf8] px-3 py-2 text-xs font-semibold text-ink/48 ring-1 ring-ink/7">
+        {status}
+      </p>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <MiniStat label="선호" value={`${likedCount}개`} />
+        <MiniStat label="비선호" value={`${dislikedCount}개`} />
+        <MiniStat label="반영" value={`${affectedCount}개`} />
+      </div>
+    </article>
+  );
+}
+
+function ProfilePage({
+  activeMood,
+  destinationText,
+  originText,
+  plan,
+  onOpenPlanner
+}: {
+  activeMood: string;
+  destinationText: string;
+  originText: string;
+  plan: DailyPlan | null;
+  onOpenPlanner: () => void;
+}) {
+  return (
+    <section className="grid gap-4 px-5 py-5 lg:grid-cols-[360px_1fr] lg:px-0">
+      <div className="grid gap-4 lg:self-start lg:sticky lg:top-20">
+        <AccountCard />
+        <article className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_46px_rgba(23,26,24,0.06)] ring-1 ring-ink/8">
+          <div className="bg-[#fde2ef] px-5 py-5">
+            <p className="text-sm font-semibold text-tide">나의 이동 프로필</p>
+            <h1 className="mt-2 text-[28px] font-semibold leading-tight [word-break:keep-all]">
+              컨디션별 이동 기록
+            </h1>
+          </div>
+          <div className="grid grid-cols-3 gap-2 p-4">
+            <ProfileStat label="컨디션" value={activeMood} />
+            <ProfileStat label="출발" value={originText || "미지정"} />
+            <ProfileStat label="도착" value={destinationText || "미지정"} />
+          </div>
+        </article>
+
+        <article className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-ink/62">저장 장소</p>
+              <p className="mt-1 text-xs text-ink/45">자주 쓰는 출발지와 도착지</p>
+            </div>
+            <Settings2 className="text-ink/36" size={18} aria-hidden />
+          </div>
+          <div className="mt-4 grid gap-2">
+            <SavedPlace icon={<Home size={16} aria-hidden />} label="집" value={destinationText || "아직 없음"} />
+            <SavedPlace icon={<MapPin size={16} aria-hidden />} label="기본 출발지" value={originText || "아직 없음"} />
+            <SavedPlace icon={<Building2 size={16} aria-hidden />} label="학교/회사" value="필요할 때 입력" />
+          </div>
+        </article>
+      </div>
+
+      <div className="grid gap-4">
+        <article className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-tide">최근 추천</p>
+              <h2 className="mt-1 text-xl font-semibold [word-break:keep-all]">
+                {plan ? routeDisplayName(plan.selected_route) : "최근 추천 기록 없음"}
+              </h2>
+            </div>
+            <button
+              className="min-h-10 shrink-0 rounded-xl bg-ink px-3 text-sm font-semibold text-white transition active:scale-[0.98]"
+              type="button"
+              onClick={onOpenPlanner}
+            >
+              경로 만들기
+            </button>
+          </div>
+          {plan ? (
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <MiniStat label="이동" value={durationLabel(plan.selected_route)} />
+              <MiniStat label="걷기" value={`${plan.selected_route.walking_minutes}분`} />
+              <MiniStat label="편안함" value={`${plan.emotional_cost.comfort_score}`} />
+            </div>
+          ) : (
+            <p className="mt-4 rounded-2xl bg-[#fff9ed] p-4 text-sm leading-6 text-ink/58 [word-break:keep-all]">
+              출발지와 도착지를 입력하면 최근 추천과 피드백이 이곳에 기록됩니다.
+            </p>
+          )}
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function AccountCard() {
+  return (
+    <article className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_46px_rgba(23,26,24,0.06)] ring-1 ring-ink/8">
+      <div className="bg-[#ddf3eb] px-5 py-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-moss shadow-sm ring-1 ring-ink/8">
+              <UserRound size={23} aria-hidden />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-moss">내 정보</span>
+              <span className="mt-1 block truncate text-2xl font-semibold leading-tight">
+                {PROFILE_PLACEHOLDER.nickname}
+              </span>
+            </span>
+          </div>
+          <button
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/78 text-ink/48 transition active:scale-95"
+            type="button"
+            aria-label="로그아웃"
+          >
+            <LogOut size={17} aria-hidden />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-2 p-4">
+        <AccountRow
+          icon={<Mail size={16} aria-hidden />}
+          label="이메일"
+          value={PROFILE_PLACEHOLDER.email}
+        />
+        <AccountRow
+          icon={<ShieldCheck size={16} aria-hidden />}
+          label="인증"
+          value={PROFILE_PLACEHOLDER.authStatus}
+        />
+      </div>
+    </article>
+  );
+}
+
+function AccountRow({
+  icon,
+  label,
+  value
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-[#fffdf8] px-3 py-3 ring-1 ring-ink/7">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fde2ef] text-tide">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs font-semibold text-ink/42">{label}</span>
+        <span className="block truncate text-sm font-semibold text-ink/76">{value}</span>
+      </span>
+    </div>
+  );
+}
+
+function ProfileStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-2xl bg-[#fffdf8] px-3 py-3 text-center ring-1 ring-ink/7">
+      <p className="truncate text-[11px] font-semibold text-ink/42">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-ink/74">{value}</p>
+    </div>
+  );
+}
+
+function SavedPlace({
+  icon,
+  label,
+  value
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-[#fffdf8] px-3 py-3 ring-1 ring-ink/7">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#ddf3eb] text-moss">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs font-semibold text-ink/42">{label}</span>
+        <span className="block truncate text-sm font-semibold text-ink/76">{value}</span>
+      </span>
+    </div>
+  );
+}
+
+function ComposerTitle({
+  icon,
+  label,
+  support
+}: {
+  icon: ReactNode;
+  label: string;
+  support: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-start gap-2.5">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#ddf3eb] text-moss">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-ink/72">{label}</span>
+        <span className="mt-0.5 block break-words text-xs leading-5 text-ink/45">
+          {support}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function PlanPreview({
+  activeMood,
+  destinationText,
+  dislikedCount,
+  likedCount,
+  originText
+}: {
+  activeMood: string;
+  destinationText: string;
+  dislikedCount: number;
+  likedCount: number;
+  originText: string;
+}) {
+  return (
+    <section className="rounded-[24px] bg-white p-4 shadow-[0_14px_40px_rgba(23,26,24,0.055)] ring-1 ring-ink/8">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-ink/42">미리보기</p>
+          <h2 className="mt-1 text-xl font-semibold leading-tight [word-break:keep-all]">
+            추천 전 확인
+          </h2>
+        </div>
+        <span className="rounded-xl bg-[#ddf3eb] px-2.5 py-1 text-xs font-semibold text-moss">
+          준비
+        </span>
+      </div>
+
+      <div className="mt-4 rounded-2xl bg-[#fffdf8] p-3 ring-1 ring-ink/8">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fde2ef] text-tide">
+            <Navigation size={18} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-ink/40">경로</p>
+            <p className="mt-0.5 truncate text-base font-semibold">
+              {originText || "출발지"} → {destinationText || "도착지"}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 divide-y divide-ink/8 rounded-2xl border border-ink/8 bg-white">
+        <PreviewRow label="컨디션" value={activeMood} />
+        <PreviewRow label="선호 장소" value={`${likedCount}개`} />
+        <PreviewRow label="비선호 장소" value={`${dislikedCount}개`} />
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        <PlannerCue icon={<HeartPulse size={15} aria-hidden />} label="피로도와 혼잡도 반영" />
+        <PlannerCue icon={<Coffee size={15} aria-hidden />} label="선호 장소는 경유 후보로만 사용" />
+        <PlannerCue icon={<Clock3 size={15} aria-hidden />} label="시간 제약 시 우회 최소화" />
+      </div>
+    </section>
+  );
+}
+
+function PreviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-h-11 items-center justify-between gap-3 px-3 py-2">
+      <span className="text-xs font-semibold text-ink/42">{label}</span>
+      <span className="min-w-0 truncate text-sm font-semibold text-ink/74">{value}</span>
+    </div>
   );
 }
 
@@ -296,24 +1076,24 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
         provider: plan.selected_route.provider,
         reason: firstTradeoff?.reason ?? plan.explanation
       });
-      setFeedbackStatus(liked ? "좋았던 route로 기억했어요" : "불편했던 route로 기억했어요");
+      setFeedbackStatus(liked ? "선호 경로로 저장됨" : "비선호 경로로 저장됨");
     } catch {
-      setFeedbackStatus("피드백 저장에 실패했어요");
+      setFeedbackStatus("피드백 저장 실패");
     }
   }
 
   return (
     <>
-      <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-ink/10">
+      <section className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-moss">추천 route</p>
+            <p className="text-sm font-semibold text-moss">추천 경로</p>
             <h2 className="mt-1 break-words text-2xl font-semibold leading-tight">
               {routeDisplayName(plan.selected_route)}
             </h2>
           </div>
           <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-tide text-white">
-            <span className="text-xs font-semibold text-white/75">comfort</span>
+            <span className="text-xs font-semibold text-white/75">편안함</span>
             <span className="text-2xl font-semibold">
               {plan.emotional_cost.comfort_score}
             </span>
@@ -328,7 +1108,7 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
           <MiniStat label="출처" value={routeProviderLabel(plan.selected_route)} />
         </div>
 
-        <div className="mt-3 rounded-2xl bg-[#f6f8f4] p-3 text-xs leading-5 text-ink/58">
+        <div className="mt-3 rounded-2xl bg-[#fff9ed] p-3 text-xs leading-5 text-ink/58">
           {routeReliabilityLabel(plan.selected_route, usesKakaoPoi)}
           {plan.selected_route.fallback_reason ? (
             <span className="mt-1 block text-ink/42">
@@ -338,10 +1118,10 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
         </div>
 
         {firstTradeoff ? (
-          <div className="mt-4 rounded-2xl bg-[#f6f8f4] p-3">
+          <div className="mt-4 rounded-2xl bg-[#fff9ed] p-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Zap className="text-coral" size={16} aria-hidden />
-              핵심 tradeoff
+              핵심 균형점
             </div>
             <p className="mt-2 text-sm leading-6 text-ink/68">{firstTradeoff.reason}</p>
           </div>
@@ -349,14 +1129,14 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
 
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button
-            className="min-h-11 rounded-xl bg-[#eef5f1] px-3 text-sm font-semibold text-moss transition active:scale-[0.99]"
+            className="min-h-11 rounded-xl bg-[#ddf3eb] px-3 text-sm font-semibold text-moss transition active:scale-[0.99]"
             type="button"
             onClick={() => handleFeedback(true)}
           >
-            이 route 괜찮았어요
+            이 길 괜찮았어요
           </button>
           <button
-            className="min-h-11 rounded-xl bg-[#fff0ec] px-3 text-sm font-semibold text-coral transition active:scale-[0.99]"
+            className="min-h-11 rounded-xl bg-[#fde2ef] px-3 text-sm font-semibold text-coral transition active:scale-[0.99]"
             type="button"
             onClick={() => handleFeedback(false)}
           >
@@ -392,25 +1172,10 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
       </section>
 
       <section className="grid gap-3 pb-8">
-        <SectionTitle icon={<Navigation size={18} aria-hidden />} title="후보 route" />
+        <SectionTitle icon={<Navigation size={18} aria-hidden />} title="후보 경로" />
         <RouteList routes={plan.routes} selectedRouteId={plan.selected_route.id} />
       </section>
     </>
-  );
-}
-
-function EmptyState() {
-  return (
-    <section className="rounded-3xl bg-white p-5 text-center shadow-sm ring-1 ring-ink/10">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef5f1] text-tide">
-        <MessageCircle size={26} aria-hidden />
-      </div>
-      <h2 className="mt-4 text-xl font-semibold">아직 계획이 없어요</h2>
-      <p className="mt-2 text-sm leading-6 text-ink/62">
-        해야 할 일과 지금 컨디션을 적으면 planner가 route, 감정 비용,
-        tradeoff를 계산해줍니다.
-      </p>
-    </section>
   );
 }
 
@@ -439,14 +1204,14 @@ function KakaoMapPreview({
     let cancelled = false;
     const fallbackTimer = window.setTimeout(() => {
       if (!cancelled) {
-        setSdkError("Kakao SDK 응답이 늦어 preview로 표시해요.");
+        setSdkError("카카오 지도 지연. 간단 미리보기 표시");
         setStatus("fallback");
       }
     }, 4500);
 
     if (!kakaoJsKey) {
       window.clearTimeout(fallbackTimer);
-      setSdkError("Kakao JavaScript 키가 없어 preview로 표시해요.");
+      setSdkError("카카오 지도 키 없음. 간단 미리보기 표시");
       setStatus("fallback");
       return;
     }
@@ -466,7 +1231,7 @@ function KakaoMapPreview({
       .catch(() => {
         if (!cancelled) {
           window.clearTimeout(fallbackTimer);
-          setSdkError("Kakao SDK 인증 또는 도메인 설정을 확인해야 해요.");
+          setSdkError("카카오 지도 인증 또는 도메인 설정 확인 필요");
           setStatus("fallback");
         }
       });
@@ -481,7 +1246,7 @@ function KakaoMapPreview({
     return (
       <MapPreview
         map={map}
-        providerLabel={sdkError ? "Kakao 연결 실패" : "Mock fallback"}
+        providerLabel={sdkError ? "카카오 연결 실패" : "간단 미리보기"}
         statusMessage={sdkError}
         usesKakaoPoi={usesKakaoPoi}
       />
@@ -489,29 +1254,29 @@ function KakaoMapPreview({
   }
 
   return (
-    <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-ink/10">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
       <div className="flex items-center justify-between px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-moss">
-            {status === "ready" ? "Kakao map" : "지도 연결 중"}
+            {status === "ready" ? "카카오 지도" : "지도 연결 중"}
           </p>
           <h2 className="text-lg font-semibold">동선 미리보기</h2>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span className="rounded-full bg-[#eef5f1] px-2.5 py-1 text-xs font-semibold text-tide">
-            {usesKakaoPoi ? "Kakao POI" : "Mock POI"}
+          <span className="rounded-xl bg-[#fde2ef] px-2.5 py-1 text-xs font-semibold text-tide">
+            {usesKakaoPoi ? "실제 장소" : "예시 장소"}
           </span>
           <MapPinned className="text-tide" size={22} aria-hidden />
         </div>
       </div>
-      <div ref={containerRef} className="h-60 w-full bg-[#edf2ee]" />
+      <div ref={containerRef} className="h-60 w-full bg-[#fff4cc]" />
     </section>
   );
 }
 
 function MapPreview({
   map,
-  providerLabel = "mock map",
+  providerLabel = "간단 지도",
   statusMessage,
   usesKakaoPoi = false
 }: {
@@ -523,30 +1288,30 @@ function MapPreview({
   const projected = useMemo(() => createProjector(map), [map]);
 
   return (
-    <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-ink/10">
+    <section className="overflow-hidden rounded-2xl bg-white shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
       <div className="flex items-center justify-between px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-moss">{providerLabel}</p>
           <h2 className="text-lg font-semibold">동선 미리보기</h2>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span className="rounded-full bg-[#eef5f1] px-2.5 py-1 text-xs font-semibold text-tide">
-            {usesKakaoPoi ? "Kakao POI" : "Mock POI"}
+          <span className="rounded-xl bg-[#fde2ef] px-2.5 py-1 text-xs font-semibold text-tide">
+            {usesKakaoPoi ? "실제 장소" : "예시 장소"}
           </span>
           <MapPinned className="text-tide" size={22} aria-hidden />
         </div>
       </div>
       {statusMessage ? (
-        <p className="mx-4 mb-3 rounded-2xl bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-coral">
+        <p className="mx-4 mb-3 rounded-2xl bg-[#fde2ef] px-3 py-2 text-xs leading-5 text-coral">
           {statusMessage}
         </p>
       ) : null}
-      <div className="relative h-60 bg-[#edf2ee]">
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(23,33,29,0.05)_1px,transparent_1px),linear-gradient(rgba(23,33,29,0.05)_1px,transparent_1px)] bg-[size:34px_34px]" />
+      <div className="relative h-60 bg-[#fff4cc]">
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(23,26,24,0.05)_1px,transparent_1px),linear-gradient(rgba(23,26,24,0.05)_1px,transparent_1px)] bg-[size:34px_34px]" />
         <svg
           className="absolute inset-0 h-full w-full"
           role="img"
-          aria-label="planner route preview"
+          aria-label="플래너 경로 미리보기"
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
         >
@@ -556,10 +1321,10 @@ function MapPreview({
               <circle
                 cx={point.x}
                 cy={point.y}
-                fill="rgba(217,111,93,0.24)"
+                fill="rgba(217,120,166,0.20)"
                 key={zone.id}
                 r="9"
-                stroke="rgba(217,111,93,0.75)"
+                stroke="rgba(217,120,166,0.70)"
                 strokeWidth="0.8"
               />
             );
@@ -623,10 +1388,10 @@ function EmotionalCostCard({ cost }: { cost: EmotionCost }) {
   ] as const;
 
   return (
-    <article className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-ink/10">
+    <article className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.04)] ring-1 ring-ink/8">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-ink/60">total emotional cost</span>
-        <span className="rounded-full bg-[#eef5f1] px-3 py-1 text-sm font-semibold text-tide">
+        <span className="text-sm font-semibold text-ink/60">전체 감정 비용</span>
+        <span className="rounded-xl bg-[#fde2ef] px-3 py-1 text-sm font-semibold text-tide">
           {cost.total_emotional_cost}
         </span>
       </div>
@@ -651,7 +1416,7 @@ function CostRow({ label, value }: { label: string; value: number }) {
           {isBonus ? value : `+${value}`}
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[#edf2ee]">
+      <div className="h-2 overflow-hidden rounded-full bg-[#fff4cc]">
         <div
           className={isBonus ? "h-full bg-moss" : "h-full bg-coral"}
           style={{ width: `${width}%` }}
@@ -666,10 +1431,10 @@ function TimelineList({ plan }: { plan: DailyPlan }) {
     <ol className="grid gap-2">
       {plan.estimated_timeline.map((item) => (
         <li
-          className="grid grid-cols-[58px_1fr] gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-ink/10"
+          className="grid grid-cols-[58px_1fr] gap-3 rounded-2xl bg-white p-3 shadow-[0_8px_22px_rgba(23,26,24,0.035)] ring-1 ring-ink/8"
           key={`${item.time}-${item.label}`}
         >
-          <span className="rounded-xl bg-[#eef5f1] px-2 py-2 text-center text-sm font-semibold text-tide">
+          <span className="rounded-xl bg-[#fde2ef] px-2 py-2 text-center text-sm font-semibold text-tide">
             {item.time}
           </span>
           <span className="min-w-0 text-sm leading-6 text-ink/72">
@@ -698,8 +1463,8 @@ function RouteList({
 
         return (
           <article
-            className={`rounded-2xl p-3 shadow-sm ring-1 ${
-              selected ? "bg-[#eef7f8] ring-tide/35" : "bg-white ring-ink/10"
+            className={`rounded-2xl p-3 shadow-[0_8px_22px_rgba(23,26,24,0.035)] ring-1 ${
+              selected ? "bg-[#fff1f7] ring-tide/35" : "bg-white ring-ink/8"
             }`}
             key={route.id}
           >
@@ -708,11 +1473,11 @@ function RouteList({
                 {routeDisplayName(route)}
               </span>
               <div className="flex shrink-0 items-center gap-1">
-                <span className="rounded-full bg-[#eef5f1] px-2 py-1 text-xs font-semibold text-tide">
+                <span className="rounded-xl bg-[#fde2ef] px-2 py-1 text-xs font-semibold text-tide">
                   {routeProviderLabel(route)}
                 </span>
                 {selected ? (
-                  <span className="rounded-full bg-tide px-2 py-1 text-xs font-semibold text-white">
+                  <span className="rounded-xl bg-tide px-2 py-1 text-xs font-semibold text-white">
                     선택됨
                   </span>
                 ) : null}
@@ -733,13 +1498,726 @@ function RouteList({
   );
 }
 
-function StatusPill({ icon, label }: { icon: ReactNode; label: string }) {
+function PlannerCue({ icon, label }: { icon: ReactNode; label: string }) {
   return (
-    <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-white px-3 text-sm font-semibold text-ink/64 shadow-sm ring-1 ring-ink/8">
-      {icon}
-      {label}
-    </span>
+    <div className="flex min-h-10 items-center gap-2 rounded-xl bg-[#fffdf8] px-3 text-sm font-semibold text-ink/64 ring-1 ring-ink/7">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#fde2ef] text-tide/80">
+        {icon}
+      </span>
+      <span>{label}</span>
+    </div>
   );
+}
+
+function PreferenceMap({
+  points,
+  votes
+}: {
+  points: PreferencePoint[];
+  votes: Record<string, PreferenceVote>;
+}) {
+  const visiblePoints = points.length > 0 ? points : POI_PREFERENCES;
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const [mapStatus, setMapStatus] = useState<KakaoStatus>("loading");
+  const [selectedPointId, setSelectedPointId] = useState(visiblePoints[0]?.id ?? "");
+  const selectedPoint =
+    visiblePoints.find((point) => point.id === selectedPointId) ?? visiblePoints[0];
+  const kakaoJsKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
+
+  useEffect(() => {
+    if (!visiblePoints.some((point) => point.id === selectedPointId)) {
+      setSelectedPointId(visiblePoints[0]?.id ?? "");
+    }
+  }, [selectedPointId, visiblePoints]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!kakaoJsKey || !mapContainerRef.current) {
+      setMapStatus("fallback");
+      return;
+    }
+
+    setMapStatus("loading");
+    loadKakaoMaps(kakaoJsKey)
+      .then(() => {
+        if (cancelled || !mapContainerRef.current || !window.kakao?.maps) {
+          return;
+        }
+        renderPreferenceKakaoMap(
+          mapContainerRef.current,
+          visiblePoints,
+          votes,
+          selectedPointId,
+          setSelectedPointId
+        );
+        setMapStatus("ready");
+      })
+      .catch((caught) => {
+        if (!cancelled) {
+          console.warn("Preference map fell back because Kakao Maps failed.", caught);
+          setMapStatus("fallback");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [kakaoJsKey, selectedPointId, visiblePoints, votes]);
+
+  return (
+    <section className="overflow-hidden rounded-[24px] bg-white shadow-[0_14px_40px_rgba(23,26,24,0.055)] ring-1 ring-ink/8">
+      <div className="flex items-start justify-between gap-3 px-5 py-4">
+        <div>
+          <p className="text-xs font-semibold text-moss">선호 지도</p>
+          <h2 className="mt-1 text-xl font-semibold">선호 지도</h2>
+        </div>
+        <div className="flex gap-1.5 text-[11px] font-semibold text-ink/45">
+          <span className="rounded-lg bg-[#ddf3eb] px-2 py-1">선호</span>
+          <span className="rounded-lg bg-[#fde2ef] px-2 py-1">비선호</span>
+        </div>
+      </div>
+
+      <div className="relative mx-5 h-[300px] overflow-hidden rounded-2xl bg-[#fff9ed] ring-1 ring-ink/8">
+        <div ref={mapContainerRef} className="absolute inset-0" />
+        {mapStatus !== "ready" ? (
+          <>
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(23,26,24,0.05)_1px,transparent_1px),linear-gradient(rgba(23,26,24,0.05)_1px,transparent_1px)] bg-[size:36px_36px]" />
+            <div className="absolute left-[16%] right-[18%] top-[48%] h-2 -rotate-12 rounded-full bg-white/80 shadow-sm" />
+            <div className="absolute bottom-[18%] left-[46%] top-[14%] w-2 rotate-6 rounded-full bg-white/80 shadow-sm" />
+          </>
+        ) : null}
+        <div className="absolute inset-0 bg-white/10" />
+
+        {mapStatus !== "ready"
+          ? visiblePoints.map((point) => {
+              const signal = resolvePreferenceSignal(point, visiblePoints, votes);
+              const bounds = pointBounds(visiblePoints);
+              const position = projectPoint(point, bounds);
+              const selected = selectedPoint?.id === point.id;
+
+              return (
+                <button
+                  aria-label={point.name}
+                  className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full transition ${
+                    selected ? "z-10 h-8 w-8 scale-110" : "h-7 w-7 hover:scale-105"
+                  } ${preferenceMapTone(signal)}`}
+                  key={point.id}
+                  type="button"
+                  onClick={() => setSelectedPointId(point.id)}
+                  style={{ left: `${position.x}%`, top: `${position.y}%` }}
+                >
+                  <span className="flex h-full w-full items-center justify-center rounded-full">
+                    <MapPin size={13} aria-hidden />
+                  </span>
+                </button>
+              );
+            })
+          : null}
+      </div>
+
+      {selectedPoint ? (
+        <div className="p-5">
+          <button
+            className="flex w-full items-center justify-between gap-3 rounded-2xl bg-[#fffdf8] px-4 py-3 text-left ring-1 ring-tide/35"
+            type="button"
+          >
+            <span className="min-w-0">
+              <span className="block text-xs font-semibold text-ink/42">
+                {selectedPoint.kind}
+              </span>
+              <span className="mt-0.5 block truncate text-lg font-semibold">
+                {selectedPoint.name}
+              </span>
+            </span>
+            <span className="shrink-0 text-sm font-semibold text-tide">
+              {preferenceSignalLabel(
+                resolvePreferenceSignal(selectedPoint, visiblePoints, votes)
+              )}
+            </span>
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function PreferenceDeck({
+  activeIndex,
+  points,
+  votes,
+  onReset,
+  onSkip,
+  onVote
+}: {
+  activeIndex: number;
+  points: PreferencePoint[];
+  votes: Record<string, PreferenceVote>;
+  onReset: () => void;
+  onSkip: () => void;
+  onVote: (id: string, vote: PreferenceVote) => void;
+}) {
+  const visiblePoints = points.length > 0 ? points : POI_PREFERENCES;
+  const active = visiblePoints[activeIndex % visiblePoints.length];
+  const Icon = active.icon;
+  const liked = visiblePoints.filter((item) => votes[item.id] === "like");
+  const disliked = visiblePoints.filter((item) => votes[item.id] === "dislike");
+  const affected = visiblePoints.filter(
+    (item) => resolvePreferenceSignal(item, visiblePoints, votes) !== null
+  );
+  const [dragStartX, setDragStartX] = useState<number | null>(null);
+  const [dragX, setDragX] = useState(0);
+  const [leavingVote, setLeavingVote] = useState<PreferenceVote | null>(null);
+
+  useEffect(() => {
+    setDragStartX(null);
+    setDragX(0);
+    setLeavingVote(null);
+  }, [active.id]);
+
+  function commitSwipe(vote: PreferenceVote) {
+    setLeavingVote(vote);
+    setDragX(vote === "like" ? 360 : -360);
+    window.setTimeout(() => onVote(active.id, vote), 150);
+  }
+
+  function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
+    setDragStartX(event.clientX - dragX);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (dragStartX === null) {
+      return;
+    }
+    setDragX(Math.max(-150, Math.min(150, event.clientX - dragStartX)));
+  }
+
+  function handlePointerUp() {
+    if (dragStartX === null) {
+      return;
+    }
+    setDragStartX(null);
+    if (dragX > SWIPE_THRESHOLD) {
+      commitSwipe("like");
+      return;
+    }
+    if (dragX < -SWIPE_THRESHOLD) {
+      commitSwipe("dislike");
+      return;
+    }
+    setDragX(0);
+  }
+
+  const dragVote = dragX > 32 ? "like" : dragX < -32 ? "dislike" : null;
+  const rotate = dragX / 18;
+  const cardStyle = {
+    transform: `translateX(${dragX}px) rotate(${rotate}deg)`,
+    transition: dragStartX === null ? "transform 160ms ease-out" : "none"
+  };
+
+  return (
+    <article className="order-1 overflow-hidden rounded-[24px] border border-ink/8 bg-white p-4 shadow-[0_18px_48px_rgba(23,26,24,0.07)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-tide">위치 포인트</p>
+          <p className="mt-1 text-xs leading-5 text-ink/48">스와이프</p>
+        </div>
+        <button
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fff9ed] text-ink/54 transition hover:text-tide active:scale-95"
+          type="button"
+          onClick={onReset}
+          aria-label="장소 취향 다시 고르기"
+        >
+          <RotateCcw size={16} aria-hidden />
+        </button>
+      </div>
+
+      <div className="relative mt-4 h-[430px] rounded-[24px] bg-[#fff9ed] p-3 shadow-[inset_0_0_0_1px_rgba(217,120,166,0.10)]">
+        <div className="absolute inset-x-8 bottom-5 top-7 rotate-[-5deg] rounded-2xl bg-white/60 ring-1 ring-ink/5" />
+        <div className="absolute inset-x-5 bottom-4 top-5 rotate-[4deg] rounded-2xl bg-white/75 ring-1 ring-ink/6" />
+        <div
+          className="preference-card relative h-full cursor-grab select-none overflow-hidden rounded-[22px] bg-white p-0 shadow-[0_18px_38px_rgba(23,26,24,0.12)] ring-1 ring-ink/8 active:cursor-grabbing"
+          key={active.id}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          style={cardStyle}
+        >
+          <div
+            className={`pointer-events-none absolute left-4 top-4 rounded-xl border px-3 py-1 text-sm font-bold transition ${
+              dragVote === "dislike" || leavingVote === "dislike"
+                ? "rotate-[-10deg] border-coral text-coral opacity-100"
+                : "opacity-0"
+            }`}
+          >
+            별로
+          </div>
+          <div
+            className={`pointer-events-none absolute right-4 top-4 rounded-xl border px-3 py-1 text-sm font-bold transition ${
+              dragVote === "like" || leavingVote === "like"
+                ? "rotate-[10deg] border-moss text-moss opacity-100"
+                : "opacity-0"
+            }`}
+          >
+            선호
+          </div>
+          <PreferenceVisual icon={Icon} point={active} />
+          <div className="flex items-start gap-3 p-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#fde2ef] text-tide">
+              <Icon size={24} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-ink/42">{active.kind}</p>
+              <h3 className="mt-1 text-xl font-semibold leading-tight [word-break:keep-all]">
+                {active.name}
+              </h3>
+              <p className="mt-2 text-sm leading-5 text-ink/58 [word-break:keep-all]">
+                {active.detail}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 px-4 pb-4">
+            {preferenceDisplayTags(active, visiblePoints, votes).map((tag) => (
+              <span
+                className="rounded-lg bg-[#fff9ed] px-2.5 py-1 text-xs font-semibold text-ink/50"
+                key={tag}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <button
+          className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#ddf3eb] text-sm font-semibold text-moss transition active:scale-[0.98]"
+          type="button"
+          onClick={() => commitSwipe("like")}
+        >
+          <ThumbsUp size={16} aria-hidden />
+          선호
+        </button>
+        <button
+          className="min-h-11 rounded-xl bg-[#fff9ed] px-3 text-sm font-semibold text-ink/52 transition active:scale-[0.98]"
+          type="button"
+          onClick={onSkip}
+        >
+          넘기기
+        </button>
+        <button
+          className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#fde2ef] text-sm font-semibold text-coral transition active:scale-[0.98]"
+          type="button"
+          onClick={() => commitSwipe("dislike")}
+        >
+          <ThumbsDown size={16} aria-hidden />
+          별로
+        </button>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="flex gap-1">
+          {visiblePoints.map((item, index) => (
+            <span
+              className={`h-1.5 rounded-full transition-all ${
+                index === activeIndex ? "w-5 bg-tide" : "w-1.5 bg-ink/14"
+              }`}
+              key={item.id}
+            />
+          ))}
+        </div>
+        <p className="text-xs font-medium text-ink/42">
+          선호 {liked.length} · 비선호 {disliked.length} · 반영 {affected.length}
+        </p>
+      </div>
+    </article>
+  );
+}
+
+function PreferenceVisual({
+  icon: Icon,
+  point
+}: {
+  icon: LucideIcon;
+  point: PreferencePoint;
+}) {
+  return (
+    <div
+      className={`relative h-48 overflow-hidden ${preferenceVisualTone(point)} text-white`}
+    >
+      <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.20),transparent_45%),radial-gradient(circle_at_78%_22%,rgba(255,255,255,0.30),transparent_28%)]" />
+      <div className="absolute -bottom-12 -right-10 h-36 w-36 rounded-full bg-white/18" />
+      <div className="absolute left-5 top-5 flex items-center gap-2 rounded-2xl bg-white/22 px-3 py-2 text-xs font-semibold backdrop-blur">
+        <Icon size={16} aria-hidden />
+        {point.kind}
+      </div>
+      <div className="absolute bottom-5 left-5 right-5">
+        <h3 className="mt-1 line-clamp-2 text-3xl font-semibold leading-tight [word-break:keep-all]">
+          {point.name}
+        </h3>
+      </div>
+    </div>
+  );
+}
+
+function preferenceDisplayTags(
+  point: PreferencePoint,
+  points: PreferencePoint[],
+  votes: Record<string, PreferenceVote>
+) {
+  const signal = resolvePreferenceSignal(point, points, votes);
+  const hasVotes = Object.keys(votes).length > 0;
+
+  if (signal === "like") {
+    return ["내가 선호", `${point.kind} 취향 강화`];
+  }
+  if (signal === "dislike") {
+    return ["내가 비선호", `${point.kind} 노출 줄임`];
+  }
+  if (signal === "similar-like") {
+    return ["비슷한 선호", `${point.kind} 계열`];
+  }
+  if (signal === "similar-dislike") {
+    return ["비슷한 비선호", `${point.kind} 계열`];
+  }
+  if (hasVotes) {
+    return ["새 후보", "판단 전"];
+  }
+  return ["첫 판단", point.kind];
+}
+
+function preferencePointFromCandidate(candidate: PoiCandidate): PreferencePoint {
+  return {
+    id: createPointId(candidate),
+    name: candidate.name,
+    kind: landmarkLabel(candidate),
+    detail: pointDetail(candidate),
+    icon: iconForLandmark(candidate.landmark_type, candidate.category),
+    tags: pointTags(candidate),
+    lat: candidate.lat,
+    lng: candidate.lng,
+    source: sourceLabel(candidate.source_confidence)
+  };
+}
+
+function buildPreferencePoints(plan: DailyPlan | null): PreferencePoint[] {
+  if (!plan) {
+    return POI_PREFERENCES;
+  }
+
+  const candidates = [
+    ...plan.stops,
+    ...plan.routes.flatMap((route) => route.stops)
+  ];
+  const pointsById = new Map<string, PreferencePoint>();
+
+  candidates.forEach((candidate) => {
+    if (!Number.isFinite(candidate.lat) || !Number.isFinite(candidate.lng)) {
+      return;
+    }
+
+    const id = createPointId(candidate);
+    if (pointsById.has(id)) {
+      return;
+    }
+
+    pointsById.set(id, preferencePointFromCandidate(candidate));
+  });
+
+  return pointsById.size > 0 ? Array.from(pointsById.values()) : POI_PREFERENCES;
+}
+
+function createPointId(candidate: PoiCandidate) {
+  return candidate.provider_id
+    ? `poi-${candidate.provider_id}`
+    : `poi-${candidate.id}-${candidate.lat.toFixed(5)}-${candidate.lng.toFixed(5)}`;
+}
+
+function iconForLandmark(landmarkType: string, category: string): LucideIcon {
+  const normalized = `${landmarkType} ${category}`.toLowerCase();
+  if (normalized.includes("cafe") || normalized.includes("coffee")) {
+    return Coffee;
+  }
+  if (normalized.includes("park") || normalized.includes("green")) {
+    return Leaf;
+  }
+  if (
+    normalized.includes("station") ||
+    normalized.includes("transit") ||
+    normalized.includes("subway")
+  ) {
+    return Navigation;
+  }
+  if (
+    normalized.includes("school") ||
+    normalized.includes("university") ||
+    normalized.includes("campus")
+  ) {
+    return Building2;
+  }
+  if (normalized.includes("hospital") || normalized.includes("medical")) {
+    return HeartPulse;
+  }
+  return MapPin;
+}
+
+function landmarkLabel(candidate: PoiCandidate) {
+  const normalized = `${candidate.landmark_type} ${candidate.category}`.toLowerCase();
+  if (normalized.includes("cafe") || normalized.includes("coffee")) {
+    return "카페";
+  }
+  if (normalized.includes("bookstore")) {
+    return "서점";
+  }
+  if (normalized.includes("library")) {
+    return "도서관";
+  }
+  if (normalized.includes("food") || normalized.includes("restaurant")) {
+    return "음식점";
+  }
+  if (normalized.includes("park") || normalized.includes("green")) {
+    return "공원";
+  }
+  if (normalized.includes("station") || normalized.includes("transit")) {
+    return "교통";
+  }
+  if (normalized.includes("school") || normalized.includes("university")) {
+    return "학교";
+  }
+  if (normalized.includes("hospital") || normalized.includes("medical")) {
+    return "의료";
+  }
+  return candidate.category || candidate.landmark_type || "장소";
+}
+
+function pointDetail(candidate: PoiCandidate) {
+  const source = sourceLabel(candidate.source_confidence);
+  const distance =
+    candidate.distance_meters === null
+      ? "주변 후보"
+      : `약 ${Math.round(candidate.distance_meters)}m`;
+
+  return `${source} · ${distance}`;
+}
+
+function pointTags(candidate: PoiCandidate) {
+  const tags = candidate.emotion_tags
+    .filter(Boolean)
+    .map(translateEmotionTag)
+    .slice(0, 3);
+  if (tags.length > 0) {
+    return tags;
+  }
+  return [landmarkLabel(candidate)];
+}
+
+function translateEmotionTag(tag: string) {
+  const labels: Record<string, string> = {
+    calm: "차분함",
+    recovery: "회복",
+    familiar: "익숙함",
+    crowded: "혼잡",
+    stressful: "부담",
+    high_noise: "소음",
+    walkable: "걷기 좋음"
+  };
+
+  return labels[tag] ?? tag;
+}
+
+function sourceLabel(source: string) {
+  if (source === "kakao") {
+    return "실제 위치";
+  }
+  if (source === "mock") {
+    return "예시 위치";
+  }
+  return source || "위치 정보";
+}
+
+function pointBounds(points: PreferencePoint[]) {
+  const lats = points.map((point) => point.lat);
+  const lngs = points.map((point) => point.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+
+  return {
+    minLat,
+    maxLat,
+    minLng,
+    maxLng,
+    latRange: Math.max(0.0001, maxLat - minLat),
+    lngRange: Math.max(0.0001, maxLng - minLng)
+  };
+}
+
+function projectPoint(
+  point: PreferencePoint,
+  bounds: ReturnType<typeof pointBounds>
+) {
+  return {
+    x: 12 + ((point.lng - bounds.minLng) / bounds.lngRange) * 76,
+    y: 88 - ((point.lat - bounds.minLat) / bounds.latRange) * 76
+  };
+}
+
+function preferenceVisualTone(point: PreferencePoint) {
+  const normalized = `${point.kind} ${point.tags.join(" ")}`.toLowerCase();
+  if (normalized.includes("cafe") || normalized.includes("카페")) {
+    return "bg-[linear-gradient(135deg,#d978a6,#f6c56f)]";
+  }
+  if (normalized.includes("park") || normalized.includes("공원")) {
+    return "bg-[linear-gradient(135deg,#6f9f87,#b6dfd0)]";
+  }
+  if (normalized.includes("book") || normalized.includes("도서") || normalized.includes("서점")) {
+    return "bg-[linear-gradient(135deg,#b781b6,#f2c7d8)]";
+  }
+  if (normalized.includes("transit") || normalized.includes("교통") || normalized.includes("역")) {
+    return "bg-[linear-gradient(135deg,#6fa5b8,#d8e9df)]";
+  }
+  return "bg-[linear-gradient(135deg,#d978a6,#8fcfbd)]";
+}
+
+function resolvePreferenceSignal(
+  point: PreferencePoint,
+  points: PreferencePoint[],
+  votes: Record<string, PreferenceVote>
+): PreferenceSignal {
+  const direct = votes[point.id];
+  if (direct) {
+    return direct;
+  }
+
+  const similarLiked = points.some(
+    (candidate) => votes[candidate.id] === "like" && areSimilarPoints(point, candidate)
+  );
+  if (similarLiked) {
+    return "similar-like";
+  }
+
+  const similarDisliked = points.some(
+    (candidate) =>
+      votes[candidate.id] === "dislike" && areSimilarPoints(point, candidate)
+  );
+  if (similarDisliked) {
+    return "similar-dislike";
+  }
+
+  return null;
+}
+
+function areSimilarPoints(a: PreferencePoint, b: PreferencePoint) {
+  if (a.id === b.id) {
+    return false;
+  }
+  if (a.kind === b.kind) {
+    return true;
+  }
+  return a.tags.some((tag) => b.tags.includes(tag));
+}
+
+function preferenceSignalLabel(signal: PreferenceSignal) {
+  if (signal === "like") {
+    return "선호";
+  }
+  if (signal === "dislike") {
+    return "비선호";
+  }
+  if (signal === "similar-like") {
+    return "비슷한 선호";
+  }
+  if (signal === "similar-dislike") {
+    return "비슷한 비선호";
+  }
+  return "미분류";
+}
+
+function preferenceMapTone(signal: PreferenceSignal) {
+  if (signal === "like") {
+    return "bg-[#73b89e] text-white shadow-[0_3px_10px_rgba(95,114,95,0.22)]";
+  }
+  if (signal === "similar-like") {
+    return "bg-[#dff3eb] text-moss shadow-[0_3px_8px_rgba(95,114,95,0.14)]";
+  }
+  if (signal === "dislike") {
+    return "bg-[#d978a6] text-white shadow-[0_3px_10px_rgba(217,120,166,0.24)]";
+  }
+  if (signal === "similar-dislike") {
+    return "bg-[#f7d6e6] text-tide shadow-[0_3px_8px_rgba(217,120,166,0.14)]";
+  }
+  return "bg-white text-ink/58 shadow-[0_3px_8px_rgba(23,26,24,0.16)]";
+}
+
+async function resolveLocationInput(
+  rawText: string,
+  currentLocation: Location | null
+) {
+  const normalized = normalizeLocationText(rawText);
+  if (
+    currentLocation &&
+    ["현재위치", "내위치", "currentlocation"].includes(normalized)
+  ) {
+    return {
+      location: currentLocation,
+      source: "browser-geolocation"
+    };
+  }
+
+  return geocodeLocation(rawText.trim());
+}
+
+function normalizeLocationText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, "");
+}
+
+function buildPlanningText(
+  current: string,
+  activeMood: string,
+  votes: Record<string, PreferenceVote>,
+  points: PreferencePoint[]
+) {
+  const liked = points.filter((item) => votes[item.id] === "like").map(
+    (item) => item.name
+  );
+  const disliked = points.filter((item) => votes[item.id] === "dislike").map(
+    (item) => item.name
+  );
+  const likedTypes = preferenceTypeSummary(points, votes, "like");
+  const dislikedTypes = preferenceTypeSummary(points, votes, "dislike");
+  const moodPreset = MOOD_PRESETS.find((mood) => mood.label === activeMood);
+  const additions = [
+    `컨디션 기준: ${moodPreset ? moodPreset.sentence : activeMood}`
+  ];
+
+  if (liked.length > 0) {
+    additions.push(`선호하는 근처 장소: ${liked.join(", ")}`);
+  }
+  if (disliked.length > 0) {
+    additions.push(`피하고 싶은 근처 장소: ${disliked.join(", ")}`);
+  }
+  if (likedTypes.length > 0) {
+    additions.push(`선호하는 장소 유형/태그: ${likedTypes.join(", ")}`);
+  }
+  if (dislikedTypes.length > 0) {
+    additions.push(`피하고 싶은 장소 유형/태그: ${dislikedTypes.join(", ")}`);
+  }
+
+  return [current.trim(), additions.join("\n")].filter(Boolean).join("\n\n");
+}
+
+function preferenceTypeSummary(
+  points: PreferencePoint[],
+  votes: Record<string, PreferenceVote>,
+  vote: PreferenceVote
+) {
+  const values = points.flatMap((point) =>
+    votes[point.id] === vote ? [point.kind, ...point.tags] : []
+  );
+  return Array.from(new Set(values)).slice(0, 8);
 }
 
 function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
@@ -753,7 +2231,7 @@ function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-[#f6f8f4] p-3">
+    <div className="rounded-2xl bg-[#fff9ed] p-3">
       <p className="text-xs font-semibold text-ink/42">{label}</p>
       <p className="mt-1 truncate text-sm font-semibold">{value}</p>
     </div>
@@ -762,7 +2240,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function InfoCard({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-start gap-2 rounded-2xl bg-white p-3 text-sm leading-6 text-ink/70 shadow-sm ring-1 ring-ink/10">
+    <div className="flex items-start gap-2 rounded-2xl bg-white p-3 text-sm leading-6 text-ink/70 shadow-[0_8px_22px_rgba(23,26,24,0.035)] ring-1 ring-ink/8">
       <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={17} aria-hidden />
       <span>{children}</span>
     </div>
@@ -811,9 +2289,13 @@ function loadKakaoMaps(kakaoJsKey: string) {
 
     if (existingScript) {
       existingScript.addEventListener("load", handleLoad, { once: true });
-      existingScript.addEventListener("error", () => reject(new Error("Kakao Maps SDK failed.")), {
-        once: true
-      });
+      existingScript.addEventListener(
+        "error",
+        () => reject(createKakaoSdkError(kakaoJsKey)),
+        {
+          once: true
+        }
+      );
       return;
     }
 
@@ -824,11 +2306,25 @@ function loadKakaoMaps(kakaoJsKey: string) {
       kakaoJsKey
     )}&autoload=false`;
     script.onload = handleLoad;
-    script.onerror = () => reject(new Error("Kakao Maps SDK failed."));
+    script.onerror = () => {
+      window.__kakaoMapsPromise = undefined;
+      script.remove();
+      reject(createKakaoSdkError(kakaoJsKey));
+    };
     document.head.appendChild(script);
   });
 
   return window.__kakaoMapsPromise;
+}
+
+function createKakaoSdkError(kakaoJsKey: string) {
+  return new Error(
+    [
+      "Kakao Maps SDK failed.",
+      `url=https://dapi.kakao.com/v2/maps/sdk.js?appkey=${kakaoJsKey.slice(0, 6)}...&autoload=false`,
+      "Check Kakao JavaScript key, Web platform domain http://localhost:4000, and browser/network blocking."
+    ].join(" ")
+  );
 }
 
 function renderKakaoMap(container: HTMLDivElement, map: MapViewModel) {
@@ -884,9 +2380,9 @@ function renderKakaoMap(container: HTMLDivElement, map: MapViewModel) {
       center: new kakao.maps.LatLng(zone.center.lat, zone.center.lng),
       radius: zone.radius_meters,
       strokeWeight: 1,
-      strokeColor: "#d96f5d",
+      strokeColor: "#d978a6",
       strokeOpacity: 0.65,
-      fillColor: "#d96f5d",
+      fillColor: "#d978a6",
       fillOpacity: 0.18
     });
   });
@@ -894,6 +2390,89 @@ function renderKakaoMap(container: HTMLDivElement, map: MapViewModel) {
   if (map.markers.length > 0 || map.polylines.length > 0) {
     kakaoMap.setBounds(bounds);
   }
+}
+
+function renderPreferenceKakaoMap(
+  container: HTMLDivElement,
+  points: PreferencePoint[],
+  votes: Record<string, PreferenceVote>,
+  selectedPointId: string,
+  onSelect: (id: string) => void
+) {
+  const kakao = window.kakao;
+  container.innerHTML = "";
+
+  const centerPoint = averagePoint(points);
+  const kakaoMap = new kakao.maps.Map(container, {
+    center: new kakao.maps.LatLng(centerPoint.lat, centerPoint.lng),
+    level: 5
+  });
+  const bounds = new kakao.maps.LatLngBounds();
+
+  points.forEach((point) => {
+    const position = new kakao.maps.LatLng(point.lat, point.lng);
+    bounds.extend(position);
+    const signal = resolvePreferenceSignal(point, points, votes);
+    const overlayElement = createPreferenceOverlayElement(
+      point,
+      signal,
+      point.id === selectedPointId,
+      onSelect
+    );
+
+    new kakao.maps.CustomOverlay({
+      map: kakaoMap,
+      position,
+      content: overlayElement,
+      xAnchor: 0.5,
+      yAnchor: 0.5,
+      zIndex: point.id === selectedPointId ? 20 : 10
+    });
+  });
+
+  if (points.length > 1) {
+    kakaoMap.setBounds(bounds);
+  }
+}
+
+function createPreferenceOverlayElement(
+  point: PreferencePoint,
+  signal: PreferenceSignal,
+  selected: boolean,
+  onSelect: (id: string) => void
+) {
+  const element = document.createElement("button");
+  element.type = "button";
+  element.ariaLabel = point.name;
+  element.className = [
+    "flex items-center justify-center rounded-full transition",
+    selected ? "h-8 w-8 scale-110" : "h-7 w-7",
+    preferenceMapTone(signal)
+  ].join(" ");
+  element.onclick = () => onSelect(point.id);
+  element.innerHTML =
+    '<span class="flex h-full w-full items-center justify-center rounded-full"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></span>';
+
+  return element;
+}
+
+function averagePoint(points: PreferencePoint[]) {
+  if (points.length === 0) {
+    return { lat: 37.5665, lng: 126.978 };
+  }
+
+  const totals = points.reduce(
+    (sum, point) => ({
+      lat: sum.lat + point.lat,
+      lng: sum.lng + point.lng
+    }),
+    { lat: 0, lng: 0 }
+  );
+
+  return {
+    lat: totals.lat / points.length,
+    lng: totals.lng / points.length
+  };
 }
 
 function escapeHtml(value: string) {
@@ -907,12 +2486,12 @@ function escapeHtml(value: string) {
 
 function routeStroke(emotionLevel: string, selected: boolean) {
   if (selected) {
-    return "#4f8a9b";
+    return "#d978a6";
   }
   if (emotionLevel === "stressful") {
-    return "#d96f5d";
+    return "#d96f9a";
   }
-  return "#7e9375";
+  return "#5f725f";
 }
 
 function routeLabel(routeId: string) {
@@ -956,11 +2535,11 @@ function routeProviderLabel(route: RouteCandidate) {
   if (route.provider === "tmap-mixed") {
     return "Tmap 혼합";
   }
-  return "추정 fallback";
+  return "추정 경로";
 }
 
 function routeReliabilityLabel(route: RouteCandidate, usesKakaoPoi: boolean) {
-  const poiLabel = usesKakaoPoi ? "실제 장소" : "demo 장소";
+  const poiLabel = usesKakaoPoi ? "실제 장소" : "예시 장소";
   const routeLabelText =
     route.provider === "tmap-mixed"
       ? "일부 추정 경로"

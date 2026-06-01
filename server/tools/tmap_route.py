@@ -12,6 +12,8 @@ from tools.kakao_local import _get_env_value
 
 TMAP_PEDESTRIAN_URL = "https://apis.openapi.sk.com/tmap/routes/pedestrian"
 TMAP_TRANSIT_URL = "https://apis.openapi.sk.com/transit/routes"
+_POST_JSON_CACHE: dict[str, dict] = {}
+_POST_JSON_CACHE_LIMIT = 120
 
 
 @dataclass(frozen=True)
@@ -172,6 +174,10 @@ def _fetch_transit_leg(
 
 
 def _post_json(url: str, app_key: str, body: dict) -> dict | None:
+    cache_key = _cache_key(url, body)
+    if cache_key in _POST_JSON_CACHE:
+        return _POST_JSON_CACHE[cache_key]
+
     request = Request(
         url,
         data=json.dumps(body).encode("utf-8"),
@@ -185,9 +191,21 @@ def _post_json(url: str, app_key: str, body: dict) -> dict | None:
 
     try:
         with urlopen(request, timeout=4) as response:
-            return json.loads(response.read().decode("utf-8"))
+            payload = json.loads(response.read().decode("utf-8"))
+            _remember_post_json(cache_key, payload)
+            return payload
     except (HTTPError, URLError, TimeoutError, OSError, ValueError):
         return None
+
+
+def _cache_key(url: str, body: dict) -> str:
+    return f"{url}:{json.dumps(body, sort_keys=True, ensure_ascii=False)}"
+
+
+def _remember_post_json(cache_key: str, payload: dict) -> None:
+    if len(_POST_JSON_CACHE) >= _POST_JSON_CACHE_LIMIT:
+        _POST_JSON_CACHE.pop(next(iter(_POST_JSON_CACHE)))
+    _POST_JSON_CACHE[cache_key] = payload
 
 
 def _compose_route(

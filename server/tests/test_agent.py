@@ -1,17 +1,29 @@
 from agent.daily_planning_agent import DailyPlanningAgent
-from api.schemas import Coordinate, Constraints, EmotionState, Location, PlanRequest, PoiCandidate
+from api.schemas import (
+    Coordinate,
+    Constraints,
+    EmotionState,
+    Location,
+    PlanRequest,
+    PoiCandidate,
+    RouteCandidate,
+    RouteSegment,
+)
 from planner.evaluate_tradeoffs import evaluate_tradeoffs
 from tools.emotion_score import score_route_for_emotion
 from tools.landmark_emotion_prior import LANDMARK_PRIORS
 from tools.route_path import build_route_candidates
 from tools.search_poi import search_poi_candidates
 from tools.extract_intent import extract_intent
+from tools.extract_route_locations import extract_route_locations
+from tools.geocode import geocode_location
 
 
 def setup_module() -> None:
     import os
 
     os.environ["HYS_DISABLE_TMAP"] = "1"
+    os.environ["HYS_DISABLE_LLM"] = "1"
 
 
 def test_tired_user_gets_lower_stress_route() -> None:
@@ -37,6 +49,24 @@ def test_recovery_request_adds_recovery_poi_and_recommendation() -> None:
 
     assert any(stop.category == "recovery" for stop in plan.stops)
     assert any(item.kind == "recovery" for item in plan.recommendations)
+
+
+def test_tired_user_gets_optional_recovery_route_candidate() -> None:
+    plan = _run("I need to print before 5. I am tired.")
+
+    assert any(
+        any(stop.category == "recovery" for stop in route.stops)
+        for route in plan.routes
+    )
+
+
+def test_hurried_user_does_not_get_optional_recovery_detour() -> None:
+    plan = _run("I need to print before 5. I am in a hurry.")
+
+    assert all(
+        all(stop.category != "recovery" for stop in route.stops)
+        for route in plan.routes
+    )
 
 
 def test_mock_routes_expose_reliability_metadata() -> None:
@@ -137,6 +167,36 @@ def test_kakao_poi_falls_back_to_mock_when_provider_has_no_result(monkeypatch) -
     )
 
     assert candidates[0].source_confidence == "mock"
+
+
+def test_geocode_uses_known_location_without_api_key(monkeypatch) -> None:
+    monkeypatch.delenv("KAKAO_REST_API_KEY", raising=False)
+
+    result = geocode_location("집")
+
+    assert result is not None
+    location, source = result
+    assert source == "known"
+    assert location.label == "집"
+
+
+def test_route_location_extraction_handles_korean_from_to(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    hints = extract_route_locations("성균관대학교에서 서울역까지 18시 전 도착. 조용한 카페 경유 가능.")
+
+    assert hints.origin_text == "성균관대학교"
+    assert hints.destination_text == "서울역"
+    assert hints.source == "rules"
+
+
+def test_route_location_extraction_allows_missing_origin(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    hints = extract_route_locations("집에 가기 전에 조용한 카페에 들르고 싶다")
+
+    assert hints.origin_text is None
+    assert hints.destination_text == "집"
 
 
 def test_tmap_pedestrian_route_is_normalized(monkeypatch) -> None:
@@ -305,6 +365,79 @@ def test_landmark_priors_only_use_allowed_tags() -> None:
 
     for prior in LANDMARK_PRIORS.values():
         assert set(prior.emotion_tags).issubset(allowed_tags)
+
+
+def test_tmap_score_uses_stop_landmark_priors() -> None:
+    emotion = EmotionState(
+        primary="tired",
+        walking_tolerance="low",
+        crowd_tolerance="low",
+        transfer_tolerance="medium",
+        time_pressure_tolerance="medium",
+        recovery_need="high",
+    )
+    base_route = RouteCandidate(
+        id="route-tmap-base",
+        provider="tmap-pedestrian",
+        route_mode="walk",
+        stops=[],
+        walking_minutes=12,
+        transfer_count=0,
+        crowd_level="low",
+        estimated_minutes=20,
+        real_duration_minutes=20,
+        estimated_duration_minutes=None,
+        distance_meters=900,
+        fare=0,
+        polyline=[],
+        segments=[
+            RouteSegment(
+                mode="walk",
+                minutes=12,
+                landmark_type="side_street",
+                emotion_tags=["walkable"],
+            )
+        ],
+    )
+    cafe_route = base_route.model_copy(
+        update={
+            "id": "route-tmap-cafe",
+            "stops": [
+                PoiCandidate(
+                    id="poi-cafe-test",
+                    name="Quiet Table Cafe",
+                    category="recovery",
+                    landmark_type="cafe",
+                    emotion_tags=["calm", "recovery"],
+                    lat=37.5876,
+                    lng=126.9926,
+                )
+            ],
+        }
+    )
+    school_route = base_route.model_copy(
+        update={
+            "id": "route-tmap-school",
+            "stops": [
+                PoiCandidate(
+                    id="poi-school-test",
+                    name="Busy School Gate",
+                    category="school",
+                    landmark_type="school",
+                    emotion_tags=["crowded", "stressful"],
+                    lat=37.5876,
+                    lng=126.9926,
+                )
+            ],
+        }
+    )
+
+    cafe_score = score_route_for_emotion(cafe_route, emotion)
+    school_score = score_route_for_emotion(school_route, emotion)
+
+    assert cafe_score.total_emotional_cost < school_score.total_emotional_cost
+    assert cafe_score.recovery_bonus > school_score.recovery_bonus
+    assert school_score.crowd_cost > cafe_score.crowd_cost
 
 
 def test_emotion_score_penalizes_high_crowd_for_tired_user() -> None:

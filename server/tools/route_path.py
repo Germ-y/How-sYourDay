@@ -1,4 +1,4 @@
-from api.schemas import Coordinate, PoiCandidate, RouteCandidate, RouteSegment
+from api.schemas import Coordinate, EmotionState, PoiCandidate, RouteCandidate, RouteSegment
 from tools.tmap_route import build_tmap_route_candidates
 
 
@@ -10,22 +10,77 @@ def build_route_candidates(
     stops: list[PoiCandidate],
     origin: Coordinate | None = None,
     destination: Coordinate | None = None,
+    emotion: EmotionState | None = None,
+    optional_stops: list[PoiCandidate] | None = None,
 ) -> list[RouteCandidate]:
     origin_point = origin or DEFAULT_ORIGIN
     destination_point = destination or DEFAULT_DESTINATION
-    tmap_routes = build_tmap_route_candidates(
-        stops=stops,
-        origin=origin_point,
-        destination=destination_point,
-    )
+    variants = _stop_variants(stops, emotion, optional_stops or [])
+    tmap_routes = []
+    for suffix, variant_stops in variants:
+        tmap_routes.extend(
+            _tag_variant_routes(
+                build_tmap_route_candidates(
+                    stops=variant_stops,
+                    origin=origin_point,
+                    destination=destination_point,
+                ),
+                suffix,
+            )
+        )
     if tmap_routes:
         return tmap_routes
 
-    return build_mock_route_candidates(
-        stops=stops,
-        origin=origin_point,
-        destination=destination_point,
+    routes = []
+    for suffix, variant_stops in variants:
+        routes.extend(
+            _tag_variant_routes(
+                build_mock_route_candidates(
+                    stops=variant_stops,
+                    origin=origin_point,
+                    destination=destination_point,
+                ),
+                suffix,
+            )
+        )
+    return routes
+
+
+def _stop_variants(
+    required_stops: list[PoiCandidate],
+    emotion: EmotionState | None,
+    optional_stops: list[PoiCandidate],
+) -> list[tuple[str, list[PoiCandidate]]]:
+    variants = [("base", required_stops)]
+    if not emotion or emotion.time_pressure_tolerance == "high":
+        return variants
+
+    recovery_stop = next(
+        (stop for stop in optional_stops if stop.category == "recovery"),
+        None,
     )
+    if recovery_stop is None:
+        return variants
+
+    variants.append(("recovery", [*required_stops, recovery_stop]))
+    return variants
+
+
+def _tag_variant_routes(
+    routes: list[RouteCandidate],
+    suffix: str,
+) -> list[RouteCandidate]:
+    if suffix == "base":
+        return routes
+
+    return [
+        route.model_copy(
+            update={
+                "id": f"{route.id}-{suffix}",
+            }
+        )
+        for route in routes
+    ]
 
 
 def build_mock_route_candidates(

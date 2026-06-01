@@ -18,6 +18,25 @@ class PlanRequest(BaseModel):
     destination: Location | None = None
 
 
+class GeocodeRequest(BaseModel):
+    query: str = Field(min_length=1)
+
+
+class GeocodeResponse(BaseModel):
+    location: Location
+    source: str
+
+
+class RouteExtractionRequest(BaseModel):
+    user_text: str = Field(min_length=1)
+
+
+class RouteExtractionResponse(BaseModel):
+    origin_text: str | None = None
+    destination_text: str | None = None
+    source: str
+
+
 class FeedbackRequest(BaseModel):
     route_id: str
     liked: bool
@@ -79,6 +98,16 @@ class PoiCandidate(BaseModel):
     lng: float
     distance_meters: int | None = None
     source_confidence: str = "mock"
+
+
+class PreferencePointsRequest(BaseModel):
+    origin: Location
+    radius_meters: int = Field(default=1800, ge=100, le=5000)
+
+
+class PreferencePointsResponse(BaseModel):
+    points: list[PoiCandidate]
+    source: str
 
 
 class RouteSegment(BaseModel):

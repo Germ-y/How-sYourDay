@@ -7,6 +7,22 @@ export type Location = Coordinate & {
   label: string;
 };
 
+export type GeocodeResult = {
+  location: Location;
+  source: string;
+};
+
+export type RouteExtractionResult = {
+  origin_text: string | null;
+  destination_text: string | null;
+  source: string;
+};
+
+export type PreferencePointsResult = {
+  points: PoiCandidate[];
+  source: string;
+};
+
 export type EmotionState = {
   primary: string;
   walking_tolerance: string;
@@ -200,6 +216,71 @@ export async function requestDailyPlan(
 
   if (!response.ok) {
     throw new Error(`API request failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function geocodeLocation(query: string): Promise<GeocodeResult> {
+  const response = await fetch(`${API_BASE_URL}/geocode`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ query })
+  });
+
+  if (!response.ok) {
+    let message = `Location lookup failed with ${response.status}`;
+    try {
+      const body = await response.json();
+      if (typeof body.detail === "string") {
+        message = body.detail;
+      }
+    } catch {
+      // Keep the status-based fallback message.
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function extractRouteLocations(
+  userText: string
+): Promise<RouteExtractionResult> {
+  const response = await fetch(`${API_BASE_URL}/extract-route`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ user_text: userText })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Route extraction failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function fetchPreferencePoints(
+  origin: Location,
+  radiusMeters = 1800
+): Promise<PreferencePointsResult> {
+  const response = await fetch(`${API_BASE_URL}/preference-points`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      origin,
+      radius_meters: radiusMeters
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Preference points request failed with ${response.status}`);
   }
 
   return response.json();

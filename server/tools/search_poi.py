@@ -1,4 +1,4 @@
-from api.schemas import Location, PoiCandidate, Task
+from api.schemas import EmotionState, Location, PoiCandidate, Task
 from tools.kakao_local import search_kakao_poi_candidates
 
 
@@ -37,8 +37,8 @@ MOCK_POIS = {
             provider_id="mock-cafe-1",
             name="Quiet Table Cafe",
             category="recovery",
-            landmark_type="side_street",
-            emotion_tags=["calm", "recovery"],
+            landmark_type="cafe",
+            emotion_tags=["calm", "recovery", "familiar"],
             lat=37.5876,
             lng=126.9926,
             distance_meters=260,
@@ -63,3 +63,35 @@ def search_poi_candidates(tasks: list[Task], origin: Location) -> list[PoiCandid
         candidates.extend(MOCK_POIS.get(task.kind, MOCK_POIS["recovery"]))
 
     return candidates
+
+
+def search_optional_recovery_poi(
+    emotion: EmotionState,
+    origin: Location,
+    existing_stops: list[PoiCandidate],
+) -> list[PoiCandidate]:
+    if any(stop.category == "recovery" for stop in existing_stops):
+        return []
+    if not _should_offer_recovery_stop(emotion):
+        return []
+
+    task = Task(
+        kind="recovery",
+        label="Optional recovery stop",
+        poi_query="quiet cafe",
+        priority=99,
+        required=False,
+    )
+    kakao_candidates = search_kakao_poi_candidates([task], origin)
+    if kakao_candidates:
+        return kakao_candidates[:1]
+
+    return MOCK_POIS["recovery"][:1]
+
+
+def _should_offer_recovery_stop(emotion: EmotionState) -> bool:
+    return (
+        emotion.recovery_need == "high"
+        or emotion.primary in {"tired", "anxious"}
+        or emotion.crowd_tolerance == "low"
+    ) and emotion.time_pressure_tolerance != "high"

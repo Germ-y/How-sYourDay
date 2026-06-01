@@ -10,6 +10,8 @@ from tools.landmark_emotion_prior import get_landmark_emotion_prior
 
 
 KAKAO_KEYWORD_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/keyword.json"
+_KAKAO_DOCUMENT_CACHE: dict[str, list[dict]] = {}
+_KAKAO_DOCUMENT_CACHE_LIMIT = 160
 TASK_QUERY_OVERRIDES = {
     "print": "인쇄소",
     "clinic": "병원",
@@ -48,6 +50,10 @@ def _fetch_kakao_documents(
         "sort": "distance",
         "size": 3,
     }
+    cache_key = json.dumps(params, sort_keys=True, ensure_ascii=False)
+    if cache_key in _KAKAO_DOCUMENT_CACHE:
+        return _KAKAO_DOCUMENT_CACHE[cache_key]
+
     url = f"{KAKAO_KEYWORD_SEARCH_URL}?{urlencode(params)}"
     request = Request(url, headers={"Authorization": f"KakaoAK {api_key}"})
 
@@ -58,7 +64,17 @@ def _fetch_kakao_documents(
         return []
 
     documents = payload.get("documents", [])
-    return documents if isinstance(documents, list) else []
+    if not isinstance(documents, list):
+        return []
+
+    _remember_kakao_documents(cache_key, documents)
+    return documents
+
+
+def _remember_kakao_documents(cache_key: str, documents: list[dict]) -> None:
+    if len(_KAKAO_DOCUMENT_CACHE) >= _KAKAO_DOCUMENT_CACHE_LIMIT:
+        _KAKAO_DOCUMENT_CACHE.pop(next(iter(_KAKAO_DOCUMENT_CACHE)))
+    _KAKAO_DOCUMENT_CACHE[cache_key] = documents
 
 
 def _normalize_document(document: dict, task: Task) -> PoiCandidate:
@@ -97,7 +113,7 @@ def _infer_landmark_type(document: dict, task: Task) -> str:
     if any(marker in combined for marker in ["강", "한강", "하천"]):
         return "river"
     if task.kind == "recovery":
-        return "side_street"
+        return "cafe"
     return "commercial"
 
 
