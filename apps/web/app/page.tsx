@@ -939,15 +939,15 @@ export default function HomePage() {
 
               <div className="h-px bg-ink/8" />
 
-              <section className="min-w-0 overflow-hidden rounded-[22px] bg-[#f3fbf7] p-3 ring-1 ring-moss/18">
-                <div className="flex min-w-0 items-start justify-between gap-3">
+              <section className="w-full min-w-0 max-w-full overflow-hidden rounded-[22px] bg-[#f3fbf7] p-3 ring-1 ring-moss/18">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                   <ComposerTitle
                     icon={<Navigation size={17} aria-hidden />}
                     label="경로 확인"
                     support={`${locationStatus} · 직접 수정 가능`}
                   />
                   <button
-                    className="min-h-9 shrink-0 rounded-xl bg-white px-3 text-xs font-semibold text-moss shadow-sm ring-1 ring-moss/15 transition hover:bg-[#ddf3eb] active:scale-[0.98]"
+                    className="min-h-9 max-w-[86px] shrink-0 rounded-xl bg-white px-3 text-xs font-semibold text-moss shadow-sm ring-1 ring-moss/15 transition hover:bg-[#ddf3eb] active:scale-[0.98]"
                     type="button"
                     onClick={handleUseCurrentLocation}
                   >
@@ -956,13 +956,9 @@ export default function HomePage() {
                 </div>
 
                 <div className="mt-3 min-w-0 overflow-hidden rounded-2xl bg-white p-3 shadow-sm ring-1 ring-moss/14">
-                  <div className="grid min-w-0 grid-cols-[24px_minmax(0,1fr)] gap-3">
-                    <div className="flex flex-col items-center pt-3">
-                      <span className="h-2.5 w-2.5 rounded-full bg-moss" />
-                      <span className="my-1 h-12 w-px bg-ink/12" />
-                      <span className="h-2.5 w-2.5 rounded-full bg-tide" />
-                    </div>
-                    <div className="grid min-w-0 gap-3">
+                  <div className="grid min-w-0 gap-3">
+                    <div className="grid min-w-0 grid-cols-[12px_minmax(0,1fr)] items-start gap-2">
+                      <span className="mt-8 h-2.5 w-2.5 rounded-full bg-moss" />
                       <LocationSearchInput
                         active={activeLocationField === "origin"}
                         candidates={originCandidates}
@@ -985,6 +981,9 @@ export default function HomePage() {
                           handleLocationCandidateSelect("origin", candidate)
                         }
                       />
+                    </div>
+                    <div className="grid min-w-0 grid-cols-[12px_minmax(0,1fr)] items-start gap-2">
+                      <span className="mt-8 h-2.5 w-2.5 rounded-full bg-tide" />
                       <LocationSearchInput
                         active={activeLocationField === "destination"}
                         candidates={destinationCandidates}
