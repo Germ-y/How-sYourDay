@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from auth.database import create_tables
+from auth.router import router as auth_router
 from agent.daily_planning_agent import DailyPlanningAgent
 from api.schemas import (
     FeedbackRequest,
@@ -21,6 +23,9 @@ from tools.geocode import geocode_location
 from tools.preference_points import search_preference_points
 
 app = FastAPI(title="How's Your Day API")
+
+create_tables()
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,

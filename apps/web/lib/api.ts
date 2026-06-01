@@ -299,3 +299,57 @@ export async function sendRouteFeedback(payload: FeedbackPayload): Promise<void>
     throw new Error(`Feedback request failed with ${response.status}`);
   }
 }
+
+// ── 인증 API ─────────────────────────────────────────────────
+
+export const TOKEN_KEY = "hows-your-day.access-token.v1";
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  nickname: string;
+};
+
+export async function signUp(
+  email: string,
+  password: string,
+  nickname: string
+): Promise<AuthUser> {
+  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, nickname })
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail ?? "회원가입에 실패했습니다");
+  }
+  return response.json();
+}
+
+export async function logIn(
+  email: string,
+  password: string
+): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail ?? "로그인에 실패했습니다");
+  }
+  const data = await response.json();
+  return data.access_token as string;
+}
+
+export async function fetchMe(token: string): Promise<AuthUser> {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    throw new Error("인증 실패");
+  }
+  return response.json();
+}

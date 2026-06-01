@@ -20,3 +20,4 @@ server/memory/preferences.json
 Thumbs.db
 .idea/
 .vscode/
+server/users.db

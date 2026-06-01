@@ -29,10 +29,15 @@ import {
 } from "lucide-react";
 import {
   extractRouteLocations,
+  fetchMe,
   fetchPreferencePoints,
   geocodeLocation,
+  logIn,
   requestDailyPlan,
   sendRouteFeedback,
+  signUp,
+  TOKEN_KEY,
+  type AuthUser,
   type Coordinate,
   type DailyPlan,
   type EmotionCost,
@@ -132,6 +137,47 @@ type PreferencePoint = {
 const SWIPE_THRESHOLD = 86;
 
 export default function HomePage() {
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    const token = window.localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      setAuthReady(true);
+      return;
+    }
+    fetchMe(token)
+      .then((user) => setAuthUser(user))
+      .catch(() => window.localStorage.removeItem(TOKEN_KEY))
+      .finally(() => setAuthReady(true));
+  }, []);
+
+  function handleAuthSuccess(token: string, user: AuthUser) {
+    window.localStorage.setItem(TOKEN_KEY, token);
+    setAuthUser(user);
+  }
+
+  function handleLogout() {
+    window.localStorage.removeItem(TOKEN_KEY);
+    setAuthUser(null);
+  }
+
+  if (!authReady) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#fff9ed]">
+        <span className="text-sm font-semibold text-ink/42">불러오는 중</span>
+      </main>
+    );
+  }
+
+  if (!authUser) {
+    return <AuthPage onAuthSuccess={handleAuthSuccess} />;
+  }
+
+  return <AppShell user={authUser} onLogout={handleLogout} />;
+}
+
+function AppShell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [text, setText] = useState(starterText);
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -616,6 +662,8 @@ export default function HomePage() {
             destinationText={destinationText}
             originText={originText}
             plan={plan}
+            user={user}
+            onLogout={onLogout}
             onOpenPlanner={() => setActiveView("planner")}
           />
         )}
@@ -799,18 +847,22 @@ function ProfilePage({
   destinationText,
   originText,
   plan,
+  user,
+  onLogout,
   onOpenPlanner
 }: {
   activeMood: string;
   destinationText: string;
   originText: string;
   plan: DailyPlan | null;
+  user: AuthUser;
+  onLogout: () => void;
   onOpenPlanner: () => void;
 }) {
   return (
     <section className="grid gap-4 px-5 py-5 lg:grid-cols-[360px_1fr] lg:px-0">
       <div className="grid gap-4 lg:self-start lg:sticky lg:top-20">
-        <AccountCard />
+        <AccountCard user={user} onLogout={onLogout} />
         <article className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_46px_rgba(23,26,24,0.06)] ring-1 ring-ink/8">
           <div className="bg-[#fde2ef] px-5 py-5">
             <p className="text-sm font-semibold text-tide">나의 이동 프로필</p>
@@ -875,7 +927,7 @@ function ProfilePage({
   );
 }
 
-function AccountCard() {
+function AccountCard({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   return (
     <article className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_46px_rgba(23,26,24,0.06)] ring-1 ring-ink/8">
       <div className="bg-[#ddf3eb] px-5 py-5">
@@ -887,7 +939,7 @@ function AccountCard() {
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-moss">내 정보</span>
               <span className="mt-1 block truncate text-2xl font-semibold leading-tight">
-                {PROFILE_PLACEHOLDER.nickname}
+                {user.nickname}
               </span>
             </span>
           </div>
@@ -895,6 +947,7 @@ function AccountCard() {
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/78 text-ink/48 transition active:scale-95"
             type="button"
             aria-label="로그아웃"
+            onClick={onLogout}
           >
             <LogOut size={17} aria-hidden />
           </button>
@@ -905,7 +958,7 @@ function AccountCard() {
         <AccountRow
           icon={<Mail size={16} aria-hidden />}
           label="이메일"
-          value={PROFILE_PLACEHOLDER.email}
+          value={user.email}
         />
       </div>
     </article>
@@ -2547,6 +2600,142 @@ function durationLabel(route: RouteCandidate) {
     return `${route.real_duration_minutes}분`;
   }
   return `${route.estimated_duration_minutes ?? route.estimated_minutes}분 추정`;
+}
+
+// ── 인증 화면 ─────────────────────────────────────────────────
+
+function AuthPage({
+  onAuthSuccess
+}: {
+  onAuthSuccess: (token: string, user: AuthUser) => void;
+}) {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (mode === "signup") {
+        if (!nickname.trim()) {
+          setError("닉네임을 입력해주세요");
+          return;
+        }
+        const user = await signUp(email, password, nickname);
+        const token = await logIn(email, password);
+        onAuthSuccess(token, user);
+      } else {
+        const token = await logIn(email, password);
+        const user = await fetchMe(token);
+        onAuthSuccess(token, user);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "오류가 발생했습니다");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#fff9ed] px-5 py-12">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <span className="flex h-14 w-14 items-center justify-center rounded-[22px] bg-white text-tide shadow-[0_12px_30px_rgba(23,26,24,0.10)] ring-1 ring-ink/8">
+            <MapPinned size={26} aria-hidden />
+          </span>
+          <div className="text-center">
+            <p className="text-xs font-semibold text-tide">How's Your Day</p>
+            <h1 className="mt-1 text-2xl font-semibold leading-tight">감정 기반 경로 추천</h1>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-[28px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8">
+          <div className="grid grid-cols-2 border-b border-ink/8 bg-[#fffdf8]">
+            <button
+              className={`py-4 text-sm font-semibold transition ${
+                mode === "login"
+                  ? "border-b-2 border-tide text-tide"
+                  : "text-ink/42 hover:text-ink/62"
+              }`}
+              type="button"
+              onClick={() => { setMode("login"); setError(null); }}
+            >
+              로그인
+            </button>
+            <button
+              className={`py-4 text-sm font-semibold transition ${
+                mode === "signup"
+                  ? "border-b-2 border-tide text-tide"
+                  : "text-ink/42 hover:text-ink/62"
+              }`}
+              type="button"
+              onClick={() => { setMode("signup"); setError(null); }}
+            >
+              회원가입
+            </button>
+          </div>
+
+          <form className="grid gap-4 p-6" onSubmit={handleSubmit}>
+            {mode === "signup" && (
+              <label className="block">
+                <span className="text-xs font-semibold text-ink/46">닉네임</span>
+                <input
+                  className="mt-1.5 min-h-11 w-full rounded-xl border border-ink/10 bg-[#fffdf8] px-3 text-sm font-semibold outline-none transition placeholder:text-ink/35 focus:border-tide focus:bg-white"
+                  placeholder="예: 균이"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  required
+                />
+              </label>
+            )}
+            <label className="block">
+              <span className="text-xs font-semibold text-ink/46">이메일</span>
+              <input
+                className="mt-1.5 min-h-11 w-full rounded-xl border border-ink/10 bg-[#fffdf8] px-3 text-sm font-semibold outline-none transition placeholder:text-ink/35 focus:border-tide focus:bg-white"
+                type="email"
+                placeholder="user@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-ink/46">비밀번호</span>
+              <input
+                className="mt-1.5 min-h-11 w-full rounded-xl border border-ink/10 bg-[#fffdf8] px-3 text-sm font-semibold outline-none transition placeholder:text-ink/35 focus:border-tide focus:bg-white"
+                type="password"
+                placeholder="비밀번호 입력"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </label>
+
+            {error && (
+              <p className="rounded-2xl border border-coral/40 bg-[#fff7fb] p-3 text-sm text-coral">
+                {error}
+              </p>
+            )}
+
+            <button
+              className="mt-1 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 font-semibold text-white shadow-[0_8px_22px_rgba(23,26,24,0.14)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45"
+              type="submit"
+              disabled={isLoading}
+            >
+              {isLoading ? "처리 중" : mode === "login" ? "로그인" : "회원가입"}
+              {!isLoading && <ArrowRight size={18} aria-hidden />}
+            </button>
+          </form>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function distanceLabel(distanceMeters: number | null) {
