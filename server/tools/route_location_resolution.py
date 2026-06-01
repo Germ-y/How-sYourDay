@@ -257,6 +257,7 @@ def _select_candidate_by_score(
         address = _normalize(candidate.address or "")
         category = _normalize(candidate.category or "")
         score = 0
+        matched_terms = 0
 
         if label == query_normalized:
             score += 80
@@ -266,12 +267,23 @@ def _select_candidate_by_score(
             score += 34
 
         for term in terms:
+            term_matched = False
             if term in label:
                 score += 12
+                term_matched = True
             if term in address:
                 score += 8
+                term_matched = True
             if term in category:
                 score += 3
+                term_matched = True
+            if term_matched:
+                matched_terms += 1
+
+        if len(terms) >= 2:
+            score += matched_terms * 20
+            if matched_terms <= 1:
+                score -= 20
 
         if school_query:
             if "학교" in (candidate.category or ""):
@@ -340,8 +352,12 @@ def _origin_queries_from_text(user_text: str, origin_text: str | None) -> list[s
 def _destination_queries_from_text(
     user_text: str, destination_text: str | None
 ) -> list[str]:
+    context_areas = _destination_context_areas_from_text(user_text)
+    specific_destination = _specific_destination_hint_from_text(user_text)
     queries = [
-        _specific_destination_hint_from_text(user_text),
+        *_contextual_destination_queries(specific_destination, context_areas),
+        *_contextual_destination_queries(destination_text, context_areas),
+        specific_destination,
         destination_text,
         _destination_before_origin_hint_from_text(user_text),
     ]
@@ -350,6 +366,61 @@ def _destination_queries_from_text(
     for match in re.findall(r"(?:가서|하다가|그리고)\s*([^,.;\n]+?)(?:에서|까지|으로|로)", user_text):
         queries.append(_clean_query(match))
     return _unique_queries(queries)
+
+
+def _destination_context_areas_from_text(user_text: str) -> list[str]:
+    areas: list[str | None] = []
+
+    for match in re.findall(
+        r"(?:에서|부터)\s*([^,.;\n]+?)(?:까지|으로|로)\s*(?:가서|가고|갈|가야|가려고|이동|도착)",
+        user_text,
+    ):
+        areas.append(match)
+
+    for match in re.findall(
+        r"([^,.;\n]+?)(?:까지|으로|로)\s*(?:가서|가고|갈|가야|가려고|이동|도착)",
+        user_text,
+    ):
+        areas.append(match)
+
+    for match in re.findall(r"([^,.;\n]+?)\s*가서", user_text):
+        areas.append(match)
+
+    return _unique_queries(areas)
+
+
+def _contextual_destination_queries(
+    destination: str | None,
+    context_areas: list[str],
+) -> list[str]:
+    destination = _clean_query(destination)
+    if not destination:
+        return []
+
+    queries: list[str | None] = []
+    normalized_destination = _normalize(destination)
+    for area in context_areas:
+        cleaned_area = _clean_query(area)
+        if not cleaned_area:
+            continue
+        normalized_area = _normalize(cleaned_area)
+        if normalized_area in normalized_destination:
+            continue
+        aliases = [*_area_aliases(cleaned_area), cleaned_area]
+        for alias in aliases:
+            queries.append(f"{alias} {destination}")
+            queries.append(f"{destination} {alias}")
+
+    return _unique_queries(queries)
+
+
+def _area_aliases(area: str) -> list[str]:
+    aliases: list[str | None] = []
+    compact = re.sub(r"\s+", "", area)
+    aliases.append(re.sub(r"(입구)?역(?:\d+호선)?$", "", compact))
+    aliases.append(re.sub(r"\d+호선$", "", compact))
+    aliases.append(re.sub(r"(대학교|대학|캠퍼스)$", "", compact))
+    return [alias for alias in _unique_queries(aliases) if _normalize(alias) != _normalize(area)]
 
 
 def _origin_hint_from_text(user_text: str) -> str | None:

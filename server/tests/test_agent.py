@@ -528,6 +528,73 @@ def test_route_location_resolution_retrieves_specific_final_place(monkeypatch) -
     assert result.destination.label == "숯림"
 
 
+def test_route_location_resolution_searches_final_place_with_area_context(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+    captured_queries: list[str] = []
+
+    def fake_search(query: str, size: int = 5) -> list[LocationCandidate]:
+        captured_queries.append(query)
+        if query == "오목교":
+            return [
+                LocationCandidate(
+                    label="오목교역 5호선",
+                    address="서울 양천구 오목로 지하 342",
+                    lat=37.524496,
+                    lng=126.875181,
+                    source="kakao-keyword",
+                    category="지하철역",
+                )
+            ]
+        if query == "홍대 수림식당":
+            return [
+                LocationCandidate(
+                    label="수림식당 홍대점",
+                    address="서울 마포구 와우산로29길 48",
+                    lat=37.555302,
+                    lng=126.924891,
+                    source="kakao-keyword",
+                    category="음식점 > 한식",
+                )
+            ]
+        if query == "수림식당":
+            return [
+                LocationCandidate(
+                    label="수림식당",
+                    address="울산 남구 삼산로",
+                    lat=35.538377,
+                    lng=129.338492,
+                    source="kakao-keyword",
+                    category="음식점 > 한식",
+                )
+            ]
+        if query == "홍대입구역":
+            return [
+                LocationCandidate(
+                    label="홍대입구역 2호선",
+                    address="서울 마포구 양화로 지하 160",
+                    lat=37.557192,
+                    lng=126.925381,
+                    source="kakao-keyword",
+                    category="지하철역",
+                )
+            ]
+        return []
+
+    monkeypatch.setattr(
+        route_location_resolution, "search_location_candidates", fake_search
+    )
+
+    result = route_location_resolution.resolve_route_locations(
+        "오목교에서 홍대입구역으로 가서 과제를 카페에서 하다가 5시에 수림식당에서 약속있어 거기 가야해"
+    )
+
+    assert "홍대 수림식당" in captured_queries
+    assert result.destination is not None
+    assert result.destination.label == "수림식당 홍대점"
+
+
 def test_route_location_resolution_falls_back_to_broad_area_when_specific_missing(
     monkeypatch,
 ) -> None:
