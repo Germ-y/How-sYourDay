@@ -1102,14 +1102,19 @@ function ProfilePage({
     <section className="grid gap-4 px-5 py-5 lg:grid-cols-[360px_1fr] lg:px-0">
       <div className="grid gap-4 lg:self-start lg:sticky lg:top-20">
         <AccountCard />
-        <article className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_46px_rgba(23,26,24,0.06)] ring-1 ring-ink/8">
-          <div className="bg-[#fde2ef] px-5 py-5">
-            <p className="text-sm font-semibold text-tide">나의 이동 프로필</p>
-            <h1 className="mt-2 text-[28px] font-semibold leading-tight [word-break:keep-all]">
-              컨디션별 이동 기록
-            </h1>
+        <article className="rounded-2xl bg-white p-4 shadow-[0_10px_28px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-tide">이동 프로필</p>
+              <h2 className="mt-1 truncate text-lg font-semibold">
+                현재 경로 기준
+              </h2>
+            </div>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fde2ef] text-tide">
+              <Navigation size={17} aria-hidden />
+            </span>
           </div>
-          <div className="grid grid-cols-3 gap-2 p-4">
+          <div className="mt-3 grid grid-cols-3 gap-2">
             <ProfileStat label="컨디션" value={activeMood} />
             <ProfileStat label="출발" value={originText || "미지정"} />
             <ProfileStat label="도착" value={destinationText || "미지정"} />
