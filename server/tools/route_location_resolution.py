@@ -12,6 +12,7 @@ from tools.llm_intent import (
     _post_openai,
     _response_text,
 )
+from tools.prompt_loader import load_prompt
 
 
 LOCATION_SELECTION_SCHEMA = {
@@ -156,23 +157,7 @@ def _select_locations_with_llm(
         "input": [
             {
                 "role": "system",
-                "content": (
-                    "You choose the best real map search result for a route request. "
-                    "The candidate lists are retrieved from Kakao Local using several place "
-                    "mentions from the sentence, so they may include broad areas, stations, "
-                    "cafes, restaurants, and distractors. Use the original user sentence and "
-                    "extracted place text to pick one "
-                    "candidate index for origin and destination. Korean route text may be "
-                    "casual and unordered, such as '나 홍대까지 가고 싶어 오목교역에서 ...'. "
-                    "In that case, candidates for '오목교역' are origin and candidates for "
-                    "'홍대' or '홍대입구역' are destination. Prefer exact names, transport "
-                    "stations when the text contains '역', campus/city hints, and matching "
-                    "addresses. Avoid shops or unrelated facilities that merely contain the "
-                    "same keyword. If the origin and destination candidate are the same but "
-                    "the extracted place texts are different, choose a different destination "
-                    "candidate or return null for destination. Return null only when no candidate reasonably represents "
-                    "the extracted text."
-                ),
+                "content": load_prompt("route_location_selection"),
             },
             {
                 "role": "user",

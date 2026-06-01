@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from api.schemas import Constraints, EmotionState, Task
 from tools.extract_intent import ExtractedIntent
 from tools.kakao_local import _get_env_value
+from tools.prompt_loader import load_prompt
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_INTENT_MODEL = "gpt-5-nano"
@@ -136,26 +137,7 @@ def extract_intent_with_llm(user_text: str) -> ExtractedIntent | None:
         "input": [
             {
                 "role": "system",
-                "content": (
-                    "You extract intent for an emotion-aware Korean route planner. "
-                    "Return only JSON matching the schema. Read casual Korean as a "
-                    "real user request, not as keywords. Separate four ideas: route, "
-                    "time pressure, condition/mood, and possible waypoint intent. "
-                    "For mood_candidates, choose exactly 4 Korean labels ordered by "
-                    "relevance from: 피곤, 바쁨, 여유, 휴식, 불안, 집중, 조용, 가벼움. "
-                    "Use 바쁨 when there is a deadline, appointment, '까지', '전', or "
-                    "risk of being late. Use 여유 when the user wants to walk, wander, "
-                    "look around, or says the weather is nice. Use 휴식 when they want "
-                    "a break, cafe, coffee, calm place, or recovery. Use 집중 when "
-                    "they mention assignment, study, work, meeting prep, or doing a "
-                    "task on the way. Use 피곤 for fatigue or avoiding hard routes. "
-                    "Use 조용 for quiet/noise-sensitive requests and 불안 for crowded "
-                    "or stressful routes. Supported task kinds are print, clinic, "
-                    "and recovery. Create a recovery task when the text asks for a "
-                    "cafe, rest, walking break, quiet place, or an optional stop. "
-                    "Do not turn final destinations or appointment places into tasks. "
-                    "Infer tolerances conservatively from the strongest mood signal."
-                ),
+                "content": load_prompt("daily_intent"),
             },
             {"role": "user", "content": user_text},
         ],

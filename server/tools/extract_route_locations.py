@@ -7,6 +7,7 @@ from urllib.request import Request, urlopen
 
 from tools.kakao_local import _get_env_value
 from tools.llm_intent import DEFAULT_INTENT_MODEL, OPENAI_RESPONSES_URL, _response_text
+from tools.prompt_loader import load_prompt
 
 
 ROUTE_EXTRACTION_SCHEMA = {
@@ -97,32 +98,7 @@ def _extract_route_locations_with_llm(user_text: str) -> RouteLocationHints | No
         "input": [
             {
                 "role": "system",
-                "content": (
-                    "You extract route origin and destination from casual Korean or English "
-                    "travel requests. Return only the place text, not coordinates, addresses, "
-                    "times, emotions, weather, tasks, or reasons. Preserve the user's place "
-                    "names as written, but remove filler words such as '나', '오늘', '가고 싶어', "
-                    "'날씨 선선해서', '조금 걸을까', and '커피 한잔하게'. "
-                    "\n\nRules:\n"
-                    "- origin_text is the place after markers like '에서', '부터', '출발', "
-                    "'starting from', or the current starting location the user names.\n"
-                    "- destination_text is the place after/before markers like '까지', '로', "
-                    "'으로', '가고 싶어', '가야 해', '도착', 'to', or the main place the user "
-                    "wants to visit.\n"
-                    "- If the destination is mentioned before the origin, still extract both. "
-                    "Example: '나 홍대까지 가고 싶어 오목교역에서 날씨 선선해서 홍대 주변 좀 "
-                    "걸을까 해' => origin_text='오목교역', destination_text='홍대'.\n"
-                    "- If a destination is repeated with extra context like '홍대 주변', choose "
-                    "the core destination '홍대' unless the surrounding place is clearly the target.\n"
-                    "- If the user names a broad area first and later names a specific committed "
-                    "appointment or task location, use the specific final place as destination. "
-                    "Example: '오목교역에서 출발해서 홍대까지 갈거야. 홍대 가서 카페에서 "
-                    "과제하다가 숯림 식당이라는 식당에서 3시에 친구 보기로 했어' => "
-                    "origin_text='오목교역', destination_text='숯림 식당'.\n"
-                    "- If only one side is clearly present, return null for the missing side. "
-                    "Do not invent home, school, work, or current location unless explicitly written.\n"
-                    "- Return JSON matching the schema exactly."
-                ),
+                "content": load_prompt("route_location_extraction"),
             },
             {"role": "user", "content": user_text},
         ],
