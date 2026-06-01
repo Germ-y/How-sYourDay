@@ -1227,6 +1227,24 @@ function AuthPage({
             </div>
 
             <div className="grid gap-3">
+              {isSignup ? (
+                <AuthField
+                  icon={<UserRound size={16} aria-hidden />}
+                  label="닉네임"
+                  placeholder="예: 균이"
+                  value={form.nickname}
+                  onChange={(value) => onChange("nickname", value)}
+                />
+              ) : (
+                <div className="grid gap-2">
+                  <span className="text-sm font-semibold text-transparent">
+                    닉네임
+                  </span>
+                  <div className="flex min-h-12 items-center justify-center rounded-xl bg-[#fffdf8] px-3 text-sm font-semibold text-ink/42 ring-1 ring-ink/8">
+                    회원가입 시 닉네임 설정
+                  </div>
+                </div>
+              )}
               <AuthField
                 icon={<Mail size={16} aria-hidden />}
                 label="이메일"
