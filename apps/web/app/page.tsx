@@ -63,21 +63,46 @@ const PROFILE_PLACEHOLDER = {
 const MOOD_PRESETS = [
   {
     label: "피곤",
-    sentence: "피로도 높음. 보행 시간과 혼잡도를 낮게 우선."
+    sentence: "피로도 높음. 보행 시간과 혼잡도를 낮게 우선.",
+    keywords: ["피곤", "지침", "지쳐", "힘들", "무리", "tired", "exhausted"]
   },
   {
     label: "바쁨",
-    sentence: "시간 제약 높음. 우회보다 도착 시간을 우선."
+    sentence: "시간 제약 높음. 우회보다 도착 시간을 우선.",
+    keywords: ["바쁨", "급", "빨리", "늦", "촉박", "시간", "까지", "전", "urgent", "hurry"]
   },
   {
     label: "여유",
-    sentence: "시간 여유 있음. 편안한 장소 경유 허용."
+    sentence: "시간 여유 있음. 편안한 장소 경유 허용.",
+    keywords: ["여유", "천천", "산책", "둘러", "괜찮", "slow", "walk"]
   },
   {
     label: "휴식",
-    sentence: "휴식 필요. 조용한 카페나 공원 후보 반영."
+    sentence: "휴식 필요. 조용한 카페나 공원 후보 반영.",
+    keywords: ["휴식", "쉬", "카페", "조용", "편한", "회복", "rest", "cafe", "coffee"]
+  },
+  {
+    label: "불안",
+    sentence: "불안감 높음. 혼잡과 환승 부담을 낮게 우선.",
+    keywords: ["불안", "긴장", "복잡", "사람", "혼잡", "무서", "anxious", "nervous"]
+  },
+  {
+    label: "집중",
+    sentence: "집중 필요. 목적지까지 예측 가능한 동선을 우선.",
+    keywords: ["집중", "공부", "과제", "시험", "회의", "업무", "focus", "study", "work"]
+  },
+  {
+    label: "조용",
+    sentence: "소음 민감도 높음. 조용한 구간과 장소를 우선.",
+    keywords: ["조용", "소음", "시끄", "quiet", "noise"]
+  },
+  {
+    label: "가벼움",
+    sentence: "컨디션 안정. 걷기와 짧은 경유를 적당히 허용.",
+    keywords: ["가볍", "괜찮", "좋아", "상쾌", "steady", "fine"]
   }
 ];
+const DEFAULT_MOOD_LABELS = ["피곤", "바쁨", "여유", "휴식"];
 const POI_PREFERENCES = [
   {
     id: "quiet-cafe",
@@ -162,6 +187,7 @@ export default function HomePage() {
   const [destinationEdited, setDestinationEdited] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [activeMood, setActiveMood] = useState(MOOD_PRESETS[0].label);
+  const [moodEdited, setMoodEdited] = useState(false);
   const [poiPreferenceIndex, setPoiPreferenceIndex] = useState(0);
   const [poiVotes, setPoiVotes] = useState<Record<string, PreferenceVote>>({});
   const [nearbyPreferencePoints, setNearbyPreferencePoints] = useState<
@@ -200,6 +226,11 @@ export default function HomePage() {
   );
   const [previewSource, setPreviewSource] = useState("rules");
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const moodCandidates = useMemo(() => buildMoodCandidates(text), [text]);
+  const visibleMoodCandidates = useMemo(
+    () => ensureActiveMoodCandidate(moodCandidates, activeMood),
+    [activeMood, moodCandidates]
+  );
 
   useEffect(() => {
     const storedOriginText = window.localStorage.getItem(LAST_ORIGIN_KEY);
@@ -284,6 +315,12 @@ export default function HomePage() {
       window.clearTimeout(timer);
     };
   }, [text, originEdited, destinationEdited, originText, destinationText]);
+
+  useEffect(() => {
+    if (!moodEdited && moodCandidates[0]?.label) {
+      setActiveMood(moodCandidates[0].label);
+    }
+  }, [moodCandidates, moodEdited]);
 
   useEffect(() => {
     let cancelled = false;
@@ -683,6 +720,7 @@ export default function HomePage() {
   }
 
   function handleMoodSelect(label: string) {
+    setMoodEdited(true);
     setActiveMood(label);
   }
 
@@ -874,10 +912,10 @@ export default function HomePage() {
                 <ComposerTitle
                   icon={<HeartPulse size={17} aria-hidden />}
                   label="컨디션"
-                  support="추천 기준 선택"
+                  support="입력 내용에서 후보 4개 추천"
                 />
                 <div className="mt-3 grid grid-cols-4 gap-2">
-                  {MOOD_PRESETS.map((mood) => {
+                  {visibleMoodCandidates.map((mood) => {
                     const selected = activeMood === mood.label;
                     return (
                       <button
@@ -957,7 +995,6 @@ export default function HomePage() {
           />
         ) : (
           <ProfilePage
-            activeMood={activeMood}
             destinationText={destinationText}
             originText={originText}
             plan={plan}
@@ -1148,7 +1185,6 @@ function TasteIntroCard({
 }
 
 function ProfilePage({
-  activeMood,
   destinationText,
   onAddSavedPlace,
   originText,
@@ -1162,7 +1198,6 @@ function ProfilePage({
   savedPlaceNotice,
   savedPlaces
 }: {
-  activeMood: string;
   destinationText: string;
   originText: string;
   plan: DailyPlan | null;
@@ -2922,6 +2957,43 @@ async function resolveLocationInput(
 
 function shouldSearchLocationInput(query: string) {
   return query.length >= 2 || ["집", "학교", "회사"].includes(query);
+}
+
+function buildMoodCandidates(input: string) {
+  const normalized = input.toLowerCase();
+  const scored = MOOD_PRESETS.map((mood, index) => {
+    const keywordScore = mood.keywords.reduce(
+      (score, keyword) => score + (normalized.includes(keyword.toLowerCase()) ? 4 : 0),
+      0
+    );
+    const defaultScore = DEFAULT_MOOD_LABELS.includes(mood.label) ? 1 : 0;
+    return {
+      mood,
+      score: keywordScore + defaultScore,
+      index
+    };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, 4)
+    .map((item) => item.mood);
+}
+
+function ensureActiveMoodCandidate(
+  candidates: typeof MOOD_PRESETS,
+  activeMood: string
+) {
+  if (candidates.some((mood) => mood.label === activeMood)) {
+    return candidates;
+  }
+
+  const selected = MOOD_PRESETS.find((mood) => mood.label === activeMood);
+  if (!selected) {
+    return candidates;
+  }
+
+  return [...candidates.slice(0, 3), selected];
 }
 
 function defaultPreviewInsights(): PreviewInsight[] {
