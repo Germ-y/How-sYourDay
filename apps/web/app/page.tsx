@@ -307,11 +307,11 @@ export default function HomePage() {
         const nextPlaces = result.places.map(savedPlaceRecordToEntry);
         setSavedPlaces(nextPlaces);
         window.localStorage.setItem(SAVED_PLACES_KEY, JSON.stringify(nextPlaces));
-        setSavedPlaceNotice("DB 저장소 연결됨");
+        setSavedPlaceNotice("");
       })
       .catch(() => {
         if (!cancelled) {
-          setSavedPlaceNotice("로컬 임시 저장 사용 중");
+          setSavedPlaceNotice("");
         }
       });
 
