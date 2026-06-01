@@ -4,6 +4,7 @@ from api.schemas import (
     Constraints,
     EmotionState,
     Location,
+    LocationCandidate,
     PlanRequest,
     PoiCandidate,
     RouteCandidate,
@@ -29,6 +30,7 @@ from tools.extract_intent import extract_intent
 from tools.extract_route_locations import extract_route_locations
 from tools.geocode import geocode_location, search_location_candidates
 from tools.preview_insights import build_preview_insights
+from tools import route_location_resolution
 
 
 def setup_module() -> None:
@@ -268,6 +270,58 @@ def test_route_location_extraction_allows_missing_origin(monkeypatch) -> None:
 
     assert hints.origin_text is None
     assert hints.destination_text == "집"
+
+
+def test_route_location_resolution_selects_real_search_candidates(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    def fake_search(query: str, size: int = 5) -> list[LocationCandidate]:
+        if query == "성균관대학교 수원":
+            return [
+                LocationCandidate(
+                    label="성균관대학교 자연과학캠퍼스",
+                    address="경기 수원시 장안구 서부로 2066",
+                    lat=37.295039,
+                    lng=126.977422,
+                    source="kakao-keyword",
+                    category="학교",
+                ),
+                LocationCandidate(
+                    label="디딤웍스 수원성균관대점",
+                    address="경기 수원시 장안구 화산로213번길 15",
+                    lat=37.298881,
+                    lng=126.972745,
+                    source="kakao-keyword",
+                    category="공유오피스",
+                ),
+            ]
+        if query == "서울역":
+            return [
+                LocationCandidate(
+                    label="서울역",
+                    address="서울 중구 한강대로 405",
+                    lat=37.554069,
+                    lng=126.970703,
+                    source="kakao-keyword",
+                    category="기차역",
+                )
+            ]
+        return []
+
+    monkeypatch.setattr(
+        route_location_resolution, "search_location_candidates", fake_search
+    )
+
+    result = route_location_resolution.resolve_route_locations(
+        "성균관대학교 수원에서 서울역까지 2시간 안에 도착해야해"
+    )
+
+    assert result.origin_text == "성균관대학교 수원"
+    assert result.origin is not None
+    assert result.origin.label == "성균관대학교 자연과학캠퍼스"
+    assert result.destination is not None
+    assert result.destination.label == "서울역"
+    assert result.selection_source == "score"
 
 
 def test_tmap_pedestrian_route_is_normalized(monkeypatch) -> None:

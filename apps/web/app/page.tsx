@@ -32,7 +32,6 @@ import {
 import {
   createSavedPlace,
   deleteSavedPlace,
-  extractRouteLocations,
   fetchMe,
   fetchPreviewInsights,
   fetchPreferencePoints,
@@ -41,6 +40,7 @@ import {
   login as loginUser,
   logout as logoutUser,
   requestDailyPlan,
+  resolveRouteLocations,
   sendRouteFeedback,
   searchLocations,
   signup as signupUser,
@@ -546,11 +546,7 @@ export default function HomePage() {
     field: "origin" | "destination",
     candidate: LocationCandidate
   ) {
-    const location = {
-      label: candidate.label,
-      lat: candidate.lat,
-      lng: candidate.lng
-    };
+    const location = locationFromCandidate(candidate);
 
     if (field === "origin") {
       setOriginText(candidate.label);
@@ -632,28 +628,54 @@ export default function HomePage() {
     setLocationStatus("문장에서 경로 확인 중");
 
     try {
-      const hints = await extractRouteLocations(trimmed);
+      const resolved = await resolveRouteLocations(trimmed);
       let changed = false;
+      let resolvedCount = 0;
+      const requestedCount =
+        Number(Boolean(resolved.origin_text)) +
+        Number(Boolean(resolved.destination_text));
 
-      if (hints.origin_text) {
-        setOriginText(hints.origin_text);
+      if (resolved.origin_text) {
+        if (resolved.origin) {
+          setOriginText(resolved.origin.label);
+          setSelectedOriginLocation(locationFromCandidate(resolved.origin));
+          resolvedCount += 1;
+        } else {
+          setOriginText(resolved.origin_text);
+          setSelectedOriginLocation(null);
+        }
         setOriginEdited(false);
-        setSelectedOriginLocation(null);
+        setOriginCandidates([]);
         changed = true;
       }
-      if (hints.destination_text) {
-        setDestinationText(hints.destination_text);
+      if (resolved.destination_text) {
+        if (resolved.destination) {
+          setDestinationText(resolved.destination.label);
+          setSelectedDestinationLocation(locationFromCandidate(resolved.destination));
+          resolvedCount += 1;
+        } else {
+          setDestinationText(resolved.destination_text);
+          setSelectedDestinationLocation(null);
+        }
         setDestinationEdited(false);
-        setSelectedDestinationLocation(null);
+        setDestinationCandidates([]);
         changed = true;
       }
 
       if (changed) {
-        setLocationStatus(
-          hints.source === "llm"
-            ? "문장에서 출발지와 도착지 확인"
-            : "문장에서 경로 후보 확인"
-        );
+        setActiveLocationField(null);
+        setError(null);
+        if (resolvedCount === requestedCount) {
+          setLocationStatus("실제 장소로 경로 확인");
+        } else if (resolvedCount > 0) {
+          setLocationStatus("일부 장소는 실제 장소로 확인");
+        } else {
+          setLocationStatus(
+            resolved.source === "llm"
+              ? "문장에서 출발지와 도착지 확인"
+              : "문장에서 경로 후보 확인"
+          );
+        }
       } else {
         setLocationStatus("찾은 경로 후보 없음. 직접 입력 가능");
       }
@@ -3326,6 +3348,14 @@ async function resolveLocationInput(
   }
 
   return geocodeLocation(rawText.trim());
+}
+
+function locationFromCandidate(candidate: LocationCandidate): Location {
+  return {
+    label: candidate.label,
+    lat: candidate.lat,
+    lng: candidate.lng
+  };
 }
 
 function shouldSearchLocationInput(query: string) {

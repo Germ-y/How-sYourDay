@@ -1,0 +1,274 @@
+import json
+import os
+import re
+from dataclasses import dataclass
+
+from api.schemas import LocationCandidate
+from tools.extract_route_locations import extract_route_locations
+from tools.geocode import search_location_candidates
+from tools.kakao_local import _get_env_value
+from tools.llm_intent import (
+    DEFAULT_INTENT_MODEL,
+    _post_openai,
+    _response_text,
+)
+
+
+LOCATION_SELECTION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["origin_index", "destination_index"],
+    "properties": {
+        "origin_index": {
+            "anyOf": [
+                {"type": "integer", "minimum": 0, "maximum": 9},
+                {"type": "null"},
+            ]
+        },
+        "destination_index": {
+            "anyOf": [
+                {"type": "integer", "minimum": 0, "maximum": 9},
+                {"type": "null"},
+            ]
+        },
+    },
+}
+
+
+@dataclass(frozen=True)
+class RouteLocationResolution:
+    origin_text: str | None
+    destination_text: str | None
+    origin: LocationCandidate | None
+    destination: LocationCandidate | None
+    origin_candidates: list[LocationCandidate]
+    destination_candidates: list[LocationCandidate]
+    source: str
+    selection_source: str
+
+
+def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResolution:
+    hints = extract_route_locations(user_text)
+    origin_candidates = _candidate_search(hints.origin_text, size)
+    destination_candidates = _candidate_search(hints.destination_text, size)
+    selection = _select_locations_with_llm(
+        user_text,
+        hints.origin_text,
+        hints.destination_text,
+        origin_candidates,
+        destination_candidates,
+    )
+
+    if selection is not None:
+        origin = _candidate_at(origin_candidates, selection.get("origin_index"))
+        destination = _candidate_at(
+            destination_candidates, selection.get("destination_index")
+        )
+        selection_source = "llm"
+    else:
+        origin = _select_candidate_by_score(hints.origin_text, origin_candidates)
+        destination = _select_candidate_by_score(
+            hints.destination_text, destination_candidates
+        )
+        selection_source = "score" if origin or destination else "none"
+
+    return RouteLocationResolution(
+        origin_text=hints.origin_text,
+        destination_text=hints.destination_text,
+        origin=origin,
+        destination=destination,
+        origin_candidates=origin_candidates,
+        destination_candidates=destination_candidates,
+        source=hints.source,
+        selection_source=selection_source,
+    )
+
+
+def _candidate_search(query: str | None, size: int) -> list[LocationCandidate]:
+    if not query:
+        return []
+    return search_location_candidates(query, size=size)
+
+
+def _select_locations_with_llm(
+    user_text: str,
+    origin_text: str | None,
+    destination_text: str | None,
+    origin_candidates: list[LocationCandidate],
+    destination_candidates: list[LocationCandidate],
+) -> dict | None:
+    if (os.environ.get("HYS_DISABLE_LLM") or _get_env_value("HYS_DISABLE_LLM")) == "1":
+        return None
+
+    api_key = _get_env_value("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    if not origin_candidates and not destination_candidates:
+        return None
+
+    model = (
+        os.environ.get("OPENAI_INTENT_MODEL")
+        or _get_env_value("OPENAI_INTENT_MODEL")
+        or DEFAULT_INTENT_MODEL
+    )
+    payload = {
+        "model": model,
+        "input": [
+            {
+                "role": "system",
+                "content": (
+                    "You choose the best real map search result for a route request. "
+                    "Use the original user sentence and extracted place text to pick "
+                    "one candidate index for origin and destination. Prefer exact place "
+                    "names, campus/city hints, addresses, and transport stations. Return "
+                    "null only when no candidate reasonably represents the extracted text."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "user_text": user_text,
+                        "origin_text": origin_text,
+                        "destination_text": destination_text,
+                        "origin_candidates": _candidate_payload(origin_candidates),
+                        "destination_candidates": _candidate_payload(
+                            destination_candidates
+                        ),
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "route_location_selection",
+                "strict": True,
+                "schema": LOCATION_SELECTION_SCHEMA,
+            }
+        },
+        "max_output_tokens": 120,
+    }
+
+    raw = _post_openai(api_key, payload)
+    if raw is None:
+        return None
+
+    text = _response_text(raw)
+    if not text:
+        return None
+
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+
+    return {
+        "origin_index": _valid_index(data.get("origin_index"), origin_candidates),
+        "destination_index": _valid_index(
+            data.get("destination_index"), destination_candidates
+        ),
+    }
+
+
+def _candidate_payload(candidates: list[LocationCandidate]) -> list[dict]:
+    return [
+        {
+            "index": index,
+            "label": candidate.label,
+            "address": candidate.address,
+            "category": candidate.category,
+            "source": candidate.source,
+        }
+        for index, candidate in enumerate(candidates)
+    ]
+
+
+def _valid_index(value, candidates: list[LocationCandidate]) -> int | None:
+    if not isinstance(value, int):
+        return None
+    if value < 0 or value >= len(candidates):
+        return None
+    return value
+
+
+def _candidate_at(
+    candidates: list[LocationCandidate], index: int | None
+) -> LocationCandidate | None:
+    if index is None:
+        return None
+    return candidates[index]
+
+
+def _select_candidate_by_score(
+    query: str | None, candidates: list[LocationCandidate]
+) -> LocationCandidate | None:
+    if not query or not candidates:
+        return None
+
+    query_normalized = _normalize(query)
+    terms = _terms(query)
+    school_query = any(keyword in query for keyword in ["대학교", "대학", "캠퍼스"])
+    station_query = "역" in query
+    best: tuple[int, int, LocationCandidate] | None = None
+
+    for index, candidate in enumerate(candidates):
+        label = _normalize(candidate.label)
+        address = _normalize(candidate.address or "")
+        category = _normalize(candidate.category or "")
+        score = 0
+
+        if label == query_normalized:
+            score += 80
+        if query_normalized and query_normalized in label:
+            score += 42
+        if label and label in query_normalized:
+            score += 34
+
+        for term in terms:
+            if term in label:
+                score += 12
+            if term in address:
+                score += 8
+            if term in category:
+                score += 3
+
+        if school_query:
+            if "학교" in (candidate.category or ""):
+                score += 45
+            else:
+                score -= 10
+            if "캠퍼스" in candidate.label:
+                score += 14
+            if "점" in candidate.label or "우편취급국" in candidate.label:
+                score -= 12
+        if station_query and "역" in candidate.label:
+            score += 10
+            if "기차역" in (candidate.category or ""):
+                score += 12
+        if candidate.source == "kakao-address":
+            score += 3
+        if candidate.source == "kakao-keyword":
+            score += 2
+
+        ranked = (score, -index, candidate)
+        if best is None or ranked[:2] > best[:2]:
+            best = ranked
+
+    if best is None or best[0] <= 0:
+        return None
+    return best[2]
+
+
+def _terms(value: str) -> list[str]:
+    return [
+        term
+        for term in re.split(r"[\s,./·()]+", value)
+        if len(_normalize(term)) >= 2
+    ]
+
+
+def _normalize(value: str) -> str:
+    return value.lower().replace(" ", "")

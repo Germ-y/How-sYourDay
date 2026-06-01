@@ -29,6 +29,17 @@ export type RouteExtractionResult = {
   source: string;
 };
 
+export type RouteLocationResolutionResult = {
+  origin_text: string | null;
+  destination_text: string | null;
+  origin: LocationCandidate | null;
+  destination: LocationCandidate | null;
+  origin_candidates: LocationCandidate[];
+  destination_candidates: LocationCandidate[];
+  source: string;
+  selection_source: string;
+};
+
 export type PreviewInsight = {
   label: string;
   value: string;
@@ -331,6 +342,24 @@ export async function extractRouteLocations(
 
   if (!response.ok) {
     throw new Error(`Route extraction failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function resolveRouteLocations(
+  userText: string
+): Promise<RouteLocationResolutionResult> {
+  const response = await fetch(`${API_BASE_URL}/resolve-route-locations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ user_text: userText })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Route location resolution failed with ${response.status}`);
   }
 
   return response.json();

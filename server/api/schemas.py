@@ -56,6 +56,17 @@ class RouteExtractionResponse(BaseModel):
     source: str
 
 
+class RouteLocationResolutionResponse(BaseModel):
+    origin_text: str | None = None
+    destination_text: str | None = None
+    origin: LocationCandidate | None = None
+    destination: LocationCandidate | None = None
+    origin_candidates: list[LocationCandidate] = []
+    destination_candidates: list[LocationCandidate] = []
+    source: str
+    selection_source: str
+
+
 class PreviewInsightsRequest(BaseModel):
     user_text: str = ""
     origin_text: str | None = None

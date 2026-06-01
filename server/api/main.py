@@ -22,6 +22,7 @@ from api.schemas import (
     PreviewInsightsResponse,
     RouteExtractionRequest,
     RouteExtractionResponse,
+    RouteLocationResolutionResponse,
     SavedPlaceCreate,
     SavedPlaceResponse,
     SavedPlacesResponse,
@@ -35,6 +36,7 @@ from tools.extract_route_locations import extract_route_locations
 from tools.geocode import geocode_location, search_location_candidates
 from tools.preference_points import search_preference_points
 from tools.preview_insights import build_preview_insights
+from tools.route_location_resolution import resolve_route_locations
 
 app = FastAPI(title="How's Your Day API")
 app.include_router(auth_router)
@@ -131,6 +133,21 @@ def extract_route(request: RouteExtractionRequest) -> RouteExtractionResponse:
         origin_text=hints.origin_text,
         destination_text=hints.destination_text,
         source=hints.source,
+    )
+
+
+@app.post("/resolve-route-locations", response_model=RouteLocationResolutionResponse)
+def resolve_route(request: RouteExtractionRequest) -> RouteLocationResolutionResponse:
+    result = resolve_route_locations(request.user_text)
+    return RouteLocationResolutionResponse(
+        origin_text=result.origin_text,
+        destination_text=result.destination_text,
+        origin=result.origin,
+        destination=result.destination,
+        origin_candidates=result.origin_candidates,
+        destination_candidates=result.destination_candidates,
+        source=result.source,
+        selection_source=result.selection_source,
     )
 
 
