@@ -671,9 +671,6 @@ export default function HomePage() {
                     문장에서 출발지와 도착지 추출
                   </p>
                 </div>
-                <span className="rounded-2xl bg-[#ddf3eb] px-3 py-1.5 text-xs font-semibold text-moss">
-                  수정 가능
-                </span>
               </div>
             </div>
 
