@@ -11,6 +11,7 @@ from api.schemas import (
     RouteCandidate,
     RouteSegment,
     SavedPlaceCreate,
+    Task,
 )
 from auth.security import (
     create_access_token,
@@ -164,6 +165,64 @@ def test_kakao_poi_is_normalized_when_provider_returns_result(monkeypatch) -> No
     assert candidates[0].provider_id == "123"
     assert candidates[0].category == "print"
     assert candidates[0].distance_meters == 110
+
+
+def test_recovery_poi_uses_destination_area_when_text_places_task_there(
+    monkeypatch,
+) -> None:
+    from tools import search_poi
+
+    captured_anchors: list[str] = []
+
+    def fake_kakao_candidates(tasks, origin):
+        captured_anchors.append(origin.label)
+        if origin.label == "수림식당 홍대점":
+            return [
+                PoiCandidate(
+                    id="poi-cafe-hongdae",
+                    provider_id="cafe-hongdae",
+                    name="홍대 작업 카페",
+                    category="recovery",
+                    landmark_type="cafe",
+                    emotion_tags=["calm", "recovery"],
+                    lat=37.552,
+                    lng=126.923,
+                    source_confidence="kakao",
+                )
+            ]
+        return [
+            PoiCandidate(
+                id="poi-cafe-origin",
+                provider_id="cafe-origin",
+                name="오목교 카페",
+                category="recovery",
+                landmark_type="cafe",
+                emotion_tags=["calm", "recovery"],
+                lat=37.524,
+                lng=126.877,
+                source_confidence="kakao",
+            )
+        ]
+
+    monkeypatch.setattr(search_poi, "search_kakao_poi_candidates", fake_kakao_candidates)
+
+    candidates = search_poi.search_poi_candidates(
+        [
+            Task(
+                kind="recovery",
+                label="카페에서 과제",
+                poi_query="카페",
+                priority=1,
+                required=True,
+            )
+        ],
+        Location(label="오목교", lat=37.5243, lng=126.8780),
+        Location(label="수림식당 홍대점", lat=37.5515, lng=126.9227),
+        "오목교에서 홍대입구역으로 가서 과제를 카페에서 하다가 수림식당에서 약속",
+    )
+
+    assert captured_anchors[0] == "수림식당 홍대점"
+    assert candidates[0].name == "홍대 작업 카페"
 
 
 def test_kakao_poi_falls_back_to_mock_when_provider_has_no_result(monkeypatch) -> None:
@@ -790,6 +849,23 @@ def test_tmap_failed_leg_becomes_mixed_route(monkeypatch) -> None:
     transit = next(route for route in routes if route.id == "route-tmap-transit")
     assert transit.provider == "tmap-mixed"
     assert transit.fallback_reason
+
+
+def test_tmap_candidate_is_skipped_when_all_legs_are_estimated(monkeypatch) -> None:
+    from tools import tmap_route
+
+    monkeypatch.delenv("HYS_DISABLE_TMAP", raising=False)
+    monkeypatch.setattr(tmap_route, "_get_tmap_app_key", lambda: "test-key")
+    monkeypatch.setattr(tmap_route, "_fetch_pedestrian_leg", lambda app_key, start, end: None)
+    monkeypatch.setattr(tmap_route, "_fetch_transit_leg", lambda app_key, start, end: None)
+
+    routes = tmap_route.build_tmap_route_candidates(
+        [],
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+        Location(label="Home", lat=37.5826, lng=127.0019),
+    )
+
+    assert routes == []
 
 
 def test_landmark_priors_only_use_allowed_tags() -> None:

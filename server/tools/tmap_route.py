@@ -45,11 +45,11 @@ def build_tmap_route_candidates(
     candidates: list[RouteCandidate] = []
 
     pedestrian_legs = _build_legs(app_key, waypoints, _fetch_pedestrian_leg)
-    if pedestrian_legs:
+    if pedestrian_legs and _has_provider_leg(pedestrian_legs):
         candidates.append(_compose_route("route-tmap-walk", "tmap-pedestrian", "walk", stops, pedestrian_legs))
 
     transit_legs = _build_legs(app_key, waypoints, _fetch_transit_leg)
-    if transit_legs:
+    if transit_legs and _has_provider_leg(transit_legs):
         candidates.append(_compose_route("route-tmap-transit", "tmap-transit", "transit", stops, transit_legs))
 
     return candidates
@@ -69,6 +69,10 @@ def _build_legs(app_key: str, waypoints: list[Coordinate], fetcher) -> list[Tmap
             leg = _estimated_walking_leg(start, end)
         legs.append(leg)
     return legs
+
+
+def _has_provider_leg(legs: list[TmapLegResult]) -> bool:
+    return any(not leg.estimated for leg in legs)
 
 
 def _fetch_pedestrian_leg(

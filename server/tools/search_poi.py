@@ -48,21 +48,67 @@ MOCK_POIS = {
 }
 
 
-def search_poi_candidates(tasks: list[Task], origin: Location) -> list[PoiCandidate]:
+def search_poi_candidates(
+    tasks: list[Task],
+    origin: Location,
+    destination: Location | None = None,
+    user_text: str = "",
+) -> list[PoiCandidate]:
     candidates: list[PoiCandidate] = []
-    kakao_candidates = {
-        candidate.category: candidate
-        for candidate in search_kakao_poi_candidates(tasks, origin)
-    }
-
     for task in tasks:
-        kakao_candidate = kakao_candidates.get(task.kind)
+        kakao_candidate = _search_task_candidate(task, origin, destination, user_text)
         if kakao_candidate:
             candidates.append(kakao_candidate)
             continue
         candidates.extend(MOCK_POIS.get(task.kind, MOCK_POIS["recovery"]))
 
     return candidates
+
+
+def _search_task_candidate(
+    task: Task,
+    origin: Location,
+    destination: Location | None,
+    user_text: str,
+) -> PoiCandidate | None:
+    anchors = _task_search_anchors(task, origin, destination, user_text)
+    seen: set[str] = set()
+
+    for anchor in anchors:
+        key = f"{anchor.label}:{anchor.lat:.6f}:{anchor.lng:.6f}"
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates = search_kakao_poi_candidates([task], anchor)
+        if candidates:
+            return candidates[0]
+
+    return None
+
+
+def _task_search_anchors(
+    task: Task,
+    origin: Location,
+    destination: Location | None,
+    user_text: str,
+) -> list[Location]:
+    if (
+        destination is not None
+        and task.kind == "recovery"
+        and _recovery_task_mentions_destination_area(user_text)
+    ):
+        return [destination, origin]
+
+    return [origin]
+
+
+def _recovery_task_mentions_destination_area(user_text: str) -> bool:
+    text = user_text.replace(" ", "")
+    recovery_markers = ["카페", "쉬", "휴식", "과제", "작업", "걷"]
+    area_markers = ["가서", "간뒤", "갔다가", "하다가", "주변", "근처", "가는길", "들러"]
+    return any(marker in text for marker in recovery_markers) and any(
+        marker in text for marker in area_markers
+    )
 
 
 def search_optional_recovery_poi(

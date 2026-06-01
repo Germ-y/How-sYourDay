@@ -14,7 +14,12 @@ class DailyPlanningAgent:
 
     def run(self, request: PlanRequest) -> PlanResponse:
         intent = extract_intent(request.user_text)
-        poi_candidates = search_poi_candidates(intent.tasks, request.origin)
+        poi_candidates = search_poi_candidates(
+            intent.tasks,
+            request.origin,
+            request.destination,
+            request.user_text,
+        )
         optional_stops = find_emotion_waypoints(
             request.user_text,
             intent.emotion,
