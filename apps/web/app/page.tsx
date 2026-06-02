@@ -391,7 +391,15 @@ export default function HomePage() {
     }
 
     if (!moodEdited) {
-      setActiveMood(moodCandidates[0]?.label ?? "");
+      setActiveMood((current) => {
+        if (!moodCandidates.length) {
+          return "";
+        }
+        if (current && moodCandidates.some((mood) => mood.label === current)) {
+          return current;
+        }
+        return moodCandidates[0]?.label ?? "";
+      });
     }
   }, [moodCandidates, moodEdited, text]);
 
