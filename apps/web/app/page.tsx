@@ -2432,21 +2432,10 @@ function MobilePlanResult({
           </div>
         </div>
 
-        <p className="mt-3 text-sm leading-6 text-ink/68">{plan.explanation}</p>
-
         <div className="mt-4 grid grid-cols-3 gap-2">
           <MiniStat label="이동" value={durationLabel(selectedRoute)} />
           <MiniStat label="걷기" value={`${selectedRoute.walking_minutes}분`} />
           <MiniStat label="출처" value={routeProviderLabel(selectedRoute)} />
-        </div>
-
-        <div className="mt-3 rounded-2xl bg-[#fff9ed] p-3 text-xs leading-5 text-ink/58">
-          {routeReliabilityLabel(selectedRoute, usesKakaoPoi)}
-          {selectedRoute.fallback_reason ? (
-            <span className="mt-1 block text-ink/42">
-              {selectedRoute.fallback_reason}
-            </span>
-          ) : null}
         </div>
 
         {firstTradeoff ? (
@@ -4571,17 +4560,6 @@ function routeProviderLabel(route: RouteCandidate) {
     return "도로망 기준";
   }
   return "추정 경로";
-}
-
-function routeReliabilityLabel(route: RouteCandidate, usesKakaoPoi: boolean) {
-  const poiLabel = usesKakaoPoi ? "실제 장소" : "예시 장소";
-  const routeLabelText =
-    route.provider === "tmap-mixed"
-      ? "일부 추정 경로"
-      : route.provider.startsWith("tmap") || route.provider === "osrm"
-        ? "실제 경로"
-        : "추정 경로";
-  return `${poiLabel} + ${routeLabelText}`;
 }
 
 function routeDurationMinutes(route: RouteCandidate) {

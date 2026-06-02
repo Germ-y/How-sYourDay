@@ -139,25 +139,38 @@ def _build_tradeoff(
     emotional_delta = (
         selected_score.total_emotional_cost - rejected_score.total_emotional_cost
     )
+    selected_name = _route_name(selected_route)
+    rejected_name = _route_name(rejected_route)
+    same_visible_route = selected_name == rejected_name
 
     if emotion.time_pressure_tolerance == "high" and time_delta < 0:
         label = "편안함보다 도착 시간을 우선했어요"
-        reason = (
-            f"{_route_name(selected_route)}는 {_route_name(rejected_route)}보다 "
-            f"{abs(time_delta)}분 빠릅니다. 시간이 촉박해서 감정 비용 "
-            f"{max(0, emotional_delta)}점을 감수하고 빠른 route를 골랐어요."
-        )
+        if same_visible_route:
+            reason = (
+                f"시간이 촉박해서 {abs(time_delta)}분 더 빠른 후보를 골랐어요."
+            )
+        else:
+            reason = (
+                f"{selected_name}는 {rejected_name}보다 {abs(time_delta)}분 빠릅니다. "
+                f"시간이 촉박해서 감정 비용 {max(0, emotional_delta)}점을 감수하고 "
+                "빠른 경로를 골랐어요."
+            )
     elif emotional_delta < 0:
         label = "속도보다 감정 비용을 낮췄어요"
-        reason = (
-            f"{_route_name(selected_route)}는 {_route_name(rejected_route)}보다 "
-            f"{max(0, time_delta)}분 더 걸리지만 감정 비용을 "
-            f"{abs(emotional_delta)}점 낮춰요."
-        )
+        if same_visible_route or time_delta <= 0:
+            reason = (
+                f"이동 시간은 비슷하게 유지하면서 감정 비용을 "
+                f"{abs(emotional_delta)}점 낮추는 후보를 선택했어요."
+            )
+        else:
+            reason = (
+                f"{selected_name}는 {rejected_name}보다 {time_delta}분 더 걸리지만 "
+                f"감정 비용을 {abs(emotional_delta)}점 낮춰요."
+            )
     else:
         label = "시간과 컨디션을 균형 있게 맞췄어요"
         reason = (
-            f"{_route_name(selected_route)}가 현재 시간 제약과 감정 비용을 "
+            f"{selected_name}가 현재 시간 제약과 감정 비용을 "
             "가장 안정적으로 맞춰서 선택됐어요."
         )
 

@@ -194,14 +194,9 @@ def _map_view_model(
 def _explanation(evaluation: TradeoffEvaluation, score: EmotionCost) -> str:
     parts = []
     if evaluation.tradeoffs:
-        parts.append(evaluation.tradeoffs[0].reason)
+        parts.append(evaluation.tradeoffs[0].user_visible_label)
     else:
         parts.append("현재 제약을 가장 안정적으로 만족하는 경로를 선택했어요.")
-
-    parts.append(
-        f"comfort score는 {score.comfort_score}, 감정 비용은 "
-        f"{score.total_emotional_cost}입니다."
-    )
 
     route = evaluation.selected_route
     if route.provider == "tmap-mixed":
@@ -214,7 +209,7 @@ def _explanation(evaluation: TradeoffEvaluation, score: EmotionCost) -> str:
         parts.append("현재 조건에 맞는 추천 경로를 추정해 계산했어요.")
 
     if evaluation.fallback_used:
-        parts.append("deadline을 완전히 만족하는 경로가 없어 가장 덜 늦는 경로를 선택했어요.")
+        parts.append("마감 시간을 완전히 만족하기 어려워 가장 덜 늦는 경로를 선택했어요.")
 
     return " ".join(parts)
 
