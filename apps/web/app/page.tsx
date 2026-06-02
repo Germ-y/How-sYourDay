@@ -633,6 +633,22 @@ export default function HomePage() {
     setError(null);
   }
 
+  function handleRouteRequestTextChange(value: string) {
+    setText(value);
+    if (!originEdited) {
+      setOriginText("");
+      setSelectedOriginLocation(null);
+      setOriginCandidates([]);
+    }
+    if (!destinationEdited) {
+      setDestinationText("");
+      setSelectedDestinationLocation(null);
+      setDestinationCandidates([]);
+    }
+    setLocationStatus(value.trim() ? "내용 확인 필요" : "");
+    setError(null);
+  }
+
   function handleAuthFormChange(field: "email" | "password" | "nickname", value: string) {
     setAuthForm((current) => ({
       ...current,
@@ -1126,7 +1142,7 @@ export default function HomePage() {
                   className="mt-3 min-h-28 w-full resize-none rounded-2xl border border-[#ecd29a] bg-white p-4 text-[15px] leading-6 shadow-sm outline-none transition placeholder:text-ink/35 focus:border-tide focus:bg-white"
                   placeholder="예: 성균관대학교에서 서울역까지, 18시 전 도착. 조용한 카페 경유 가능."
                   value={text}
-                  onChange={(event) => setText(event.target.value)}
+                  onChange={(event) => handleRouteRequestTextChange(event.target.value)}
                 />
                 <button
                   className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#ddf3eb] px-4 text-sm font-semibold text-moss shadow-sm ring-1 ring-moss/15 transition hover:bg-[#d2eee4] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
@@ -3119,29 +3135,36 @@ function PlannerCue({
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-semibold text-ink/38">{label}</span>
         {isEditing ? (
-          <span className="mt-2 grid grid-cols-5 gap-1.5">
-            {WAYPOINT_CATEGORY_OPTIONS.map((option) => {
-              const selected = value === option.value;
-              const Icon = option.icon;
-              return (
-                <button
-                  className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition active:scale-95 ${
-                    selected
-                      ? "bg-[#fde2ef] text-tide ring-1 ring-tide/35"
-                      : "bg-white text-ink/52 ring-1 ring-ink/8 hover:bg-[#fff9ed]"
-                  }`}
-                  key={option.value}
-                  type="button"
-                  onClick={() => {
-                    onValueChange?.(option.value);
-                    onEditToggle?.();
-                  }}
-                >
-                  <Icon size={15} aria-hidden />
-                  <span>{option.label}</span>
-                </button>
-              );
-            })}
+          <span className="mt-2 grid gap-2">
+            <span className="grid grid-cols-5 gap-1.5">
+              {WAYPOINT_CATEGORY_OPTIONS.map((option) => {
+                const selected = value === option.value;
+                const Icon = option.icon;
+                return (
+                  <button
+                    className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition active:scale-95 ${
+                      selected
+                        ? "bg-[#fde2ef] text-tide ring-1 ring-tide/35"
+                        : "bg-white text-ink/52 ring-1 ring-ink/8 hover:bg-[#fff9ed]"
+                    }`}
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onValueChange?.(option.value);
+                    }}
+                  >
+                    <Icon size={15} aria-hidden />
+                    <span>{option.label}</span>
+                  </button>
+                );
+              })}
+            </span>
+            <input
+              className="block min-h-9 w-full min-w-0 rounded-xl border border-ink/10 bg-white px-3 text-xs font-semibold text-ink outline-none transition placeholder:text-ink/32 focus:border-tide"
+              placeholder="예: 스타벅스, 조용한 카페"
+              value={value ?? ""}
+              onChange={(event) => onValueChange?.(event.target.value)}
+            />
           </span>
         ) : (
           <span className="block text-sm font-semibold leading-5 text-ink/72 [overflow-wrap:anywhere]">
@@ -3156,7 +3179,11 @@ function PlannerCue({
           onClick={onEditToggle}
           aria-label={`${label} 수정`}
         >
-          <PencilLine size={15} aria-hidden />
+          {isEditing ? (
+            <CheckCircle2 size={15} aria-hidden />
+          ) : (
+            <PencilLine size={15} aria-hidden />
+          )}
         </button>
       ) : null}
     </div>
