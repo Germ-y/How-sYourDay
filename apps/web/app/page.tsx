@@ -58,6 +58,7 @@ import {
   type PreviewInsight,
   type RouteCandidate,
   type TimelineItem,
+  type Tradeoff,
   type PlacePreferenceRecord,
   type SavedPlaceRecord
 } from "@/lib/api";
@@ -2455,15 +2456,11 @@ function MobilePlanResult({
           <MiniStat label="출처" value={routeProviderLabel(selectedRoute)} />
         </div>
 
-        {firstTradeoff ? (
-          <div className="mt-4 rounded-2xl bg-[#fff9ed] p-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Zap className="text-coral" size={16} aria-hidden />
-              핵심 균형점
-            </div>
-            <p className="mt-2 text-sm leading-6 text-ink/68">{firstTradeoff.reason}</p>
-          </div>
-        ) : null}
+        <RouteXaiCard
+          cost={plan.emotional_cost}
+          route={selectedRoute}
+          tradeoff={firstTradeoff}
+        />
 
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button
@@ -2764,6 +2761,88 @@ function CostRow({ label, value }: { label: string; value: number }) {
       </div>
     </div>
   );
+}
+
+function RouteXaiCard({
+  cost,
+  route,
+  tradeoff
+}: {
+  cost: EmotionCost;
+  route: RouteCandidate;
+  tradeoff: Tradeoff | null;
+}) {
+  const chips = routeXaiChips(cost, route);
+
+  return (
+    <div className="mt-4 rounded-2xl bg-[#fff9ed] p-3 ring-1 ring-ink/6">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <Zap className="text-coral" size={16} aria-hidden />
+        왜 추천했나요
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {chips.map((chip) => (
+          <span
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-xl bg-white px-2.5 text-xs font-semibold text-ink/64 ring-1 ring-ink/7"
+            key={chip}
+          >
+            <CheckCircle2 size={13} aria-hidden className="text-moss" />
+            {chip}
+          </span>
+        ))}
+      </div>
+      <p className="mt-3 text-sm leading-6 text-ink/68">
+        {tradeoff?.reason ?? routeXaiFallbackSummary(cost, route)}
+      </p>
+    </div>
+  );
+}
+
+function routeXaiChips(cost: EmotionCost, route: RouteCandidate) {
+  const factors = [
+    ["혼잡", cost.crowd_cost],
+    ["피로", cost.fatigue_cost],
+    ["걷기", cost.walking_cost],
+    ["시간", cost.time_pressure_cost],
+    ["환승", cost.transfer_cost]
+  ] as const;
+  const topFactors = factors
+    .filter(([, value]) => value > 0)
+    .sort(([, left], [, right]) => right - left)
+    .slice(0, 2)
+    .map(([label, value]) => `${label} +${value}`);
+  const chips = [
+    ...topFactors,
+    route.stops.length > 0 ? `경유 ${route.stops.length}곳` : "직접 이동",
+    routeProviderLabel(route)
+  ];
+
+  if (chips.length < 3) {
+    chips.unshift(`감정 비용 ${cost.total_emotional_cost}`);
+  }
+
+  return chips.slice(0, 4);
+}
+
+function routeXaiFallbackSummary(cost: EmotionCost, route: RouteCandidate) {
+  const topCost = Math.max(
+    cost.crowd_cost,
+    cost.fatigue_cost,
+    cost.walking_cost,
+    cost.time_pressure_cost,
+    cost.transfer_cost
+  );
+
+  if (topCost === cost.crowd_cost && topCost > 0) {
+    return "혼잡 부담을 계산에 넣고, 현재 조건에서 가장 무난한 이동을 골랐어요.";
+  }
+  if (topCost === cost.fatigue_cost && topCost > 0) {
+    return "피로도를 반영해서 걷기와 이동 부담이 큰 경로를 피했어요.";
+  }
+  if (route.stops.length > 0) {
+    return "필요한 경유지를 포함하면서 이동 부담이 커지지 않는 후보를 골랐어요.";
+  }
+  return "이동 시간과 감정 비용을 함께 비교해서 균형이 좋은 후보를 골랐어요.";
 }
 
 function mapForSelectedRoute(map: MapViewModel, route: RouteCandidate): MapViewModel {
