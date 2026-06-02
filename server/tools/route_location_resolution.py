@@ -91,7 +91,11 @@ class RouteLocationResolution:
 def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResolution:
     hints = extract_route_locations(user_text)
     origin_text = _origin_hint_from_text(user_text) or hints.origin_text
-    destination_text = _specific_destination_hint_from_text(user_text) or hints.destination_text
+    destination_text = (
+        _specific_destination_hint_from_text(user_text)
+        or _destination_hint_after_origin_from_text(user_text)
+        or hints.destination_text
+    )
     origin_queries = _origin_queries_from_text(user_text, origin_text)
     destination_queries = _destination_queries_from_text(user_text, destination_text)
     origin_candidates = _candidate_search_many(
@@ -651,6 +655,20 @@ def _origin_hint_from_text(user_text: str) -> str | None:
     if not matches:
         return None
     return _clean_query(matches[0])
+
+
+def _destination_hint_after_origin_from_text(user_text: str) -> str | None:
+    patterns = [
+        r"(?:에서|부터)\s*([^,.;\n]+?)(?:까지|으로|로)\s*(?:가고\s*싶|가야|갈|가기|가려고|도착|이동|$)",
+        r"(?:에서|부터)\s*([^,.;\n]+?)(?:까지|으로|로)",
+    ]
+    for pattern in patterns:
+        matches = re.findall(pattern, user_text, flags=re.IGNORECASE)
+        for value in matches:
+            cleaned = _clean_query(value)
+            if cleaned:
+                return cleaned
+    return None
 
 
 def _specific_destination_hint_from_text(user_text: str) -> str | None:

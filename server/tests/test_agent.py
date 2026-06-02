@@ -1084,6 +1084,7 @@ def test_route_location_resolution_prefers_address_region_for_ambiguous_area(
     )
 
     assert "서울 대학로 소극장" in captured_queries
+    assert result.destination_text == "대학로 소극장"
     assert result.destination is not None
     assert result.destination.label == "대학로예술극장 소극장"
     assert "서울 종로구" in (result.destination.address or "")
