@@ -2486,6 +2486,12 @@ function PlanPreview({
       const waypointKey = previewWaypointKey(insight, index);
       return !isEditableWaypointInsight(insight) || !deletedWaypoints[waypointKey];
     });
+  const contextCueInsights = visibleCueInsights.filter(
+    ({ insight }) => !isEditableWaypointInsight(insight)
+  );
+  const waypointCueInsights = visibleCueInsights.filter(
+    ({ insight }) => isEditableWaypointInsight(insight)
+  );
 
   return (
     <section className="rounded-[24px] bg-white p-4 shadow-[0_14px_40px_rgba(23,26,24,0.055)] ring-1 ring-ink/8">
@@ -2516,16 +2522,21 @@ function PlanPreview({
       </div>
 
       <div className="mt-4 grid gap-2">
-        {visibleCueInsights.map(({ insight, index }) => {
+        {contextCueInsights.map(({ insight, index }) => (
+          <PlannerCue
+            icon={previewInsightIcon(insight)}
+            key={`${insight.label}-${insight.value}-${index}`}
+            label={insight.label}
+            value={insight.value}
+          />
+        ))}
+        {waypointCueInsights.map(({ insight, index }) => {
           const waypointKey = previewWaypointKey(insight, index);
-          const editable = isEditableWaypointInsight(insight);
-          const value = editable
-            ? editedWaypoints[waypointKey] ?? insight.value
-            : insight.value;
+          const value = editedWaypoints[waypointKey] ?? insight.value;
 
           return (
             <PlannerCue
-              editable={editable}
+              editable
               icon={previewInsightIcon(insight)}
               isEditing={editingWaypointKey === waypointKey}
               key={`${insight.label}-${insight.value}-${index}`}
