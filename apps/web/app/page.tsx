@@ -1341,17 +1341,17 @@ function AuthPage({
   const isSignup = mode === "signup";
 
   return (
-    <main className="min-h-screen bg-[#fff9ed] px-5 py-8 text-ink">
+    <main className="auth-shell min-h-screen overflow-x-hidden bg-[#fff9ed] px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))] text-ink [min-height:100svh] sm:px-5 sm:py-8">
       <form
-        className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md flex-col justify-center"
+        className="mx-auto flex min-h-[calc(100svh-2.5rem)] w-full max-w-md min-w-0 flex-col justify-start pt-4 sm:min-h-[calc(100vh-4rem)] sm:justify-center sm:pt-0"
         onSubmit={onSubmit}
       >
-        <section className="overflow-hidden rounded-[28px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8">
+        <section className="w-full max-w-full overflow-hidden rounded-[28px] bg-white shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8">
           <div className="bg-[#eef8f2] px-5 py-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-moss">How's Your Day</p>
-                <h1 className="mt-1 text-[30px] font-semibold leading-tight [word-break:keep-all]">
+                <h1 className="mt-1 text-[28px] font-semibold leading-tight [word-break:keep-all] sm:text-[30px]">
                   계정으로 계속하기
                 </h1>
                 <p className="mt-2 text-sm font-medium leading-6 text-ink/55 [word-break:keep-all]">
@@ -1364,7 +1364,7 @@ function AuthPage({
             </div>
           </div>
 
-          <div className="grid gap-5 p-5 pt-0">
+          <div className="grid min-w-0 gap-5 p-5 pt-0">
             <div className="relative -mx-5 grid grid-cols-2 border-b border-ink/8 bg-white px-5">
               {[
                 { id: "login" as const, label: "로그인" },
@@ -1447,7 +1447,7 @@ function AuthPage({
             ) : null}
 
             <button
-              className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 font-semibold text-white shadow-[0_12px_30px_rgba(23,26,24,0.12)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45"
+              className="flex min-h-12 w-full min-w-0 items-center justify-center gap-2 rounded-xl bg-ink px-4 font-semibold text-white shadow-[0_12px_30px_rgba(23,26,24,0.12)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45"
               type="submit"
               disabled={isLoading}
             >
@@ -1479,9 +1479,9 @@ function AuthField({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="grid gap-2">
+    <label className="grid min-w-0 gap-2">
       <span className="text-sm font-semibold text-ink/68">{label}</span>
-      <span className="flex min-h-12 items-center gap-3 rounded-xl bg-[#fffdf8] px-3 ring-1 ring-ink/10 transition focus-within:ring-tide/45">
+      <span className="flex min-h-12 w-full min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-xl bg-[#fffdf8] px-3 ring-1 ring-ink/10 transition focus-within:ring-tide/45">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#f7e8f0] text-tide">
           {icon}
         </span>
