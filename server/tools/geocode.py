@@ -100,21 +100,27 @@ def search_location_candidates(
         )
 
     candidates = _dedupe_candidates(candidates)
+    protected_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.source in {"known", "kakao-address"}
+    ]
     semantic_candidates = [
         candidate
         for candidate in candidates
-        if _candidate_matches_query(text, candidate)
+        if candidate.source not in {"known", "kakao-address"}
+        and _candidate_matches_query(text, candidate)
     ]
-    if semantic_candidates:
-        candidates = semantic_candidates
+    if protected_candidates or semantic_candidates:
+        candidates = [*protected_candidates, *semantic_candidates]
     if current_location:
         candidates = sorted(
             candidates,
             key=lambda candidate: (
+                0 if candidate.source in {"known", "kakao-address"} else 1,
                 candidate.distance_meters
                 if candidate.distance_meters is not None
                 else _rough_distance_meters(current_location, candidate),
-                0 if candidate.source == "kakao-keyword" else 1,
             ),
         )
     return candidates[:size]

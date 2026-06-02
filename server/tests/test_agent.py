@@ -40,7 +40,7 @@ from tools.extract_route_locations import extract_route_locations
 from tools.geocode import geocode_location, search_location_candidates
 from tools.preview_insights import build_preview_insights
 from tools.prompt_loader import kst_runtime_context
-from tools import route_location_resolution
+from tools import geocode, route_location_resolution
 
 
 def setup_module() -> None:
@@ -517,6 +517,45 @@ def test_location_search_returns_known_candidates_without_api_key(monkeypatch) -
     assert candidates
     assert candidates[0].label == "집"
     assert candidates[0].source == "known"
+
+
+def test_location_search_keeps_address_candidates_with_nearby_filter(monkeypatch) -> None:
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+
+    def fake_get_json(url: str, api_key: str, params: dict) -> dict:
+        if url == geocode.KAKAO_ADDRESS_SEARCH_URL:
+            return {
+                "documents": [
+                    {
+                        "address_name": "서울 종로구 혜화동",
+                        "x": "127.00060",
+                        "y": "37.58686",
+                        "address": {"address_name": "서울 종로구 혜화동"},
+                    }
+                ]
+            }
+        return {
+            "documents": [
+                {
+                    "place_name": "우체통",
+                    "address_name": "서울 종로구 동숭동 67-6",
+                    "x": "127.00177",
+                    "y": "37.58233",
+                    "category_name": "사회,공공기관 > 우체통",
+                    "distance": "4",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(geocode, "_get_json", fake_get_json)
+
+    candidates = search_location_candidates(
+        "혜화",
+        current_location=Coordinate(label="현재 위치", lat=37.5823, lng=127.0018),
+    )
+
+    assert [candidate.source for candidate in candidates] == ["kakao-address"]
+    assert candidates[0].label == "서울 종로구 혜화동"
 
 
 def test_saved_places_are_scoped_by_user() -> None:
