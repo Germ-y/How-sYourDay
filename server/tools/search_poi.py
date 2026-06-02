@@ -93,7 +93,7 @@ def _search_task_candidates(
         if key in seen:
             continue
         seen.add(key)
-        candidates = search_kakao_poi_candidates([task], anchor)
+        candidates = search_kakao_poi_candidates([task], anchor, user_text=user_text)
         if candidates:
             return _dedupe_poi_candidates(candidates)[: _task_candidate_limit(task)]
 

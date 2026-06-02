@@ -14,6 +14,12 @@ class ExtractedIntent:
 
 TASK_RULES = {
     "print": ("print", "Print document", "print shop"),
+    "프린트": ("print", "문서 출력", "인쇄소"),
+    "프린터": ("print", "문서 출력", "인쇄소"),
+    "인쇄": ("print", "문서 출력", "인쇄소"),
+    "출력": ("print", "문서 출력", "인쇄소"),
+    "복사": ("print", "문서 복사", "복사"),
+    "제본": ("print", "문서 제본", "제본"),
     "clinic": ("clinic", "Visit clinic", "clinic"),
     "hospital": ("clinic", "Visit clinic", "clinic"),
     "rest": ("recovery", "Take a short recovery break", "quiet cafe"),
@@ -59,7 +65,12 @@ def extract_intent(user_text: str) -> ExtractedIntent:
             mood_candidates=llm_intent.mood_candidates or fallback.mood_candidates,
         )
 
-    return llm_intent
+    return ExtractedIntent(
+        tasks=_sanitize_tasks(user_text, llm_intent.tasks),
+        constraints=llm_intent.constraints,
+        emotion=llm_intent.emotion,
+        mood_candidates=llm_intent.mood_candidates,
+    )
 
 
 def _extract_intent_with_rules(user_text: str) -> ExtractedIntent:
@@ -85,7 +96,7 @@ def _extract_intent_with_rules(user_text: str) -> ExtractedIntent:
     )
 
     return ExtractedIntent(
-        tasks=tasks,
+        tasks=_sanitize_tasks(user_text, tasks),
         constraints=constraints,
         emotion=_analyze_emotion(lowered),
         mood_candidates=_infer_mood_candidates(lowered),
@@ -99,6 +110,60 @@ def _has_equivalent_task(tasks: list[Task], kind: str, poi_query: str) -> bool:
             for task in tasks
         )
     return any(task.kind == kind for task in tasks)
+
+
+def _sanitize_tasks(user_text: str, tasks: list[Task]) -> list[Task]:
+    if not _looks_like_print_cafe_reference(user_text):
+        return tasks
+
+    has_separate_recovery = _has_recovery_intent_beyond_print_cafe(user_text)
+    sanitized = [
+        task
+        for task in tasks
+        if task.kind != "recovery" or has_separate_recovery
+    ]
+    if not any(task.kind == "print" for task in sanitized):
+        sanitized.insert(
+            0,
+            Task(
+                kind="print",
+                label="문서 출력",
+                poi_query="인쇄소",
+                priority=1,
+                required=True,
+            ),
+        )
+
+    return [
+        Task(
+            kind=task.kind,
+            label=task.label,
+            poi_query=task.poi_query,
+            priority=index,
+            required=task.required,
+        )
+        for index, task in enumerate(sanitized, start=1)
+    ]
+
+
+def _looks_like_print_cafe_reference(text: str) -> bool:
+    compact = text.replace(" ", "").lower()
+    return bool(
+        re.search(r"(?:프린터|프린트|인쇄|출력|복사|제본)카페", compact)
+        or re.search(r"카페(?:프린터|프린트|인쇄|출력|복사|제본)", compact)
+    )
+
+
+def _has_recovery_intent_beyond_print_cafe(text: str) -> bool:
+    compact = re.sub(
+        r"(?:프린터|프린트|인쇄|출력|복사|제본)카페|카페(?:프린터|프린트|인쇄|출력|복사|제본)",
+        "",
+        text.replace(" ", "").lower(),
+    )
+    return any(
+        marker in compact
+        for marker in ["커피", "쉬", "휴식", "조용", "과제", "작업", "공부", "노트북"]
+    )
 
 
 def _extract_deadline(text: str) -> str | None:

@@ -292,7 +292,7 @@ def test_recovery_poi_uses_destination_area_when_text_places_task_there(
 
     captured_anchors: list[str] = []
 
-    def fake_kakao_candidates(tasks, origin):
+    def fake_kakao_candidates(tasks, origin, user_text=""):
         captured_anchors.append(origin.label)
         if origin.label == "수림식당 홍대점":
             return [
@@ -356,6 +356,57 @@ def test_recovery_poi_uses_destination_area_when_text_places_task_there(
         "홍대 작업 카페",
         "홍대 조용한 카페",
     ]
+
+
+def test_printer_cafe_reference_is_print_not_recovery() -> None:
+    intent = extract_intent("혜화에서 집 가기 전에 프린터 카페 들러서 출력해야해")
+
+    assert any(task.kind == "print" for task in intent.tasks)
+    assert not any(task.kind == "recovery" for task in intent.tasks)
+
+
+def test_recovery_poi_rejects_print_cafe_candidate(monkeypatch) -> None:
+    from tools import kakao_local
+
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+    monkeypatch.setattr(
+        kakao_local,
+        "_fetch_kakao_documents",
+        lambda api_key, task, origin: [
+            {
+                "id": "printer-cafe",
+                "place_name": "프린터카페 대학로점",
+                "category_name": "서비스,산업 > 전문대행 > 인쇄",
+                "x": "127.0020",
+                "y": "37.5820",
+                "distance": "80",
+            },
+            {
+                "id": "real-cafe",
+                "place_name": "조용한 작업 카페",
+                "category_name": "음식점 > 카페",
+                "x": "127.0030",
+                "y": "37.5830",
+                "distance": "130",
+            },
+        ],
+    )
+
+    candidates = search_poi_candidates(
+        [
+            Task(
+                kind="recovery",
+                label="카페에서 쉬기",
+                poi_query="카페",
+                priority=1,
+                required=True,
+            )
+        ],
+        Location(label="혜화", lat=37.5823, lng=127.0018),
+        user_text="혜화에서 집 가기 전에 조용한 카페에서 쉬고 싶어",
+    )
+
+    assert [candidate.name for candidate in candidates] == ["조용한 작업 카페"]
 
 
 def test_recovery_candidates_become_alternative_route_variants() -> None:

@@ -111,6 +111,7 @@ Treat everyday errands as required tasks when the user says they must buy, pick 
 Use recovery when a stop helps rest, calm, focus, or comfort.
 Use recovery when the user wants to stop at a cafe, drink coffee, study, do an assignment, do laptop work, work quietly, or avoid noise on the way.
 Korean examples that should create a recovery task: "카페에서 과제", "카페에서 노트북 작업", "커피 한잔", "조용한 곳", "시끄러운 곳은 싫어".
+Treat "프린터 카페", "프린트카페", "인쇄 카페", "출력 카페", or "복사 카페" as print/copy service places unless the user separately asks for rest, coffee, quiet work, or a real cafe break.
 Set recovery_need high when the user wants cafe/rest/quiet/recovery.
 Set walking_tolerance high when the user wants to walk or wander.
 Set walking_tolerance low when the user is tired or wants less effort.
@@ -126,6 +127,8 @@ Do not treat the final destination as a waypoint task.
 Do not turn an appointment restaurant into a recovery task.
 Do not ignore store errands just because they are not emotional recovery stops.
 Do not classify required shopping, pickup, pharmacy, convenience-store, mart, or retail errands as recovery.
+Do not classify "프린터 카페", "프린트카페", "인쇄 카페", "출력 카페", or "복사 카페" as recovery just because the name includes 카페.
+Only create a separate recovery task in that sentence when there is another explicit rest, coffee, quiet work, study, laptop, or break signal.
 Do not treat "홍대" as a task just because it is a place.
 Do not output coordinates.
 Do not output addresses.
@@ -146,6 +149,7 @@ Do not infer time pressure from destination grammar.
 
 Task Decision Rules
 Use print when the user needs printing, copying, scanning, document output, or "리포트 출력".
+Use print when the user mentions "프린터 카페", "프린트 카페", "프린트카페", "인쇄 카페", "출력 카페", or "복사 카페".
 Use clinic when the user needs hospital, clinic, medical appointment, treatment, or pharmacy-like health visit.
 Use recovery when the user asks for cafe, coffee, rest, quiet place, comfortable place, park, walking break, or reset.
 Use errand when the user needs to buy something, pick up an item, stop by a store, visit 다이소, visit a mart, visit a pharmacy, visit a convenience store, or do a quick shopping errand.

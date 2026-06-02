@@ -7,6 +7,7 @@ from urllib.request import Request, urlopen
 
 from api.schemas import Location, PoiCandidate, Task
 from tools.landmark_emotion_prior import get_landmark_emotion_prior
+from tools.poi_candidate_validation import document_matches_task
 
 
 KAKAO_KEYWORD_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/keyword.json"
@@ -22,6 +23,7 @@ TASK_QUERY_OVERRIDES = {
 def search_kakao_poi_candidates(
     tasks: list[Task],
     origin: Location,
+    user_text: str = "",
 ) -> list[PoiCandidate]:
     api_key = _get_env_value("KAKAO_REST_API_KEY")
     if not api_key:
@@ -30,6 +32,13 @@ def search_kakao_poi_candidates(
     candidates: list[PoiCandidate] = []
     for task in tasks:
         documents = _fetch_kakao_documents(api_key, task, origin)
+        if not documents:
+            continue
+        documents = [
+            document
+            for document in documents
+            if document_matches_task(document, task, user_text)
+        ]
         if not documents:
             continue
         candidates.extend(
