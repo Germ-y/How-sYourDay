@@ -1032,6 +1032,63 @@ def test_route_location_resolution_falls_back_to_broad_area_when_specific_missin
     assert result.destination.label == "홍대입구역 2호선"
 
 
+def test_route_location_resolution_prefers_address_region_for_ambiguous_area(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+    captured_queries: list[str] = []
+
+    def fake_search(query: str, size: int = 5) -> list[LocationCandidate]:
+        captured_queries.append(query)
+        if query == "혜화":
+            return [
+                LocationCandidate(
+                    label="혜화역 4호선",
+                    address="서울 종로구 대학로 지하 120",
+                    lat=37.582336,
+                    lng=127.001844,
+                    source="kakao-keyword",
+                    category="지하철역",
+                )
+            ]
+        if query == "서울 대학로 소극장":
+            return [
+                LocationCandidate(
+                    label="대학로예술극장 소극장",
+                    address="서울 종로구 대학로10길 17",
+                    lat=37.581931,
+                    lng=127.003193,
+                    source="kakao-keyword",
+                    category="문화시설 > 공연장",
+                )
+            ]
+        if query == "대학로 소극장":
+            return [
+                LocationCandidate(
+                    label="대학로소극장",
+                    address="부산 금정구 부산대학로",
+                    lat=35.230811,
+                    lng=129.084418,
+                    source="kakao-keyword",
+                    category="문화시설 > 공연장",
+                )
+            ]
+        return []
+
+    monkeypatch.setattr(
+        route_location_resolution, "search_location_candidates", fake_search
+    )
+
+    result = route_location_resolution.resolve_route_locations(
+        "혜화에서 대학로 소극장까지 가고 싶어"
+    )
+
+    assert "서울 대학로 소극장" in captured_queries
+    assert result.destination is not None
+    assert result.destination.label == "대학로예술극장 소극장"
+    assert "서울 종로구" in (result.destination.address or "")
+
+
 def test_tmap_pedestrian_route_is_normalized(monkeypatch) -> None:
     from tools import tmap_route
 

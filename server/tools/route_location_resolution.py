@@ -35,6 +35,46 @@ LOCATION_SELECTION_SCHEMA = {
     },
 }
 
+MAJOR_REGION_TOKENS = [
+    "서울",
+    "부산",
+    "대구",
+    "인천",
+    "광주",
+    "대전",
+    "울산",
+    "세종",
+    "경기",
+    "강원",
+    "충북",
+    "충청북도",
+    "충남",
+    "충청남도",
+    "전북",
+    "전라북도",
+    "전남",
+    "전라남도",
+    "경북",
+    "경상북도",
+    "경남",
+    "경상남도",
+    "제주",
+]
+
+SEOUL_AREA_REGION_HINTS = {
+    "대학로": ["서울", "종로", "혜화", "동숭", "명륜", "이화동"],
+    "혜화": ["서울", "종로", "혜화", "동숭", "명륜"],
+    "홍대": ["서울", "마포", "서교", "상수", "합정", "홍대입구"],
+    "성수": ["서울", "성동", "성수"],
+    "서울숲": ["서울", "성동", "서울숲"],
+    "신촌": ["서울", "서대문", "마포", "신촌"],
+    "이대": ["서울", "서대문", "대현", "이화여대"],
+    "강남": ["서울", "강남", "역삼"],
+    "건대": ["서울", "광진", "화양", "건대입구"],
+    "여의도": ["서울", "영등포", "여의도"],
+    "오목교": ["서울", "양천", "오목"],
+}
+
 
 @dataclass(frozen=True)
 class RouteLocationResolution:
@@ -75,11 +115,29 @@ def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResol
         destination = _candidate_at(
             destination_candidates, selection.get("destination_index")
         )
-        selection_source = "llm"
+        scored_origin = _select_best_across_queries(origin_queries, origin_candidates)
+        origin_context = _candidate_region_context(origin or scored_origin)
+        scored_destination = _select_best_across_queries(
+            destination_queries, destination_candidates, origin_context
+        )
+        adjusted_origin = _prefer_score_adjusted_candidate(
+            origin_text, None, origin, scored_origin
+        )
+        adjusted_destination = _prefer_score_adjusted_candidate(
+            destination_text, origin_context, destination, scored_destination
+        )
+        selection_source = (
+            "llm-score-adjusted"
+            if adjusted_origin is not origin or adjusted_destination is not destination
+            else "llm"
+        )
+        origin = adjusted_origin
+        destination = adjusted_destination
     else:
         origin = _select_best_across_queries(origin_queries, origin_candidates)
+        origin_context = _candidate_region_context(origin)
         destination = _select_best_across_queries(
-            destination_queries, destination_candidates
+            destination_queries, destination_candidates, origin_context
         )
         selection_source = "score" if origin or destination else "none"
 
@@ -93,6 +151,7 @@ def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResol
             destination_text,
             destination_candidates,
             origin,
+            _candidate_region_context(origin),
         )
         if destination:
             selection_source = f"{selection_source}-deduped"
@@ -115,17 +174,20 @@ def _candidate_search(query: str | None, size: int) -> list[LocationCandidate]:
     return search_location_candidates(query, size=size)
 
 
-def _candidate_search_many(queries: list[str], size: int) -> list[LocationCandidate]:
+def _candidate_search_many(
+    queries: list[str], size: int, context_text: str | None = None
+) -> list[LocationCandidate]:
     candidates: list[LocationCandidate] = []
     seen: set[str] = set()
 
     for query in queries:
-        for candidate in _candidate_search(query, size):
-            key = f"{_normalize(candidate.label)}:{candidate.lat:.6f}:{candidate.lng:.6f}"
-            if key in seen:
-                continue
-            seen.add(key)
-            candidates.append(candidate)
+        for search_query in _regionalized_queries(query, context_text):
+            for candidate in _candidate_search(search_query, size):
+                key = f"{_normalize(candidate.label)}:{candidate.lat:.6f}:{candidate.lng:.6f}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                candidates.append(candidate)
 
     return candidates[: max(size, 10)]
 
@@ -241,68 +303,17 @@ def _candidate_at(
 
 
 def _select_candidate_by_score(
-    query: str | None, candidates: list[LocationCandidate]
+    query: str | None,
+    candidates: list[LocationCandidate],
+    context_text: str | None = None,
 ) -> LocationCandidate | None:
     if not query or not candidates:
         return None
 
-    query_normalized = _normalize(query)
-    terms = _terms(query)
-    school_query = any(keyword in query for keyword in ["대학교", "대학", "캠퍼스"])
-    station_query = "역" in query
     best: tuple[int, int, LocationCandidate] | None = None
 
     for index, candidate in enumerate(candidates):
-        label = _normalize(candidate.label)
-        address = _normalize(candidate.address or "")
-        category = _normalize(candidate.category or "")
-        score = 0
-        matched_terms = 0
-
-        if label == query_normalized:
-            score += 80
-        if query_normalized and query_normalized in label:
-            score += 42
-        if label and label in query_normalized:
-            score += 34
-
-        for term in terms:
-            term_matched = False
-            if term in label:
-                score += 12
-                term_matched = True
-            if term in address:
-                score += 8
-                term_matched = True
-            if term in category:
-                score += 3
-                term_matched = True
-            if term_matched:
-                matched_terms += 1
-
-        if len(terms) >= 2:
-            score += matched_terms * 20
-            if matched_terms <= 1:
-                score -= 20
-
-        if school_query:
-            if "학교" in (candidate.category or ""):
-                score += 45
-            else:
-                score -= 10
-            if "캠퍼스" in candidate.label:
-                score += 14
-            if "점" in candidate.label or "우편취급국" in candidate.label:
-                score -= 12
-        if station_query and "역" in candidate.label:
-            score += 10
-            if "기차역" in (candidate.category or ""):
-                score += 12
-        if candidate.source == "kakao-address":
-            score += 3
-        if candidate.source == "kakao-keyword":
-            score += 2
-
+        score = _candidate_score(query, candidate, context_text)
         ranked = (score, -index, candidate)
         if best is None or ranked[:2] > best[:2]:
             best = ranked
@@ -316,22 +327,234 @@ def _select_distinct_candidate_by_score(
     query: str | None,
     candidates: list[LocationCandidate],
     disallowed: LocationCandidate,
+    context_text: str | None = None,
 ) -> LocationCandidate | None:
     return _select_candidate_by_score(
         query,
         [candidate for candidate in candidates if not _same_candidate(candidate, disallowed)],
+        context_text,
     )
 
 
 def _select_best_across_queries(
     queries: list[str],
     candidates: list[LocationCandidate],
+    context_text: str | None = None,
 ) -> LocationCandidate | None:
     for query in queries:
-        selected = _select_candidate_by_score(query, candidates)
+        selected = _select_candidate_by_score(query, candidates, context_text)
         if selected:
             return selected
     return None
+
+
+def _prefer_score_adjusted_candidate(
+    query: str | None,
+    context_text: str | None,
+    selected: LocationCandidate | None,
+    scored: LocationCandidate | None,
+) -> LocationCandidate | None:
+    if not scored:
+        return selected
+    if not selected:
+        return scored
+    if _same_candidate(selected, scored):
+        return selected
+
+    selected_score = _candidate_score(query, selected, context_text)
+    scored_score = _candidate_score(query, scored, context_text)
+    if scored_score >= selected_score + 35:
+        return scored
+    return selected
+
+
+def _candidate_score(
+    query: str | None,
+    candidate: LocationCandidate,
+    context_text: str | None = None,
+) -> int:
+    if not query:
+        return 0
+
+    query_normalized = _normalize(query)
+    terms = _terms(query)
+    school_query = any(keyword in query for keyword in ["대학교", "대학", "캠퍼스"])
+    station_query = "역" in query
+    label = _normalize(candidate.label)
+    address = _normalize(candidate.address or "")
+    category = _normalize(candidate.category or "")
+    score = 0
+    matched_terms = 0
+
+    if label == query_normalized:
+        score += 80
+    if query_normalized and query_normalized in label:
+        score += 42
+    if label and label in query_normalized:
+        score += 34
+
+    for term in terms:
+        term_matched = False
+        if term in label:
+            score += 12
+            term_matched = True
+        if term in address:
+            score += 10
+            term_matched = True
+        if term in category:
+            score += 3
+            term_matched = True
+        if term_matched:
+            matched_terms += 1
+
+    if len(terms) >= 2:
+        score += matched_terms * 20
+        if matched_terms <= 1:
+            score -= 20
+
+    score += _region_match_score(query, context_text, candidate)
+
+    if school_query:
+        if "학교" in (candidate.category or ""):
+            score += 45
+        else:
+            score -= 10
+        if "캠퍼스" in candidate.label:
+            score += 14
+        if "점" in candidate.label or "우편취급국" in candidate.label:
+            score -= 12
+    if station_query and "역" in candidate.label:
+        score += 10
+        if "기차역" in (candidate.category or ""):
+            score += 12
+    if candidate.source == "kakao-address":
+        score += 3
+    if candidate.source == "kakao-keyword":
+        score += 2
+
+    return score
+
+
+def _region_match_score(
+    query: str,
+    context_text: str | None,
+    candidate: LocationCandidate,
+) -> int:
+    hints = _region_hints(query, context_text)
+    if not hints:
+        return 0
+
+    label = _normalize(candidate.label)
+    address = _normalize(candidate.address or "")
+    candidate_text = f"{label} {address}"
+    normalized_hints = [_normalize(hint) for hint in hints]
+    score = 0
+
+    if any(hint and hint in address for hint in normalized_hints):
+        score += 45
+    elif any(hint and hint in candidate_text for hint in normalized_hints):
+        score += 20
+
+    allowed_major_regions = {
+        region
+        for region in MAJOR_REGION_TOKENS
+        if _normalize(region) in normalized_hints
+    }
+    if allowed_major_regions and _major_region_conflicts(address, allowed_major_regions):
+        score -= 150
+
+    return score
+
+
+def _region_hints(query: str, context_text: str | None = None) -> list[str]:
+    explicit_query_regions = _major_regions_in_text(query)
+    if explicit_query_regions:
+        return explicit_query_regions
+
+    context_regions = _region_tokens_from_context(context_text)
+    if context_regions:
+        return context_regions
+
+    for area, hints in SEOUL_AREA_REGION_HINTS.items():
+        if _normalize(area) in _normalize(query):
+            return hints
+    return []
+
+
+def _major_regions_in_text(text: str | None) -> list[str]:
+    normalized = _normalize(text or "")
+    return [
+        region for region in MAJOR_REGION_TOKENS if _normalize(region) in normalized
+    ]
+
+
+def _region_tokens_from_context(context_text: str | None) -> list[str]:
+    if not context_text:
+        return []
+
+    tokens: list[str | None] = [*_major_regions_in_text(context_text)]
+    for match in re.findall(r"([가-힣]{2,6})(?:시|군|구)", context_text):
+        tokens.append(match)
+    for match in re.findall(r"([가-힣]{2,8})(?:읍|면|동)", context_text):
+        tokens.append(match)
+    return _unique_region_tokens(tokens)
+
+
+def _unique_region_tokens(values: list[str | None]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not value:
+            continue
+        cleaned = value.strip()
+        if len(cleaned) < 2:
+            continue
+        key = _normalize(cleaned)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(cleaned)
+    return unique
+
+
+def _major_region_conflicts(address: str, allowed_major_regions: set[str]) -> bool:
+    if not address:
+        return False
+    normalized_allowed = {_normalize(region) for region in allowed_major_regions}
+    for region in MAJOR_REGION_TOKENS:
+        normalized_region = _normalize(region)
+        if normalized_region in address and normalized_region not in normalized_allowed:
+            return True
+    return False
+
+
+def _candidate_region_context(candidate: LocationCandidate | None) -> str | None:
+    if not candidate:
+        return None
+    return " ".join(
+        value
+        for value in [candidate.label, candidate.address, candidate.category]
+        if value
+    )
+
+
+def _regionalized_queries(query: str, context_text: str | None = None) -> list[str]:
+    hints = _region_hints(query, context_text)
+    variants: list[str | None] = []
+    compact = _normalize(query)
+    for prefix in _search_region_prefixes(hints):
+        if _normalize(prefix) not in compact:
+            variants.append(f"{prefix} {query}")
+    variants.append(query)
+    return _unique_queries(variants)
+
+
+def _search_region_prefixes(hints: list[str]) -> list[str]:
+    if "서울" in hints:
+        return [prefix for prefix in ["서울", "종로" if "종로" in hints else None] if prefix]
+    if "부산" in hints:
+        return ["부산"]
+    return []
 
 
 def _same_candidate(a: LocationCandidate, b: LocationCandidate) -> bool:
