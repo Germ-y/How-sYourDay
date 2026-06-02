@@ -175,6 +175,10 @@ type SavedPlaceEntry = {
   lng?: number | null;
   updatedAt: string;
 };
+type CustomWaypoint = {
+  id: string;
+  value: string;
+};
 type PreferencePoint = {
   id: string;
   name: string;
@@ -237,6 +241,8 @@ export default function HomePage() {
     defaultPreviewInsights()
   );
   const [editedWaypoints, setEditedWaypoints] = useState<Record<string, string>>({});
+  const [deletedWaypoints, setDeletedWaypoints] = useState<Record<string, boolean>>({});
+  const [customWaypoints, setCustomWaypoints] = useState<CustomWaypoint[]>([]);
   const [editingWaypointKey, setEditingWaypointKey] = useState<string | null>(null);
   const [suggestedMoodLabels, setSuggestedMoodLabels] = useState<string[]>([]);
   const [previewSource, setPreviewSource] = useState("rules");
@@ -261,8 +267,16 @@ export default function HomePage() {
     [activeMood, moodCandidates]
   );
   const routeWaypointHints = useMemo(
-    () => collectPreviewWaypointHints(previewInsights, editedWaypoints),
-    [editedWaypoints, previewInsights]
+    () =>
+      [
+        ...collectPreviewWaypointHints(
+          previewInsights,
+          editedWaypoints,
+          deletedWaypoints
+        ),
+        ...customWaypoints.map((waypoint) => waypoint.value.trim()).filter(Boolean)
+      ].slice(0, 5),
+    [customWaypoints, deletedWaypoints, editedWaypoints, previewInsights]
   );
   const quickSavedPlaces = useMemo(
     () => buildQuickSavedPlaces(savedPlaces),
@@ -635,6 +649,10 @@ export default function HomePage() {
 
   function handleRouteRequestTextChange(value: string) {
     setText(value);
+    setEditedWaypoints({});
+    setDeletedWaypoints({});
+    setCustomWaypoints([]);
+    setEditingWaypointKey(null);
     if (!originEdited) {
       setOriginText("");
       setSelectedOriginLocation(null);
@@ -1024,6 +1042,37 @@ export default function HomePage() {
     }));
   }
 
+  function handleWaypointDelete(key: string) {
+    setDeletedWaypoints((current) => ({
+      ...current,
+      [key]: true
+    }));
+    setEditingWaypointKey((current) => (current === key ? null : current));
+  }
+
+  function handleCustomWaypointAdd() {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const key = customWaypointKey(id);
+    setCustomWaypoints((current) => [...current, { id, value: "조용한 카페" }]);
+    setEditingWaypointKey(key);
+  }
+
+  function handleCustomWaypointChange(id: string, value: string) {
+    setCustomWaypoints((current) =>
+      current.map((waypoint) =>
+        waypoint.id === id ? { ...waypoint, value } : waypoint
+      )
+    );
+  }
+
+  function handleCustomWaypointDelete(id: string) {
+    const key = customWaypointKey(id);
+    setCustomWaypoints((current) =>
+      current.filter((waypoint) => waypoint.id !== id)
+    );
+    setEditingWaypointKey((current) => (current === key ? null : current));
+  }
+
   function handlePoiVote(id: string, vote: PreferenceVote) {
     const point = preferencePoints.find((item) => item.id === id);
     setPoiVotes((current) => ({
@@ -1296,12 +1345,18 @@ export default function HomePage() {
 
           <div className="grid gap-4 lg:self-start">
             <PlanPreview
+              customWaypoints={customWaypoints}
+              deletedWaypoints={deletedWaypoints}
               destinationText={destinationText}
               editedWaypoints={editedWaypoints}
               editingWaypointKey={editingWaypointKey}
               insights={previewInsights}
               isLoading={isPreviewLoading}
+              onCustomWaypointAdd={handleCustomWaypointAdd}
+              onCustomWaypointChange={handleCustomWaypointChange}
+              onCustomWaypointDelete={handleCustomWaypointDelete}
               onWaypointChange={handleWaypointChange}
+              onWaypointDelete={handleWaypointDelete}
               onWaypointEditToggle={handleWaypointEditToggle}
               originText={originText}
               source={previewSource}
@@ -2391,28 +2446,46 @@ function RouteResultPage({
 }
 
 function PlanPreview({
+  customWaypoints,
+  deletedWaypoints,
   destinationText,
   editedWaypoints,
   editingWaypointKey,
   insights,
   isLoading,
+  onCustomWaypointAdd,
+  onCustomWaypointChange,
+  onCustomWaypointDelete,
   onWaypointChange,
+  onWaypointDelete,
   onWaypointEditToggle,
   originText,
   source
 }: {
+  customWaypoints: CustomWaypoint[];
+  deletedWaypoints: Record<string, boolean>;
   destinationText: string;
   editedWaypoints: Record<string, string>;
   editingWaypointKey: string | null;
   insights: PreviewInsight[];
   isLoading: boolean;
+  onCustomWaypointAdd: () => void;
+  onCustomWaypointChange: (id: string, value: string) => void;
+  onCustomWaypointDelete: (id: string) => void;
   onWaypointChange: (key: string, value: string) => void;
+  onWaypointDelete: (key: string) => void;
   onWaypointEditToggle: (key: string, value: string) => void;
   originText: string;
   source: string;
 }) {
   const routeLabel = previewRouteLabel(insights, originText, destinationText);
   const cueInsights = previewCueInsights(insights);
+  const visibleCueInsights = cueInsights
+    .map((insight, index) => ({ insight, index }))
+    .filter(({ insight, index }) => {
+      const waypointKey = previewWaypointKey(insight, index);
+      return !isEditableWaypointInsight(insight) || !deletedWaypoints[waypointKey];
+    });
 
   return (
     <section className="rounded-[24px] bg-white p-4 shadow-[0_14px_40px_rgba(23,26,24,0.055)] ring-1 ring-ink/8">
@@ -2443,7 +2516,7 @@ function PlanPreview({
       </div>
 
       <div className="mt-4 grid gap-2">
-        {cueInsights.map((insight, index) => {
+        {visibleCueInsights.map(({ insight, index }) => {
           const waypointKey = previewWaypointKey(insight, index);
           const editable = isEditableWaypointInsight(insight);
           const value = editable
@@ -2457,12 +2530,39 @@ function PlanPreview({
               isEditing={editingWaypointKey === waypointKey}
               key={`${insight.label}-${insight.value}-${index}`}
               label={insight.label}
+              onDelete={() => onWaypointDelete(waypointKey)}
               onEditToggle={() => onWaypointEditToggle(waypointKey, insight.value)}
               onValueChange={(nextValue) => onWaypointChange(waypointKey, nextValue)}
               value={value}
             />
           );
         })}
+        {customWaypoints.map((waypoint) => {
+          const waypointKey = customWaypointKey(waypoint.id);
+          return (
+            <PlannerCue
+              editable
+              icon={<MapPin size={15} aria-hidden />}
+              isEditing={editingWaypointKey === waypointKey}
+              key={waypointKey}
+              label="직접 경유"
+              onDelete={() => onCustomWaypointDelete(waypoint.id)}
+              onEditToggle={() => onWaypointEditToggle(waypointKey, waypoint.value)}
+              onValueChange={(nextValue) =>
+                onCustomWaypointChange(waypoint.id, nextValue)
+              }
+              value={waypoint.value}
+            />
+          );
+        })}
+        <button
+          className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#ddf3eb] px-3 text-sm font-semibold text-moss transition hover:bg-[#d2eee4] active:scale-[0.98]"
+          type="button"
+          onClick={onCustomWaypointAdd}
+        >
+          <Plus size={16} aria-hidden />
+          경유 추가
+        </button>
       </div>
     </section>
   );
@@ -3115,6 +3215,7 @@ function PlannerCue({
   icon,
   isEditing = false,
   label,
+  onDelete,
   onEditToggle,
   onValueChange,
   value
@@ -3123,6 +3224,7 @@ function PlannerCue({
   icon: ReactNode;
   isEditing?: boolean;
   label: string;
+  onDelete?: () => void;
   onEditToggle?: () => void;
   onValueChange?: (value: string) => void;
   value?: string;
@@ -3173,18 +3275,28 @@ function PlannerCue({
         )}
       </span>
       {editable ? (
-        <button
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#ddf3eb] text-moss transition hover:bg-[#d2eee4] active:scale-95"
-          type="button"
-          onClick={onEditToggle}
-          aria-label={`${label} 수정`}
-        >
-          {isEditing ? (
-            <CheckCircle2 size={15} aria-hidden />
-          ) : (
-            <PencilLine size={15} aria-hidden />
-          )}
-        </button>
+        <span className="flex shrink-0 gap-1">
+          <button
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#ddf3eb] text-moss transition hover:bg-[#d2eee4] active:scale-95"
+            type="button"
+            onClick={onEditToggle}
+            aria-label={`${label} 수정`}
+          >
+            {isEditing ? (
+              <CheckCircle2 size={15} aria-hidden />
+            ) : (
+              <PencilLine size={15} aria-hidden />
+            )}
+          </button>
+          <button
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#fde2ef] text-tide transition hover:bg-[#f7d4e7] active:scale-95"
+            type="button"
+            onClick={onDelete}
+            aria-label={`${label} 삭제`}
+          >
+            <Trash2 size={15} aria-hidden />
+          </button>
+        </span>
       ) : null}
     </div>
   );
@@ -4227,7 +4339,8 @@ function isEditableWaypointInsight(insight: PreviewInsight) {
 
 function collectPreviewWaypointHints(
   insights: PreviewInsight[],
-  edits: Record<string, string>
+  edits: Record<string, string>,
+  deleted: Record<string, boolean> = {}
 ) {
   return previewCueInsights(insights)
     .flatMap((insight, index) => {
@@ -4235,6 +4348,9 @@ function collectPreviewWaypointHints(
         return [];
       }
       const key = previewWaypointKey(insight, index);
+      if (deleted[key]) {
+        return [];
+      }
       const value = (edits[key] ?? insight.value).trim();
       if (!value || isWaypointPlaceholder(value)) {
         return [];
@@ -4242,6 +4358,10 @@ function collectPreviewWaypointHints(
       return [value];
     })
     .slice(0, 5);
+}
+
+function customWaypointKey(id: string) {
+  return `custom:${id}`;
 }
 
 function isWaypointPlaceholder(value: string) {
