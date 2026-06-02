@@ -16,6 +16,7 @@ class PlanRequest(BaseModel):
     user_text: str = Field(min_length=1)
     origin: Location
     destination: Location | None = None
+    waypoint_hints: list[str] = Field(default_factory=list)
 
 
 class GeocodeRequest(BaseModel):

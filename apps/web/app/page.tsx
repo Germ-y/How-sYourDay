@@ -888,13 +888,13 @@ export default function HomePage() {
         text,
         activeMood,
         poiVotes,
-        preferencePoints,
-        routeWaypointHints
+        preferencePoints
       );
       const result = await requestDailyPlan(
         planningText,
         originResult.location,
-        destinationResult.location
+        destinationResult.location,
+        routeWaypointHints
       );
       setLocationStatus(
         `${originResult.location.label} → ${destinationResult.location.label}`
@@ -4655,8 +4655,7 @@ function buildPlanningText(
   current: string,
   activeMood: string,
   votes: Record<string, PreferenceVote>,
-  points: PreferencePoint[],
-  waypointHints: string[] = []
+  points: PreferencePoint[]
 ) {
   const liked = points.filter((item) => votes[item.id] === "like").map(
     (item) => item.name
@@ -4681,10 +4680,6 @@ function buildPlanningText(
   if (dislikedTypes.length > 0) {
     additions.push(`피하고 싶은 장소 유형/태그: ${dislikedTypes.join(", ")}`);
   }
-  if (waypointHints.length > 0) {
-    additions.push(`사용자가 확인/수정한 경유 후보: ${waypointHints.join(", ")}`);
-  }
-
   return [current.trim(), additions.join("\n")].filter(Boolean).join("\n\n");
 }
 

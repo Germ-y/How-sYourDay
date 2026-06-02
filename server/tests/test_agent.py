@@ -38,6 +38,7 @@ from tools.search_poi import search_poi_candidates
 from tools.extract_intent import extract_intent
 from tools.extract_route_locations import extract_route_locations
 from tools.geocode import geocode_location, search_location_candidates
+from tools.manual_waypoints import normalize_manual_waypoints
 from tools.preview_insights import build_preview_insights
 from tools.prompt_loader import kst_runtime_context
 from tools import geocode, route_location_resolution
@@ -524,6 +525,45 @@ def test_route_with_destination_does_not_use_static_mock_stop(monkeypatch) -> No
     )
 
     assert candidates == []
+
+
+def test_manual_waypoint_normalization_preserves_brand_and_errand(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    tasks = normalize_manual_waypoints(
+        ["스타벅스", "다이소"],
+        "서울숲에서 성수역까지 가는데 카페에서 작업하다가 다이소도 들러야해",
+        Location(label="서울숲", lat=37.5446, lng=127.0374),
+        Location(label="성수역", lat=37.5446, lng=127.0559),
+    )
+
+    assert [(task.kind, task.poi_query) for task in tasks] == [
+        ("recovery", "스타벅스"),
+        ("errand", "다이소"),
+    ]
+    assert all(task.required for task in tasks)
+
+
+def test_plan_request_waypoint_hints_feed_poi_search(monkeypatch) -> None:
+    searched_queries = []
+
+    def fake_search(tasks, origin, user_text=""):
+        searched_queries.extend(task.poi_query for task in tasks)
+        return []
+
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+    monkeypatch.setattr("tools.search_poi.search_kakao_poi_candidates", fake_search)
+
+    DailyPlanningAgent().run(
+        PlanRequest(
+            user_text="서울숲에서 성수역까지 바로 가고 싶어",
+            origin=Location(label="서울숲", lat=37.5446, lng=127.0374),
+            destination=Location(label="성수역", lat=37.5446, lng=127.0559),
+            waypoint_hints=["스타벅스"],
+        )
+    )
+
+    assert "스타벅스" in searched_queries
 
 
 def test_geocode_uses_known_location_without_api_key(monkeypatch) -> None:

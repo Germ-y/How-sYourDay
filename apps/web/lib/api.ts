@@ -297,7 +297,8 @@ const ACCESS_TOKEN_KEY = "hows-your-day.access-token.v1";
 export async function requestDailyPlan(
   userText: string,
   origin: Location,
-  destination: Location
+  destination: Location,
+  waypointHints: string[] = []
 ): Promise<DailyPlan> {
   const response = await fetch(`${API_BASE_URL}/plan`, {
     method: "POST",
@@ -308,7 +309,8 @@ export async function requestDailyPlan(
     body: JSON.stringify({
       user_text: userText,
       origin,
-      destination
+      destination,
+      waypoint_hints: waypointHints
     })
   });
 
