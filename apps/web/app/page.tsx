@@ -73,7 +73,7 @@ const MOOD_PRESETS = [
   {
     label: "바쁨",
     sentence: "시간 제약 높음. 우회보다 도착 시간을 우선.",
-    keywords: ["바쁨", "급", "빨리", "늦", "촉박", "시간", "까지", "전", "시", "약속", "보기로", "만나", "도착", "urgent", "hurry"]
+    keywords: ["바쁨", "급", "빨리", "늦", "촉박", "약속", "보기로", "만나", "도착해야", "urgent", "hurry"]
   },
   {
     label: "급함",
@@ -363,6 +363,11 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    setPreviewInsights(
+      buildLocalPreviewInsights(text, originText, destinationText, activeMood)
+    );
+    setSuggestedMoodLabels(buildLocalMoodLabels(text));
+    setPreviewSource("local");
     setIsPreviewLoading(true);
     const timer = window.setTimeout(async () => {
       try {
@@ -3701,30 +3706,38 @@ function previewRouteLabel(
   originText: string,
   destinationText: string
 ) {
+  const formRouteLabel = buildFormRouteLabel(originText, destinationText);
+  if (formRouteLabel) {
+    return formRouteLabel;
+  }
+
   const routeInsight = insights.find(
     (insight) => insight.kind === "route" && insight.value.includes("→")
   );
   return routeInsight?.value ?? `${originText || "출발지"} → ${destinationText || "도착지"}`;
 }
 
+function buildFormRouteLabel(originText: string, destinationText: string) {
+  const origin = originText.trim();
+  const destination = destinationText.trim();
+  if (!origin && !destination) {
+    return "";
+  }
+  return `${origin || "출발지"} → ${destination || "도착지"}`;
+}
+
 function previewCueInsights(insights: PreviewInsight[]) {
-  const defaults = defaultPreviewInsights().filter(
-    (insight) => insight.kind !== "route"
-  );
   const cues = insights.filter((insight) => insight.kind !== "route");
-  const merged = [...cues, ...defaults];
   const seen = new Set<string>();
 
-  return merged
-    .filter((insight) => {
-      const key = `${insight.label}:${insight.value}`;
-      if (seen.has(key)) {
-        return false;
-      }
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 3);
+  return cues.filter((insight) => {
+    const key = `${insight.label}:${insight.value}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 function buildLocalPreviewInsights(
@@ -3757,7 +3770,7 @@ function buildLocalPreviewInsights(
     kind: "mood"
   });
 
-  return [...insights, ...defaultPreviewInsights()].slice(0, 4);
+  return insights;
 }
 
 function buildLocalStopInsights(text: string): PreviewInsight[] {

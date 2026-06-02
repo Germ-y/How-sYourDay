@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 
 from api.schemas import Constraints, EmotionState, Task
@@ -19,6 +20,12 @@ TASK_RULES = {
     "recover": ("recovery", "Take a short recovery break", "quiet cafe"),
     "coffee": ("recovery", "Take a short recovery break", "quiet cafe"),
     "cafe": ("recovery", "Take a short recovery break", "quiet cafe"),
+    "카페": ("recovery", "Take a short recovery break", "quiet cafe"),
+    "커피": ("recovery", "Take a short recovery break", "quiet cafe"),
+    "과제": ("recovery", "Find a comfortable place to work", "quiet cafe"),
+    "작업": ("recovery", "Find a comfortable place to work", "quiet cafe"),
+    "공부": ("recovery", "Find a comfortable place to study", "quiet cafe"),
+    "조용": ("recovery", "Find a quiet place", "quiet cafe"),
     "쉬": ("recovery", "Take a short recovery break", "quiet cafe"),
 }
 
@@ -57,16 +64,6 @@ def _extract_intent_with_rules(user_text: str) -> ExtractedIntent:
                     priority=len(tasks) + 1,
                 )
             )
-
-    if not tasks:
-        tasks.append(
-            Task(
-                kind="recovery",
-                label="Find a comfortable place to reset",
-                poi_query="quiet cafe",
-                priority=1,
-            )
-        )
 
     constraints = Constraints(
         deadline=_extract_deadline(lowered),
@@ -138,7 +135,7 @@ def _analyze_emotion(text: str) -> EmotionState:
 
 def _infer_mood_candidates(text: str) -> list[str]:
     rules = [
-        ("바쁨", ["바쁨", "급", "빨리", "늦", "촉박", "시간", "까지", "전", "시", "약속", "보기로", "만나", "도착", "hurry", "urgent"]),
+        ("바쁨", ["바쁨", "급", "빨리", "늦", "촉박", "약속", "보기로", "만나", "도착해야", "hurry", "urgent"]),
         ("급함", ["급", "빨리", "늦", "촉박", "hurry", "urgent"]),
         ("여유", ["여유", "천천", "둘러", "괜찮", "slow"]),
         ("산책", ["산책", "걸", "걷", "돌아다니", "선선", "walk"]),
@@ -158,6 +155,8 @@ def _infer_mood_candidates(text: str) -> list[str]:
     scored: list[tuple[int, int, str]] = []
     for index, (label, keywords) in enumerate(rules):
         score = sum(1 for keyword in keywords if keyword in text)
+        if label == "바쁨" and _has_time_pressure_hint(text):
+            score += 2
         if score:
             scored.append((-score, index, label))
 
@@ -166,3 +165,12 @@ def _infer_mood_candidates(text: str) -> list[str]:
         if fallback not in labels:
             labels.append(fallback)
     return labels[:4]
+
+
+def _has_time_pressure_hint(text: str) -> bool:
+    return bool(
+        re.search(r"\d+\s*(?:시|분)\s*(?:까지|전|안에)?", text)
+        or re.search(r"(?:오전|오후)\s*\d+", text)
+        or re.search(r"\d+\s*시간\s*안", text)
+        or any(marker in text for marker in ["마감", "늦지", "촉박"])
+    )

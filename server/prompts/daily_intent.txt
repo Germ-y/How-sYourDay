@@ -93,6 +93,12 @@ Read the whole sentence before deciding.
 Treat casual Korean as meaningful.
 Use context, not only keywords.
 Prefer practical interpretation over literal word matching.
+Judge mood_candidates semantically, not by isolated particles.
+When "까지" follows a place name, treat it as a destination marker unless a time expression or urgency word is also present.
+Examples of place-destination "까지": "성수역까지", "서울역까지", "홍대까지", "집까지".
+These alone do not mean the user is busy.
+Examples of time-pressure "까지": "5시까지", "18시까지", "30분 안에", "늦지 않게", "빨리", "급해".
+These can justify 바쁨 or 급함.
 Detect multiple simultaneous states when present.
 Rank mood_candidates by what most affects routing.
 Use Korean labels for task labels when the user writes Korean.
@@ -101,6 +107,8 @@ Use poi_query values that can be searched on a local map.
 Keep poi_query practical, such as "quiet cafe", "print shop", "clinic", "park".
 Treat optional stops as optional unless the user says they must visit.
 Use recovery when a stop helps rest, calm, focus, or comfort.
+Use recovery when the user wants to stop at a cafe, drink coffee, study, do an assignment, do laptop work, work quietly, or avoid noise on the way.
+Korean examples that should create a recovery task: "카페에서 과제", "카페에서 노트북 작업", "커피 한잔", "조용한 곳", "시끄러운 곳은 싫어".
 Set recovery_need high when the user wants cafe/rest/quiet/recovery.
 Set walking_tolerance high when the user wants to walk or wander.
 Set walking_tolerance low when the user is tired or wants less effort.
@@ -128,6 +136,9 @@ All allowed mood labels are short two-character Korean UI chips.
 Do not use three-character labels such as "가벼움".
 Do not use unsupported task kinds.
 Do not choose more or fewer than four mood_candidates.
+Do not use keyword matching mechanically.
+Do not rank 바쁨 first just because the route sentence contains a place followed by "까지".
+Do not infer time pressure from destination grammar.
 
 Task Decision Rules
 Use print when the user needs printing, copying, scanning, document output, or "리포트 출력".
@@ -190,7 +201,8 @@ Mood Candidate Ranking Rules
 mood_candidates must contain exactly four labels.
 Order matters.
 The first label should be the best immediate condition chip.
-바쁨 means deadline, appointment, "까지", "전", "늦", "빨리", "급", "도착해야".
+바쁨 means deadline, appointment, "5시까지", "18시 전", "30분 안에", "늦", "빨리", "급", "도착해야".
+Do not choose 바쁨 only because "까지" follows a place name, such as "성수역까지" or "서울역까지".
 급함 means immediate urgency, rushing, lateness risk, "빨리", "급", "촉박".
 여유 means spare time, flexible movement, "천천히", "둘러", "괜찮".
 산책 means walking, wandering, nice weather, "걷", "걸을", "산책", "선선".

@@ -19,8 +19,8 @@ PREVIEW_INSIGHTS_SCHEMA = {
     "properties": {
         "insights": {
             "type": "array",
-            "minItems": 4,
-            "maxItems": 4,
+            "minItems": 1,
+            "maxItems": 8,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
@@ -64,7 +64,7 @@ def build_preview_insights(
     )
     if llm_insights:
         mood_candidates = intent.mood_candidates if intent else _default_mood_candidates()
-        return llm_insights[:4], "llm", mood_candidates[:4]
+        return llm_insights, "llm", mood_candidates[:4]
 
     insights: list[PreviewInsight] = []
     if origin or destination:
@@ -101,21 +101,12 @@ def build_preview_insights(
         if emotion_point:
             insights.append(emotion_point)
 
-    if active_mood and len(insights) < 4:
-        insights.append(
-            PreviewInsight(
-                label="컨디션",
-                value=f"{active_mood} 기준으로 경로 비교",
-                kind="mood",
-            )
-        )
-
-    while len(insights) < 4:
-        insights.append(_empty_insight(len(insights)))
+    mood_label = _first_mood_label(active_mood, intent.mood_candidates if intent else [])
+    _ensure_mood_insight(insights, mood_label)
 
     source = "llm" if route_hints and route_hints.source == "llm" else "rules"
     mood_candidates = intent.mood_candidates if intent else _default_mood_candidates()
-    return insights[:4], source, mood_candidates[:4]
+    return _limit_insights(insights), source, mood_candidates[:4]
 
 
 def _preview_insights_with_llm(
@@ -230,10 +221,7 @@ def _repair_preview_insights(
         seen.add(key)
         unique.append(insight)
 
-    while len(unique) < 4:
-        unique.append(_empty_insight(len(unique)))
-
-    return unique[:4]
+    return _limit_insights(unique)
 
 
 def _task_insight(tasks) -> PreviewInsight | None:
@@ -306,8 +294,35 @@ def _empty_insight(index: int) -> PreviewInsight:
     return defaults[index]
 
 
+def _limit_insights(insights: list[PreviewInsight]) -> list[PreviewInsight]:
+    return insights[:8]
+
+
 def _default_mood_candidates() -> list[str]:
     return ["피곤", "바쁨", "여유", "휴식"]
+
+
+def _first_mood_label(active_mood: str | None, mood_candidates: list[str]) -> str | None:
+    if active_mood and active_mood.strip():
+        return active_mood.strip()
+    for label in mood_candidates:
+        if label and label.strip():
+            return label.strip()
+    return None
+
+
+def _ensure_mood_insight(insights: list[PreviewInsight], mood_label: str | None) -> None:
+    if not mood_label or any(insight.kind == "mood" for insight in insights):
+        return
+
+    if len(insights) < 4:
+        insights.append(
+            PreviewInsight(
+                label="컨디션",
+                value=f"{mood_label} 기준으로 경로 비교",
+                kind="mood",
+            )
+        )
 
 
 def _first_present(*values: str | None) -> str | None:
@@ -318,7 +333,12 @@ def _first_present(*values: str | None) -> str | None:
 
 
 def _has_time_hint(text: str) -> bool:
-    return any(marker in text for marker in ["시", "분", "까지", "전", "deadline"])
+    return bool(
+        re.search(r"\d+\s*(?:시|분)\s*(?:까지|전|안에)?", text)
+        or re.search(r"(?:오전|오후)\s*\d+", text)
+        or re.search(r"\d+\s*시간\s*안", text)
+        or any(marker in text for marker in ["deadline", "마감", "늦지", "촉박"])
+    )
 
 
 def _waypoint_hint(text: str, destination: str | None = None) -> str | None:
