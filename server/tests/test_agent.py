@@ -41,6 +41,7 @@ def setup_module() -> None:
     import os
 
     os.environ["HYS_DISABLE_TMAP"] = "1"
+    os.environ["HYS_DISABLE_OSRM"] = "1"
     os.environ["HYS_DISABLE_LLM"] = "1"
 
 
@@ -99,6 +100,7 @@ def test_mock_routes_expose_reliability_metadata() -> None:
 def test_real_tmap_route_excludes_mock_candidates(monkeypatch) -> None:
     from tools import route_path
 
+    monkeypatch.setenv("HYS_DISABLE_OSRM", "1")
     monkeypatch.setattr(
         route_path,
         "build_tmap_route_candidates",
@@ -133,6 +135,89 @@ def test_real_tmap_route_excludes_mock_candidates(monkeypatch) -> None:
     )
 
     assert [route.provider for route in routes] == ["tmap-pedestrian"]
+
+
+def test_osrm_route_is_normalized(monkeypatch) -> None:
+    from tools import osrm_route
+
+    monkeypatch.delenv("HYS_DISABLE_OSRM", raising=False)
+    monkeypatch.setenv("OSRM_PROFILE", "driving")
+    monkeypatch.setattr(osrm_route, "_get_osrm_base_url", lambda: "https://osrm.test")
+    monkeypatch.setattr(
+        osrm_route,
+        "_fetch_osrm_route",
+        lambda base_url, profile, waypoints: {
+            "routes": [
+                {
+                    "duration": 900,
+                    "distance": 3200,
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [
+                            [waypoints[0].lng, waypoints[0].lat],
+                            [waypoints[-1].lng, waypoints[-1].lat],
+                        ],
+                    },
+                    "legs": [{"duration": 900}],
+                }
+            ]
+        },
+    )
+
+    routes = osrm_route.build_osrm_route_candidates(
+        [],
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+        Location(label="Home", lat=37.5826, lng=127.0019),
+    )
+
+    assert routes[0].provider == "osrm"
+    assert routes[0].route_mode == "driving"
+    assert routes[0].real_duration_minutes == 15
+    assert routes[0].distance_meters == 3200
+    assert routes[0].polyline[0].lat == 37.5882
+
+
+def test_route_path_uses_osrm_when_tmap_is_disabled(monkeypatch) -> None:
+    from tools import route_path
+
+    monkeypatch.setenv("HYS_DISABLE_TMAP", "1")
+    monkeypatch.delenv("HYS_DISABLE_OSRM", raising=False)
+    monkeypatch.setattr(route_path, "build_tmap_route_candidates", lambda stops, origin, destination: [])
+    monkeypatch.setattr(
+        route_path,
+        "build_osrm_route_candidates",
+        lambda stops, origin, destination: [
+            route_path.RouteCandidate(
+                id="route-osrm-driving",
+                provider="osrm",
+                route_mode="driving",
+                stops=stops,
+                walking_minutes=5,
+                transfer_count=0,
+                crowd_level="medium",
+                estimated_minutes=12,
+                real_duration_minutes=12,
+                estimated_duration_minutes=None,
+                distance_meters=2200,
+                fare=0,
+                fallback_reason="OSRM 개발용 경로로 계산했어요.",
+                cost_estimate=0,
+                polyline=[
+                    Coordinate(lat=origin.lat, lng=origin.lng),
+                    Coordinate(lat=destination.lat, lng=destination.lng),
+                ],
+                segments=[],
+            )
+        ],
+    )
+
+    routes = route_path.build_route_candidates(
+        [],
+        Location(label="Current location", lat=37.5882, lng=126.9936),
+        Location(label="Home", lat=37.5826, lng=127.0019),
+    )
+
+    assert [route.provider for route in routes] == ["osrm"]
 
 
 def test_kakao_poi_is_normalized_when_provider_returns_result(monkeypatch) -> None:

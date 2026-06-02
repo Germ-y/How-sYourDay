@@ -1,4 +1,5 @@
 from api.schemas import Coordinate, EmotionState, PoiCandidate, RouteCandidate, RouteSegment
+from tools.osrm_route import build_osrm_route_candidates
 from tools.tmap_route import build_tmap_route_candidates
 
 
@@ -16,11 +17,11 @@ def build_route_candidates(
     origin_point = origin or DEFAULT_ORIGIN
     destination_point = destination or DEFAULT_DESTINATION
     variants = _stop_variants(stops, emotion, optional_stops or [])
-    tmap_routes = []
+    provider_routes = []
     for suffix, variant_stops in variants:
-        tmap_routes.extend(
+        provider_routes.extend(
             _tag_variant_routes(
-                build_tmap_route_candidates(
+                _build_provider_route_candidates(
                     stops=variant_stops,
                     origin=origin_point,
                     destination=destination_point,
@@ -28,8 +29,8 @@ def build_route_candidates(
                 suffix,
             )
         )
-    if tmap_routes:
-        return tmap_routes
+    if provider_routes:
+        return provider_routes
 
     routes = []
     for suffix, variant_stops in variants:
@@ -44,6 +45,34 @@ def build_route_candidates(
             )
         )
     return routes
+
+
+def _build_provider_route_candidates(
+    stops: list[PoiCandidate],
+    origin: Coordinate,
+    destination: Coordinate,
+) -> list[RouteCandidate]:
+    provider = _route_provider_preference()
+    if provider != "osrm":
+        tmap_routes = build_tmap_route_candidates(
+            stops=stops,
+            origin=origin,
+            destination=destination,
+        )
+        if tmap_routes:
+            return tmap_routes
+
+    return build_osrm_route_candidates(
+        stops=stops,
+        origin=origin,
+        destination=destination,
+    )
+
+
+def _route_provider_preference() -> str:
+    import os
+
+    return os.environ.get("HYS_ROUTE_PROVIDER", "").strip().lower()
 
 
 def _stop_variants(

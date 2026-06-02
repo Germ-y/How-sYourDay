@@ -201,6 +201,8 @@ def _explanation(evaluation: TradeoffEvaluation, score: EmotionCost) -> str:
         parts.append("일부 짧은 구간은 Tmap 결과가 없어 추정 이동으로 보완했어요.")
     elif route.provider.startswith("tmap"):
         parts.append(f"{_route_provider_label(route)} 실제 경로를 기준으로 계산했어요.")
+    elif route.provider == "osrm":
+        parts.append("OSRM 개발용 실제 경로를 기준으로 계산했어요.")
     elif route.provider == "mock":
         parts.append("Tmap 경로 생성에 실패해 추정 fallback 경로를 사용했어요.")
 
@@ -237,6 +239,8 @@ def _route_provider_label(route: RouteCandidate) -> str:
         return "Tmap 대중교통"
     if route.provider == "tmap-mixed":
         return "Tmap 혼합"
+    if route.provider == "osrm":
+        return "OSRM"
     return "추정 fallback"
 
 

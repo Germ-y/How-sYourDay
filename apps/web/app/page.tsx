@@ -4264,6 +4264,9 @@ function routeDisplayName(route: RouteCandidate) {
   if (route.provider === "tmap-mixed") {
     return "Tmap 혼합 경로";
   }
+  if (route.provider === "osrm") {
+    return "OSRM 개발용 경로";
+  }
   return routeLabel(route.id);
 }
 
@@ -4287,6 +4290,9 @@ function routeProviderLabel(route: RouteCandidate) {
   if (route.provider === "tmap-mixed") {
     return "Tmap 혼합";
   }
+  if (route.provider === "osrm") {
+    return "OSRM";
+  }
   return "추정 경로";
 }
 
@@ -4295,7 +4301,7 @@ function routeReliabilityLabel(route: RouteCandidate, usesKakaoPoi: boolean) {
   const routeLabelText =
     route.provider === "tmap-mixed"
       ? "일부 추정 경로"
-      : route.provider.startsWith("tmap")
+      : route.provider.startsWith("tmap") || route.provider === "osrm"
         ? "실제 경로"
         : "추정 경로";
   return `${poiLabel} + ${routeLabelText}`;

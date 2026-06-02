@@ -188,4 +188,6 @@ def _route_name(route: RouteCandidate) -> str:
         return "Tmap 대중교통 경로"
     if route.provider == "tmap-mixed":
         return "Tmap 혼합 경로"
+    if route.provider == "osrm":
+        return "OSRM 개발용 경로"
     return "추정 fallback 경로"
