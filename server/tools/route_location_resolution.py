@@ -100,12 +100,17 @@ def resolve_route_locations(
     current_location: Coordinate | None = None,
 ) -> RouteLocationResolution:
     hints = extract_route_locations(user_text)
-    origin_text = _origin_hint_from_text(user_text) or hints.origin_text
-    destination_text = (
+    rule_origin_text = _origin_hint_from_text(user_text)
+    rule_destination_text = (
         _specific_destination_hint_from_text(user_text)
         or _destination_hint_after_origin_from_text(user_text)
-        or hints.destination_text
     )
+    if hints.source == "llm":
+        origin_text = hints.origin_text or rule_origin_text
+        destination_text = hints.destination_text or rule_destination_text
+    else:
+        origin_text = rule_origin_text or hints.origin_text
+        destination_text = rule_destination_text or hints.destination_text
     origin_queries = _origin_queries_from_text(user_text, origin_text)
     destination_queries = _destination_queries_from_text(user_text, destination_text)
     origin_candidates = _candidate_search_many(
@@ -228,11 +233,19 @@ def _candidate_search_many(
 
     for query in queries:
         for search_query in _regionalized_queries(query, context_text):
-            for candidate in _candidate_search(
-                search_query,
-                size,
-                current_location=current_location,
-            ):
+            search_batches = [
+                _candidate_search(
+                    search_query,
+                    size,
+                    current_location=current_location,
+                )
+            ]
+            if current_location is not None:
+                search_batches.append(_candidate_search(search_query, size))
+
+            for candidate in [
+                candidate for batch in search_batches for candidate in batch
+            ]:
                 key = f"{_normalize(candidate.label)}:{candidate.lat:.6f}:{candidate.lng:.6f}"
                 if key in seen:
                     continue
@@ -299,7 +312,7 @@ def _select_locations_with_llm(
                 "schema": LOCATION_SELECTION_SCHEMA,
             }
         },
-        "max_output_tokens": 120,
+        "max_output_tokens": 1500,
     }
 
     raw = _post_openai(api_key, payload)
@@ -448,6 +461,9 @@ def _candidate_score(
     terms = _terms(query)
     school_query = any(keyword in query for keyword in ["대학교", "대학", "캠퍼스"])
     station_query = "역" in query
+    facility_query = any(
+        keyword in query for keyword in ["몰", "백화점", "타워", "쇼핑센터", "마트"]
+    )
     label = _normalize(candidate.label)
     address = _normalize(candidate.address or "")
     category = _normalize(
@@ -522,6 +538,20 @@ def _candidate_score(
             score += 12
         if "역무실" in candidate.label or "관리,운영" in (candidate.category or ""):
             score -= 28
+    if facility_query:
+        if any(
+            marker in category
+            for marker in ["복합쇼핑몰", "쇼핑센터", "백화점", "대형마트"]
+        ):
+            score += 45
+        if any(marker in category for marker in ["의류판매", "패션", "음식점", "카페"]):
+            score -= 35
+        if (
+            query_normalized in label
+            and label != query_normalized
+            and not label.startswith(query_normalized)
+        ):
+            score -= 16
     if candidate.source == "kakao-address":
         score += 3
     if candidate.source == "kakao-keyword":
@@ -829,6 +859,7 @@ def _clean_query(value: str | None) -> str | None:
         return None
 
     cleaned = value.strip()
+    cleaned = _strip_waypoint_prefix(cleaned)
     cleaned = re.sub(r"^\d{1,2}시(?:\s*\d{1,2}분)?(?:에)?\s*", "", cleaned)
     cleaned = re.sub(r"^.*(?:가고\s*싶어|가고싶어|싶어)\s+", "", cleaned)
     cleaned = re.sub(
@@ -847,6 +878,18 @@ def _clean_query(value: str | None) -> str | None:
     cleaned = re.sub(r"\s*(에서|부터|으로|로|까지|에)$", "", cleaned)
     cleaned = cleaned.strip()
     return cleaned if len(cleaned) >= 2 else None
+
+
+def _strip_waypoint_prefix(value: str) -> str:
+    parts = re.split(
+        r"\s*(?:지나서|지나|거쳐서|거쳐|들러서|들러|들렀다가|경유해서|경유)\s*",
+        value,
+    )
+    if len(parts) <= 1:
+        return value
+
+    tail = parts[-1].strip()
+    return tail or value
 
 
 def _unique_queries(values: list[str | None]) -> list[str]:

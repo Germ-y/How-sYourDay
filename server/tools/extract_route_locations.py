@@ -114,7 +114,7 @@ def _extract_route_locations_with_llm(user_text: str) -> RouteLocationHints | No
                 "schema": ROUTE_EXTRACTION_SCHEMA,
             }
         },
-        "max_output_tokens": 300,
+        "max_output_tokens": 1000,
     }
 
     raw = _post_openai(api_key, payload)
@@ -149,7 +149,7 @@ def _post_openai(api_key: str, payload: dict) -> dict | None:
     )
 
     try:
-        with urlopen(request, timeout=8) as response:
+        with urlopen(request, timeout=20) as response:
             return json.loads(response.read().decode("utf-8"))
     except (HTTPError, URLError, TimeoutError, OSError, ValueError):
         return None
@@ -205,6 +205,7 @@ def _clean_location_hint(value) -> str | None:
         return None
 
     cleaned = value.strip()
+    cleaned = _strip_waypoint_prefix(cleaned)
     cleaned = re.sub(r"^\d{1,2}시(?:\s*\d{1,2}분)?(?:에)?\s*", "", cleaned)
     cleaned = re.sub(r"^.*(?:가고\s*싶어|가고싶어|싶어)\s+", "", cleaned)
     cleaned = re.sub(r"^(오늘|내일|지금|일단|그리고|나는|나|제가|저는|i)\s+", "", cleaned, flags=re.IGNORECASE)
@@ -217,6 +218,18 @@ def _clean_location_hint(value) -> str | None:
         return None
 
     return cleaned
+
+
+def _strip_waypoint_prefix(value: str) -> str:
+    parts = re.split(
+        r"\s*(?:지나서|지나|거쳐서|거쳐|들러서|들러|들렀다가|경유해서|경유)\s*",
+        value,
+    )
+    if len(parts) <= 1:
+        return value
+
+    tail = parts[-1].strip()
+    return tail or value
 
 
 def _normalize_location_text(value: str) -> str:

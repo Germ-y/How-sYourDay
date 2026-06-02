@@ -832,6 +832,24 @@ def test_preview_insights_uses_final_appointment_and_waypoints(monkeypatch) -> N
     assert any(insight.label == "작업할 카페" for insight in insights)
 
 
+def test_preview_insights_detects_via_place_before_final_destination(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    insights, _, _ = build_preview_insights(
+        "잠실역에서 석촌호수 지나서 롯데월드몰까지 가고 싶어. 오늘은 여유 있어서 예쁜 길이면 좀 돌아가도 괜찮아",
+        None,
+        None,
+        None,
+    )
+
+    values = [insight.value for insight in insights]
+
+    assert values[0] == "잠실역 → 롯데월드몰"
+    assert any("석촌호수 주변" in value for value in values)
+
+
 def test_preview_insights_repairs_missing_condition_card_from_llm(monkeypatch) -> None:
     from tools import preview_insights
 
@@ -962,6 +980,19 @@ def test_route_location_extraction_prefers_specific_commitment_destination(monke
 
     assert hints.origin_text == "오목교역"
     assert hints.destination_text == "숯림 식당"
+
+
+def test_route_location_extraction_keeps_via_place_out_of_destination(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    hints = extract_route_locations(
+        "잠실역에서 석촌호수 지나서 롯데월드몰까지 가고 싶어. 오늘은 여유 있어서 예쁜 길이면 좀 돌아가도 괜찮아"
+    )
+
+    assert hints.origin_text == "잠실역"
+    assert hints.destination_text == "롯데월드몰"
 
 
 def test_route_location_extraction_allows_missing_origin(monkeypatch) -> None:
@@ -1256,6 +1287,76 @@ def test_route_location_resolution_prefers_address_region_for_ambiguous_area(
     assert result.destination is not None
     assert result.destination.label == "대학로예술극장 소극장"
     assert "서울 종로구" in (result.destination.address or "")
+
+
+def test_route_location_resolution_verifies_via_sentence_with_kakao_candidates(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+    captured_queries: list[str] = []
+
+    def fake_search(
+        query: str, size: int = 5, current_location=None
+    ) -> list[LocationCandidate]:
+        captured_queries.append(query)
+        if query == "잠실역":
+            return [
+                LocationCandidate(
+                    label="잠실역 2호선",
+                    address="서울 송파구 올림픽로 지하 265",
+                    lat=37.513261,
+                    lng=127.100159,
+                    source="kakao-keyword",
+                    category="지하철역",
+                )
+            ]
+        if query == "롯데월드몰":
+            return [
+                LocationCandidate(
+                    label="무신사 스탠다드 롯데월드몰 잠실점",
+                    address="서울 송파구 올림픽로 300",
+                    lat=37.513751,
+                    lng=127.104268,
+                    source="kakao-keyword",
+                    category="가정,생활 > 패션 > 의류판매 > 무신사 스탠다드",
+                ),
+                LocationCandidate(
+                    label="롯데월드몰",
+                    address="서울 송파구 올림픽로 300",
+                    lat=37.512545,
+                    lng=127.102613,
+                    source="kakao-keyword",
+                    category="쇼핑,유통 > 쇼핑센터",
+                )
+            ]
+        if query == "석촌호수":
+            return [
+                LocationCandidate(
+                    label="석촌호수",
+                    address="서울 송파구 잠실동",
+                    lat=37.509775,
+                    lng=127.105924,
+                    source="kakao-keyword",
+                    category="여행 > 관광,명소 > 호수",
+                )
+            ]
+        return []
+
+    monkeypatch.setattr(
+        route_location_resolution, "search_location_candidates", fake_search
+    )
+
+    result = route_location_resolution.resolve_route_locations(
+        "잠실역에서 석촌호수 지나서 롯데월드몰까지 가고 싶어. 오늘은 여유 있어서 예쁜 길이면 좀 돌아가도 괜찮아"
+    )
+
+    assert result.origin_text == "잠실역"
+    assert result.destination_text == "롯데월드몰"
+    assert result.origin is not None
+    assert result.origin.label == "잠실역 2호선"
+    assert result.destination is not None
+    assert result.destination.label == "롯데월드몰"
+    assert "석촌호수 지나서 롯데월드몰" not in captured_queries
 
 
 def test_route_location_resolution_prefers_nearby_candidate_with_current_location(

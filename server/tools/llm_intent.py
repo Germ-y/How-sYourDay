@@ -228,7 +228,7 @@ def _post_openai(api_key: str, payload: dict) -> dict | None:
     )
 
     try:
-        with urlopen(request, timeout=8) as response:
+        with urlopen(request, timeout=20) as response:
             return json.loads(response.read().decode("utf-8"))
     except (HTTPError, URLError, TimeoutError, OSError, ValueError):
         return None

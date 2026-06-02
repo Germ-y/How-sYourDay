@@ -765,26 +765,20 @@ export default function HomePage() {
           setOriginText(originCandidate.label);
           setSelectedOriginLocation(locationFromCandidate(originCandidate));
           resolvedCount += 1;
-        } else {
-          setOriginText(originHint);
-          setSelectedOriginLocation(null);
         }
         setOriginEdited(false);
         setOriginCandidates([]);
-        changed = true;
+        changed = changed || Boolean(originCandidate);
       }
       if (destinationHint) {
         if (destinationCandidate) {
           setDestinationText(destinationCandidate.label);
           setSelectedDestinationLocation(locationFromCandidate(destinationCandidate));
           resolvedCount += 1;
-        } else {
-          setDestinationText(destinationHint);
-          setSelectedDestinationLocation(null);
         }
         setDestinationEdited(false);
         setDestinationCandidates([]);
-        changed = true;
+        changed = changed || Boolean(destinationCandidate);
       }
 
       if (changed) {
@@ -795,14 +789,10 @@ export default function HomePage() {
         } else if (resolvedCount > 0) {
           setLocationStatus("일부 장소는 실제 장소로 확인");
         } else {
-          setLocationStatus(
-            resolved.source === "llm"
-              ? "문장에서 출발지와 도착지 확인"
-              : "문장에서 경로 후보 확인"
-          );
+          setLocationStatus("카카오에서 확인된 장소만 입력칸에 반영");
         }
       } else {
-        setLocationStatus("찾은 경로 후보 없음. 직접 입력 가능");
+        setLocationStatus("카카오에서 확인된 장소를 찾지 못했어요");
       }
     } catch {
       const [originFallback, destinationFallback] = await Promise.all([
@@ -823,26 +813,20 @@ export default function HomePage() {
           setOriginText(originFallback.label);
           setSelectedOriginLocation(locationFromCandidate(originFallback));
           resolvedCount += 1;
-        } else {
-          setOriginText(localRoute.origin);
-          setSelectedOriginLocation(null);
         }
         setOriginEdited(false);
         setOriginCandidates([]);
-        changed = true;
+        changed = changed || Boolean(originFallback);
       }
       if (localRoute.destination) {
         if (destinationFallback) {
           setDestinationText(destinationFallback.label);
           setSelectedDestinationLocation(locationFromCandidate(destinationFallback));
           resolvedCount += 1;
-        } else {
-          setDestinationText(localRoute.destination);
-          setSelectedDestinationLocation(null);
         }
         setDestinationEdited(false);
         setDestinationCandidates([]);
-        changed = true;
+        changed = changed || Boolean(destinationFallback);
       }
 
       if (changed) {
@@ -851,10 +835,10 @@ export default function HomePage() {
         setLocationStatus(
           resolvedCount === requestedCount
             ? "실제 장소로 경로 확인"
-            : "문장에서 경로 후보 확인"
+            : "카카오에서 확인된 장소만 입력칸에 반영"
         );
       } else {
-        setLocationStatus("내용 확인 실패. 직접 입력 가능");
+        setLocationStatus("카카오에서 확인된 장소를 찾지 못했어요");
       }
     } finally {
       setIsRouteConfirming(false);
