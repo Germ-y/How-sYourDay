@@ -100,6 +100,13 @@ def search_location_candidates(
         )
 
     candidates = _dedupe_candidates(candidates)
+    semantic_candidates = [
+        candidate
+        for candidate in candidates
+        if _candidate_matches_query(text, candidate)
+    ]
+    if semantic_candidates:
+        candidates = semantic_candidates
     if current_location:
         candidates = sorted(
             candidates,
@@ -265,6 +272,38 @@ def _dedupe_candidates(candidates: list[LocationCandidate]) -> list[LocationCand
         unique.append(candidate)
 
     return unique
+
+
+def _candidate_matches_query(query: str, candidate: LocationCandidate) -> bool:
+    normalized_terms = _semantic_terms(query)
+    if not normalized_terms:
+        return True
+
+    candidate_text = _normalize(
+        " ".join(
+            value
+            for value in [candidate.label, candidate.address, candidate.category]
+            if value
+        )
+    )
+    return any(term in candidate_text for term in normalized_terms)
+
+
+def _semantic_terms(query: str) -> list[str]:
+    raw_terms = [
+        _normalize(term)
+        for term in query.split()
+        if len(_normalize(term)) >= 2
+    ]
+    if not raw_terms:
+        raw_terms = [_normalize(query)] if len(_normalize(query)) >= 2 else []
+
+    non_region_terms = [
+        term
+        for term in raw_terms
+        if term not in {"서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종"}
+    ]
+    return non_region_terms or raw_terms
 
 
 def _get_json(url: str, api_key: str, params: dict) -> dict | None:
