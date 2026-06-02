@@ -598,6 +598,21 @@ export default function HomePage() {
     setLocationStatus(`${candidate.label} 선택됨`);
   }
 
+  function handleLocationTextChange(field: "origin" | "destination", value: string) {
+    if (field === "origin") {
+      setOriginText(value);
+      setOriginEdited(true);
+      setSelectedOriginLocation(null);
+      setLocationStatus(value.trim() ? "출발지를 직접 입력 중" : "출발지 입력 필요");
+    } else {
+      setDestinationText(value);
+      setDestinationEdited(true);
+      setSelectedDestinationLocation(null);
+      setLocationStatus(value.trim() ? "도착지를 직접 입력 중" : "도착지 입력 필요");
+    }
+    setError(null);
+  }
+
   function handleAuthFormChange(field: "email" | "password" | "nickname", value: string) {
     setAuthForm((current) => ({
       ...current,
@@ -1088,6 +1103,7 @@ export default function HomePage() {
                   <ComposerTitle
                     icon={<Navigation size={17} aria-hidden />}
                     label="경로 확인"
+                    support="내용 확인으로 채우거나 직접 입력"
                   />
                   <button
                     className="min-h-9 max-w-[86px] shrink-0 rounded-xl bg-white px-3 text-xs font-semibold text-moss shadow-sm ring-1 ring-moss/15 transition hover:bg-[#ddf3eb] active:scale-[0.98]"
@@ -1114,10 +1130,7 @@ export default function HomePage() {
                           window.setTimeout(() => setActiveLocationField(null), 120);
                         }}
                         onChange={(value) => {
-                          setOriginText(value);
-                          setOriginEdited(true);
-                          setSelectedOriginLocation(null);
-                          setError(null);
+                          handleLocationTextChange("origin", value);
                         }}
                         onFocus={() => setActiveLocationField("origin")}
                         onSelect={(candidate) =>
@@ -1139,10 +1152,7 @@ export default function HomePage() {
                           window.setTimeout(() => setActiveLocationField(null), 120);
                         }}
                         onChange={(value) => {
-                          setDestinationText(value);
-                          setDestinationEdited(true);
-                          setSelectedDestinationLocation(null);
-                          setError(null);
+                          handleLocationTextChange("destination", value);
                         }}
                         onFocus={() => setActiveLocationField("destination")}
                         onSelect={(candidate) =>
