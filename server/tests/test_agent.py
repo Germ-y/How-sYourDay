@@ -498,6 +498,34 @@ def test_kakao_poi_falls_back_to_mock_when_provider_has_no_result(monkeypatch) -
     assert candidates[0].source_confidence == "mock"
 
 
+def test_route_with_destination_does_not_use_static_mock_stop(monkeypatch) -> None:
+    from tools import kakao_local
+
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+    monkeypatch.setattr(
+        kakao_local,
+        "_fetch_kakao_documents",
+        lambda api_key, task, origin: [],
+    )
+
+    candidates = search_poi_candidates(
+        [
+            Task(
+                kind="recovery",
+                label="카페 경유",
+                poi_query="카페",
+                priority=1,
+                required=True,
+            )
+        ],
+        Location(label="신촌역", lat=37.5552, lng=126.9369),
+        Location(label="연세대학교", lat=37.5663, lng=126.9387),
+        "신촌역에서 연세대학교까지 가는 길에 카페도 가능",
+    )
+
+    assert candidates == []
+
+
 def test_geocode_uses_known_location_without_api_key(monkeypatch) -> None:
     monkeypatch.delenv("KAKAO_REST_API_KEY", raising=False)
 

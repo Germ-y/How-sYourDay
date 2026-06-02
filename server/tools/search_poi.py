@@ -74,6 +74,8 @@ def search_poi_candidates(
         if kakao_candidates:
             candidates.extend(kakao_candidates)
             continue
+        if destination is not None:
+            continue
         candidates.extend(MOCK_POIS.get(task.kind, MOCK_POIS["recovery"]))
 
     return candidates
@@ -95,7 +97,14 @@ def _search_task_candidates(
         seen.add(key)
         candidates = search_kakao_poi_candidates([task], anchor, user_text=user_text)
         if candidates:
-            return _dedupe_poi_candidates(candidates)[: _task_candidate_limit(task)]
+            route_candidates = _route_relevant_candidates(
+                task,
+                candidates,
+                origin,
+                destination,
+            )
+            if route_candidates:
+                return _dedupe_poi_candidates(route_candidates)[: _task_candidate_limit(task)]
 
     return []
 
@@ -127,14 +136,54 @@ def _task_search_anchors(
     destination: Location | None,
     user_text: str,
 ) -> list[Location]:
-    if (
-        destination is not None
-        and task.kind == "recovery"
-        and _recovery_task_mentions_destination_area(user_text)
-    ):
-        return [destination, origin]
+    if destination is not None and task.kind == "recovery":
+        midpoint = _route_midpoint(origin, destination)
+        if _recovery_task_mentions_destination_area(user_text):
+            return [destination, midpoint, origin]
+        return [midpoint, origin, destination]
 
     return [origin]
+
+
+def _route_relevant_candidates(
+    task: Task,
+    candidates: list[PoiCandidate],
+    origin: Location,
+    destination: Location | None,
+) -> list[PoiCandidate]:
+    if destination is None or task.kind != "recovery":
+        return candidates
+
+    filtered = [
+        candidate
+        for candidate in candidates
+        if _is_near_route_corridor(candidate, origin, destination)
+    ]
+    return filtered
+
+
+def _route_midpoint(origin: Location, destination: Location) -> Location:
+    return Location(
+        label="경로 중간 지점",
+        lat=(origin.lat + destination.lat) / 2,
+        lng=(origin.lng + destination.lng) / 2,
+    )
+
+
+def _is_near_route_corridor(
+    candidate: PoiCandidate,
+    origin: Location,
+    destination: Location,
+) -> bool:
+    direct = _rough_distance_meters(origin, destination)
+    via = _rough_distance_meters(origin, candidate) + _rough_distance_meters(
+        candidate,
+        destination,
+    )
+    detour = max(0, via - direct)
+    corridor_distance = _distance_to_segment_meters(candidate, origin, destination)
+    corridor_radius = max(500, direct * 0.35)
+    return detour <= 1800 and corridor_distance <= corridor_radius
 
 
 def _recovery_task_mentions_destination_area(user_text: str) -> bool:
@@ -176,3 +225,31 @@ def _should_offer_recovery_stop(emotion: EmotionState) -> bool:
         or emotion.primary in {"tired", "anxious"}
         or emotion.crowd_tolerance == "low"
     ) and emotion.time_pressure_tolerance != "high"
+
+
+def _rough_distance_meters(start, end) -> int:
+    lat_meters = (end.lat - start.lat) * 111_000
+    lng_meters = (end.lng - start.lng) * 88_000
+    return round((lat_meters**2 + lng_meters**2) ** 0.5)
+
+
+def _distance_to_segment_meters(point, start, end) -> float:
+    px, py = _to_local_meters(point, start)
+    ex, ey = _to_local_meters(end, start)
+    length_sq = ex * ex + ey * ey
+    if length_sq == 0:
+        return (px * px + py * py) ** 0.5
+
+    t = max(0, min(1, (px * ex + py * ey) / length_sq))
+    nearest_x = ex * t
+    nearest_y = ey * t
+    dx = px - nearest_x
+    dy = py - nearest_y
+    return (dx * dx + dy * dy) ** 0.5
+
+
+def _to_local_meters(point, origin) -> tuple[float, float]:
+    return (
+        (point.lng - origin.lng) * 88_000,
+        (point.lat - origin.lat) * 111_000,
+    )
