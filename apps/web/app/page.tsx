@@ -1103,7 +1103,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="grid min-w-0 gap-5 overflow-hidden p-5">
+            <div className="grid min-w-0 gap-5 overflow-visible p-5">
               <section className="min-w-0 overflow-hidden rounded-[22px] bg-[#fff8e6] p-3 shadow-[0_10px_26px_rgba(217,151,76,0.08)] ring-1 ring-[#f2d89d]">
                 <ComposerTitle
                   icon={<MessageCircle size={17} aria-hidden />}
@@ -1129,7 +1129,7 @@ export default function HomePage() {
 
               <div className="h-px bg-ink/8" />
 
-              <section className="w-full min-w-0 max-w-full overflow-hidden rounded-[22px] bg-[#f3fbf7] p-3 ring-1 ring-moss/18">
+              <section className="w-full min-w-0 max-w-full overflow-visible rounded-[22px] bg-[#f3fbf7] p-3 ring-1 ring-moss/18">
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                   <ComposerTitle
                     icon={<Navigation size={17} aria-hidden />}
@@ -1145,7 +1145,7 @@ export default function HomePage() {
                   </button>
                 </div>
 
-                <div className="mt-3 min-w-0 overflow-hidden rounded-2xl bg-white p-3 shadow-sm ring-1 ring-moss/14">
+                <div className="mt-3 min-w-0 overflow-visible rounded-2xl bg-white p-3 shadow-sm ring-1 ring-moss/14">
                   <div className="grid min-w-0 gap-3">
                     <div className="grid min-w-0 grid-cols-[12px_minmax(0,1fr)] items-start gap-2">
                       <span className="mt-8 h-2.5 w-2.5 rounded-full bg-moss" />
