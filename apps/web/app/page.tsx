@@ -20,6 +20,7 @@ import {
   MapPinned,
   MessageCircle,
   Navigation,
+  PencilLine,
   Plus,
   RotateCcw,
   Sparkles,
@@ -223,6 +224,8 @@ export default function HomePage() {
   const [previewInsights, setPreviewInsights] = useState<PreviewInsight[]>(
     defaultPreviewInsights()
   );
+  const [editedWaypoints, setEditedWaypoints] = useState<Record<string, string>>({});
+  const [editingWaypointKey, setEditingWaypointKey] = useState<string | null>(null);
   const [suggestedMoodLabels, setSuggestedMoodLabels] = useState<string[]>([]);
   const [previewSource, setPreviewSource] = useState("rules");
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -244,6 +247,10 @@ export default function HomePage() {
   const visibleMoodCandidates = useMemo(
     () => ensureActiveMoodCandidate(moodCandidates, activeMood),
     [activeMood, moodCandidates]
+  );
+  const routeWaypointHints = useMemo(
+    () => collectPreviewWaypointHints(previewInsights, editedWaypoints),
+    [editedWaypoints, previewInsights]
   );
   const quickSavedPlaces = useMemo(
     () => buildQuickSavedPlaces(savedPlaces),
@@ -827,7 +834,8 @@ export default function HomePage() {
         text,
         activeMood,
         poiVotes,
-        preferencePoints
+        preferencePoints,
+        routeWaypointHints
       );
       const result = await requestDailyPlan(
         planningText,
@@ -967,6 +975,25 @@ export default function HomePage() {
   function handleMoodSelect(label: string) {
     setMoodEdited(true);
     setActiveMood(label);
+  }
+
+  function handleWaypointEditToggle(key: string, value: string) {
+    setEditedWaypoints((current) =>
+      key in current
+        ? current
+        : {
+            ...current,
+            [key]: value
+          }
+    );
+    setEditingWaypointKey((current) => (current === key ? null : key));
+  }
+
+  function handleWaypointChange(key: string, value: string) {
+    setEditedWaypoints((current) => ({
+      ...current,
+      [key]: value
+    }));
   }
 
   function handlePoiVote(id: string, vote: PreferenceVote) {
@@ -1242,8 +1269,12 @@ export default function HomePage() {
           <div className="grid gap-4 lg:self-start">
             <PlanPreview
               destinationText={destinationText}
+              editedWaypoints={editedWaypoints}
+              editingWaypointKey={editingWaypointKey}
               insights={previewInsights}
               isLoading={isPreviewLoading}
+              onWaypointChange={handleWaypointChange}
+              onWaypointEditToggle={handleWaypointEditToggle}
               originText={originText}
               source={previewSource}
             />
@@ -2333,14 +2364,22 @@ function RouteResultPage({
 
 function PlanPreview({
   destinationText,
+  editedWaypoints,
+  editingWaypointKey,
   insights,
   isLoading,
+  onWaypointChange,
+  onWaypointEditToggle,
   originText,
   source
 }: {
   destinationText: string;
+  editedWaypoints: Record<string, string>;
+  editingWaypointKey: string | null;
   insights: PreviewInsight[];
   isLoading: boolean;
+  onWaypointChange: (key: string, value: string) => void;
+  onWaypointEditToggle: (key: string, value: string) => void;
   originText: string;
   source: string;
 }) {
@@ -2376,14 +2415,26 @@ function PlanPreview({
       </div>
 
       <div className="mt-4 grid gap-2">
-        {cueInsights.map((insight, index) => (
-          <PlannerCue
-            icon={previewInsightIcon(insight)}
-            key={`${insight.label}-${insight.value}-${index}`}
-            label={insight.label}
-            value={insight.value}
-          />
-        ))}
+        {cueInsights.map((insight, index) => {
+          const waypointKey = previewWaypointKey(insight, index);
+          const editable = isEditableWaypointInsight(insight);
+          const value = editable
+            ? editedWaypoints[waypointKey] ?? insight.value
+            : insight.value;
+
+          return (
+            <PlannerCue
+              editable={editable}
+              icon={previewInsightIcon(insight)}
+              isEditing={editingWaypointKey === waypointKey}
+              key={`${insight.label}-${insight.value}-${index}`}
+              label={insight.label}
+              onEditToggle={() => onWaypointEditToggle(waypointKey, insight.value)}
+              onValueChange={(nextValue) => onWaypointChange(waypointKey, nextValue)}
+              value={value}
+            />
+          );
+        })}
       </div>
     </section>
   );
@@ -3032,25 +3083,52 @@ function RouteList({
 }
 
 function PlannerCue({
+  editable = false,
   icon,
+  isEditing = false,
   label,
+  onEditToggle,
+  onValueChange,
   value
 }: {
+  editable?: boolean;
   icon: ReactNode;
+  isEditing?: boolean;
   label: string;
+  onEditToggle?: () => void;
+  onValueChange?: (value: string) => void;
   value?: string;
 }) {
   return (
-    <div className="flex min-h-12 items-center gap-2 rounded-xl bg-[#fffdf8] px-3 text-sm font-semibold text-ink/64 ring-1 ring-ink/7">
+    <div className="flex min-h-12 items-center gap-2 rounded-xl bg-[#fffdf8] px-3 py-2 text-sm font-semibold text-ink/64 ring-1 ring-ink/7">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#fde2ef] text-tide/80">
         {icon}
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-semibold text-ink/38">{label}</span>
-        <span className="block truncate text-sm font-semibold text-ink/72">
-          {value ?? label}
-        </span>
+        {isEditing ? (
+          <input
+            className="mt-1 block min-h-9 w-full min-w-0 rounded-xl border border-tide/45 bg-white px-3 text-sm font-semibold text-ink outline-none transition placeholder:text-ink/32 focus:border-tide"
+            value={value ?? ""}
+            onChange={(event) => onValueChange?.(event.target.value)}
+            autoFocus
+          />
+        ) : (
+          <span className="block text-sm font-semibold leading-5 text-ink/72 [overflow-wrap:anywhere]">
+            {value ?? label}
+          </span>
+        )}
       </span>
+      {editable ? (
+        <button
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#ddf3eb] text-moss transition hover:bg-[#d2eee4] active:scale-95"
+          type="button"
+          onClick={onEditToggle}
+          aria-label={`${label} 수정`}
+        >
+          <PencilLine size={15} aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -4079,6 +4157,44 @@ function previewCueInsights(insights: PreviewInsight[]) {
   });
 }
 
+function previewWaypointKey(insight: PreviewInsight, index: number) {
+  return `${insight.kind}:${insight.label}:${insight.value}:${index}`;
+}
+
+function isEditableWaypointInsight(insight: PreviewInsight) {
+  if (!["stop", "task"].includes(insight.kind)) {
+    return false;
+  }
+  return !isWaypointPlaceholder(insight.value);
+}
+
+function collectPreviewWaypointHints(
+  insights: PreviewInsight[],
+  edits: Record<string, string>
+) {
+  return previewCueInsights(insights)
+    .flatMap((insight, index) => {
+      if (!isEditableWaypointInsight(insight)) {
+        return [];
+      }
+      const key = previewWaypointKey(insight, index);
+      const value = (edits[key] ?? insight.value).trim();
+      if (!value || isWaypointPlaceholder(value)) {
+        return [];
+      }
+      return [value];
+    })
+    .slice(0, 5);
+}
+
+function isWaypointPlaceholder(value: string) {
+  return [
+    "선호 장소 후보 확인",
+    "쉴 만한 장소 후보 확인",
+    "경유 후보 확인"
+  ].includes(value.trim());
+}
+
 function ensurePreviewMoodCue(insights: PreviewInsight[]) {
   if (insights.some((insight) => insight.kind === "mood")) {
     return insights;
@@ -4343,7 +4459,8 @@ function buildPlanningText(
   current: string,
   activeMood: string,
   votes: Record<string, PreferenceVote>,
-  points: PreferencePoint[]
+  points: PreferencePoint[],
+  waypointHints: string[] = []
 ) {
   const liked = points.filter((item) => votes[item.id] === "like").map(
     (item) => item.name
@@ -4367,6 +4484,9 @@ function buildPlanningText(
   }
   if (dislikedTypes.length > 0) {
     additions.push(`피하고 싶은 장소 유형/태그: ${dislikedTypes.join(", ")}`);
+  }
+  if (waypointHints.length > 0) {
+    additions.push(`사용자가 확인/수정한 경유 후보: ${waypointHints.join(", ")}`);
   }
 
   return [current.trim(), additions.join("\n")].filter(Boolean).join("\n\n");
