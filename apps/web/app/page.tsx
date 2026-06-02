@@ -2649,6 +2649,12 @@ function MobilePlanResult({
           <MiniStat label="출처" value={routeProviderLabel(selectedRoute)} />
         </div>
 
+        <MoodImpactCard
+          plan={plan}
+          selectedRoute={selectedRoute}
+          selectedScore={selectedScore}
+        />
+
         <RouteXaiCard
           cost={selectedScore}
           route={selectedRoute}
@@ -2956,6 +2962,48 @@ function CostRow({ label, value }: { label: string; value: number }) {
   );
 }
 
+function MoodImpactCard({
+  plan,
+  selectedRoute,
+  selectedScore
+}: {
+  plan: DailyPlan;
+  selectedRoute: RouteCandidate;
+  selectedScore: EmotionCost;
+}) {
+  const impact = moodImpactSummary(plan, selectedRoute, selectedScore);
+
+  return (
+    <div className="mt-4 rounded-2xl bg-[#eef9f4] px-3 py-3 ring-1 ring-moss/10">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-moss ring-1 ring-moss/10">
+            <HeartPulse size={16} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-moss">컨디션 반영</p>
+            <p className="truncate text-sm font-semibold">{impact.title}</p>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-xl bg-white px-2.5 py-1 text-xs font-semibold text-ink/58 ring-1 ring-ink/7">
+          {impact.badge}
+        </span>
+      </div>
+      <p className="mt-3 text-sm leading-6 text-ink/66">{impact.detail}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {impact.chips.map((chip) => (
+          <span
+            className="rounded-xl bg-white px-2.5 py-1 text-xs font-semibold text-ink/58 ring-1 ring-ink/7"
+            key={chip}
+          >
+            {chip}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RouteXaiCard({
   cost,
   route,
@@ -2989,6 +3037,97 @@ function RouteXaiCard({
       </p>
     </div>
   );
+}
+
+function moodImpactSummary(
+  plan: DailyPlan,
+  selectedRoute: RouteCandidate,
+  selectedScore: EmotionCost
+) {
+  const fastestRoute = plan.routes.reduce((best, route) =>
+    routeDurationMinutes(route) < routeDurationMinutes(best) ? route : best
+  , plan.routes[0] ?? selectedRoute);
+  const fastestScore = scoreForRoute(plan, fastestRoute);
+  const selectedDuration = routeDurationMinutes(selectedRoute);
+  const fastestDuration = routeDurationMinutes(fastestRoute);
+  const durationDelta = selectedDuration - fastestDuration;
+  const emotionalDelta =
+    selectedScore.total_emotional_cost - fastestScore.total_emotional_cost;
+  const emphasis = emotionEmphasis(plan.emotion);
+  const conditionName = emotionDisplayName(plan.emotion);
+  const hasRecoveryStop = selectedRoute.stops.some(
+    (stop) => stop.category === "recovery" || stop.emotion_tags.includes("recovery")
+  );
+
+  let detail = "현재 컨디션에서 시간과 감정 비용의 균형이 가장 안정적인 후보를 골랐어요.";
+  if (plan.emotion.time_pressure_tolerance === "high") {
+    detail =
+      durationDelta <= 0
+        ? "시간 압박이 높게 감지되어 우회와 회복 경유보다 빠른 도착을 더 크게 봤어요."
+        : "시간 압박을 반영했지만, 필요한 경유와 감정 비용까지 함께 비교했어요.";
+  } else if (durationDelta > 0 && emotionalDelta < 0) {
+    detail = `${fastestDuration}분 후보보다 ${durationDelta}분 더 걸리지만 감정 비용을 ${Math.abs(
+      emotionalDelta
+    )}점 낮춰서 선택했어요.`;
+  } else if (hasRecoveryStop) {
+    detail = "회복 필요가 높게 잡혀서, 목적지까지 바로 가는 길뿐 아니라 쉬어갈 수 있는 후보도 함께 비교했어요.";
+  } else if (selectedScore.crowd_cost >= 14) {
+    detail = "혼잡 부담을 크게 계산해서 사람 많은 구간의 비용이 점수에 드러나도록 했어요.";
+  } else if (selectedScore.walking_cost >= 12 || selectedScore.fatigue_cost >= 10) {
+    detail = "피로와 보행 부담을 크게 계산해서 오래 걷는 후보가 불리해지도록 했어요.";
+  }
+
+  const chips = [
+    ...emphasis,
+    hasRecoveryStop ? "회복 경유 검토" : "직접 이동 비교",
+    `감정 비용 ${selectedScore.total_emotional_cost}`
+  ];
+
+  return {
+    badge: conditionName,
+    chips: Array.from(new Set(chips)).slice(0, 4),
+    detail,
+    title: `${conditionName} 기준으로 점수 조정`
+  };
+}
+
+function emotionDisplayName(emotion: DailyPlan["emotion"]) {
+  if (emotion.time_pressure_tolerance === "high") {
+    return "바쁨";
+  }
+  if (emotion.recovery_need === "high") {
+    return emotion.primary === "tired" ? "피곤" : "휴식";
+  }
+  if (emotion.primary === "tired") {
+    return "피곤";
+  }
+  if (emotion.primary === "anxious") {
+    return "불안";
+  }
+  if (emotion.primary === "hurried") {
+    return "바쁨";
+  }
+  return "안정";
+}
+
+function emotionEmphasis(emotion: DailyPlan["emotion"]) {
+  const chips: string[] = [];
+  if (emotion.time_pressure_tolerance === "high") {
+    chips.push("시간 우선");
+  }
+  if (emotion.primary === "tired" || emotion.walking_tolerance === "low") {
+    chips.push("피로/걷기 민감");
+  }
+  if (emotion.primary === "anxious" || emotion.crowd_tolerance === "low") {
+    chips.push("혼잡 민감");
+  }
+  if (emotion.transfer_tolerance === "low") {
+    chips.push("환승 부담");
+  }
+  if (emotion.recovery_need === "high") {
+    chips.push("회복 필요");
+  }
+  return chips.length ? chips : ["균형 비교"];
 }
 
 function routeXaiChips(cost: EmotionCost, route: RouteCandidate) {
