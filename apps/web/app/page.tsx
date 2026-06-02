@@ -2176,7 +2176,7 @@ function LocationSearchInput({
   const showPanel = active && (isLoading || candidates.length > 0);
 
   return (
-    <label className="relative block min-w-0 overflow-hidden" htmlFor={id}>
+    <label className="relative block min-w-0 overflow-visible" htmlFor={id}>
       <span className="text-xs font-semibold text-ink/46">{label}</span>
       <input
         autoComplete="off"
