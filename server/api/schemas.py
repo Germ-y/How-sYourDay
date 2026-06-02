@@ -40,6 +40,12 @@ class LocationCandidate(BaseModel):
     lng: float
     source: str
     category: str | None = None
+    provider_id: str | None = None
+    category_group_code: str | None = None
+    category_group_name: str | None = None
+    category_name: str | None = None
+    phone: str | None = None
+    place_url: str | None = None
     distance_meters: int | None = None
 
 
@@ -191,6 +197,12 @@ class PoiCandidate(BaseModel):
     provider_id: str | None = None
     name: str
     category: str
+    address: str | None = None
+    category_group_code: str | None = None
+    category_group_name: str | None = None
+    category_name: str | None = None
+    phone: str | None = None
+    place_url: str | None = None
     landmark_type: str
     emotion_tags: list[str] = Field(default_factory=list)
     lat: float

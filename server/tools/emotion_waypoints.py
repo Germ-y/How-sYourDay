@@ -124,6 +124,17 @@ def _search_kakao_waypoints(api_key: str, query, midpoint: Coordinate) -> list[P
             provider_id=str(document.get("id") or ""),
             name=str(document.get("place_name") or query.query),
             category="recovery",
+            address=str(
+                document.get("road_address_name")
+                or document.get("address_name")
+                or ""
+            )
+            or None,
+            category_group_code=str(document.get("category_group_code") or "") or None,
+            category_group_name=str(document.get("category_group_name") or "") or None,
+            category_name=str(document.get("category_name") or "") or None,
+            phone=str(document.get("phone") or "") or None,
+            place_url=str(document.get("place_url") or "") or None,
             landmark_type=query.landmark_type,
             emotion_tags=list(dict.fromkeys([*prior.emotion_tags, "recovery"])),
             lat=_to_float(document.get("y"), midpoint.lat),

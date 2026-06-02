@@ -330,6 +330,13 @@ def _candidate_payload(candidates: list[LocationCandidate]) -> list[dict]:
             "label": candidate.label,
             "address": candidate.address,
             "category": candidate.category,
+            "provider_id": candidate.provider_id,
+            "category_group_code": candidate.category_group_code,
+            "category_group_name": candidate.category_group_name,
+            "category_name": candidate.category_name,
+            "phone": candidate.phone,
+            "place_url": candidate.place_url,
+            "distance_meters": candidate.distance_meters,
             "source": candidate.source,
         }
         for index, candidate in enumerate(candidates)
@@ -443,7 +450,17 @@ def _candidate_score(
     station_query = "역" in query
     label = _normalize(candidate.label)
     address = _normalize(candidate.address or "")
-    category = _normalize(candidate.category or "")
+    category = _normalize(
+        " ".join(
+            value
+            for value in [
+                candidate.category,
+                candidate.category_group_name,
+                candidate.category_name,
+            ]
+            if value
+        )
+    )
     score = 0
     semantic_score = 0
     matched_terms = 0
@@ -642,7 +659,13 @@ def _candidate_region_context(candidate: LocationCandidate | None) -> str | None
         return None
     return " ".join(
         value
-        for value in [candidate.label, candidate.address, candidate.category]
+        for value in [
+            candidate.label,
+            candidate.address,
+            candidate.category,
+            candidate.category_group_name,
+            candidate.category_name,
+        ]
         if value
     )
 

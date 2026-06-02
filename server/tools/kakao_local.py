@@ -16,7 +16,6 @@ _KAKAO_DOCUMENT_CACHE_LIMIT = 160
 TASK_QUERY_OVERRIDES = {
     "print": "인쇄소",
     "clinic": "병원",
-    "recovery": "카페",
 }
 
 
@@ -104,6 +103,17 @@ def _normalize_document(document: dict, task: Task) -> PoiCandidate:
         provider_id=provider_id or None,
         name=str(document.get("place_name") or task.label),
         category=task.kind,
+        address=str(
+            document.get("road_address_name")
+            or document.get("address_name")
+            or ""
+        )
+        or None,
+        category_group_code=str(document.get("category_group_code") or "") or None,
+        category_group_name=str(document.get("category_group_name") or "") or None,
+        category_name=str(document.get("category_name") or "") or None,
+        phone=str(document.get("phone") or "") or None,
+        place_url=str(document.get("place_url") or "") or None,
         landmark_type=landmark_type,
         emotion_tags=emotion_tags,
         lat=_to_float(document.get("y"), 37.5882),
@@ -130,6 +140,8 @@ def _infer_landmark_type(document: dict, task: Task) -> str:
         return "park"
     if any(marker in combined for marker in ["강", "한강", "하천"]):
         return "river"
+    if any(marker in combined for marker in ["만화카페", "만화방", "북카페", "서점", "도서"]):
+        return "cafe"
     if task.kind == "recovery":
         return "cafe"
     return "commercial"

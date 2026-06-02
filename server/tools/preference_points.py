@@ -91,6 +91,17 @@ def _normalize_preference_document(
         provider_id=provider_id or None,
         name=str(document.get("place_name") or category),
         category=category,
+        address=str(
+            document.get("road_address_name")
+            or document.get("address_name")
+            or ""
+        )
+        or None,
+        category_group_code=str(document.get("category_group_code") or "") or None,
+        category_group_name=str(document.get("category_group_name") or "") or None,
+        category_name=str(document.get("category_name") or "") or None,
+        phone=str(document.get("phone") or "") or None,
+        place_url=str(document.get("place_url") or "") or None,
         landmark_type=landmark_type,
         emotion_tags=prior.emotion_tags,
         lat=_to_float(document.get("y"), 37.5882),

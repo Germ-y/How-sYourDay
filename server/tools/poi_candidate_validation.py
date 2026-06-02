@@ -22,6 +22,7 @@ POI_VALIDATION_SCHEMA = {
 
 PRINT_MARKERS = ["인쇄", "출력", "프린트", "프린터", "복사", "제본", "스캔"]
 CAFE_MARKERS = ["카페", "커피", "coffee", "cafe"]
+RESTFUL_PLACE_MARKERS = ["만화카페", "만화방", "북카페", "서점", "도서"]
 CLINIC_MARKERS = ["병원", "의료", "의원", "내과", "외과", "약국"]
 ERRAND_MARKERS = [
     "다이소",
@@ -53,8 +54,12 @@ def document_matches_task(document: dict, task: Task, user_text: str = "") -> bo
 def _rule_match(document: dict, task: Task, user_text: str) -> bool | None:
     name = str(document.get("place_name") or "")
     category = str(document.get("category_name") or "")
-    combined = _normalize(" ".join([name, category, task.label, task.poi_query]))
-    candidate_combined = _normalize(f"{name} {category}")
+    category_group = str(document.get("category_group_name") or "")
+    address = str(document.get("road_address_name") or document.get("address_name") or "")
+    combined = _normalize(
+        " ".join([name, category_group, category, address, task.label, task.poi_query])
+    )
+    candidate_combined = _normalize(f"{name} {category_group} {category} {address}")
 
     if task.kind == "recovery":
         if _has_any(candidate_combined, PRINT_MARKERS):
@@ -63,7 +68,7 @@ def _rule_match(document: dict, task: Task, user_text: str) -> bool | None:
             return False
         if _has_any(candidate_combined, ["다이소", "마트", "편의점", "생활용품"]):
             return False
-        if _has_any(candidate_combined, CAFE_MARKERS):
+        if _has_any(candidate_combined, CAFE_MARKERS + RESTFUL_PLACE_MARKERS):
             return True
         if _has_any(_normalize(user_text), ["산책", "걷", "공원"]) and _has_any(
             candidate_combined, ["공원", "숲", "산책"]
@@ -119,8 +124,13 @@ def _llm_match(document: dict, task: Task, user_text: str) -> bool | None:
             "document": {
                 "place_name": document.get("place_name"),
                 "category_name": document.get("category_name"),
+                "category_group_code": document.get("category_group_code"),
+                "category_group_name": document.get("category_group_name"),
                 "address_name": document.get("address_name"),
                 "road_address_name": document.get("road_address_name"),
+                "phone": document.get("phone"),
+                "place_url": document.get("place_url"),
+                "distance": document.get("distance"),
             },
             "user_text": user_text,
         },
@@ -143,8 +153,13 @@ def _llm_match(document: dict, task: Task, user_text: str) -> bool | None:
                         "candidate": {
                             "place_name": document.get("place_name"),
                             "category_name": document.get("category_name"),
+                            "category_group_code": document.get("category_group_code"),
+                            "category_group_name": document.get("category_group_name"),
                             "address_name": document.get("address_name"),
                             "road_address_name": document.get("road_address_name"),
+                            "phone": document.get("phone"),
+                            "place_url": document.get("place_url"),
+                            "distance": document.get("distance"),
                         },
                     },
                     ensure_ascii=False,

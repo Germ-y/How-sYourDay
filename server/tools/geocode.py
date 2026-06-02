@@ -250,6 +250,12 @@ def _search_kakao_keyword_candidates(
                 source="kakao-keyword",
                 category=str(document.get("category_group_name") or document.get("category_name") or "")
                 or None,
+                provider_id=str(document.get("id") or "") or None,
+                category_group_code=str(document.get("category_group_code") or "") or None,
+                category_group_name=str(document.get("category_group_name") or "") or None,
+                category_name=str(document.get("category_name") or "") or None,
+                phone=str(document.get("phone") or "") or None,
+                place_url=str(document.get("place_url") or "") or None,
                 distance_meters=_to_int(document.get("distance")),
             )
         )
@@ -292,7 +298,13 @@ def _candidate_matches_query(query: str, candidate: LocationCandidate) -> bool:
     candidate_text = _normalize(
         " ".join(
             value
-            for value in [candidate.label, candidate.address, candidate.category]
+            for value in [
+                candidate.label,
+                candidate.address,
+                candidate.category,
+                candidate.category_group_name,
+                candidate.category_name,
+            ]
             if value
         )
     )

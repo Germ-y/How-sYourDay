@@ -16,6 +16,12 @@ export type LocationCandidate = Location & {
   address: string | null;
   source: string;
   category: string | null;
+  provider_id?: string | null;
+  category_group_code?: string | null;
+  category_group_name?: string | null;
+  category_name?: string | null;
+  phone?: string | null;
+  place_url?: string | null;
   distance_meters: number | null;
 };
 
@@ -86,6 +92,12 @@ export type PoiCandidate = {
   provider_id: string | null;
   name: string;
   category: string;
+  address?: string | null;
+  category_group_code?: string | null;
+  category_group_name?: string | null;
+  category_name?: string | null;
+  phone?: string | null;
+  place_url?: string | null;
   landmark_type: string;
   emotion_tags: string[];
   lat: number;
