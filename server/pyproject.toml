@@ -25,5 +25,18 @@ dev = [
 line-length = 88
 target-version = "py311"
 
+[tool.setuptools.packages.find]
+include = [
+  "agent*",
+  "api*",
+  "auth*",
+  "db*",
+  "memory*",
+  "planner*",
+  "prompts*",
+  "repositories*",
+  "tools*"
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

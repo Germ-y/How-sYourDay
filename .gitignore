@@ -17,6 +17,7 @@ logs/
 # Environment
 .env
 .env.local
+*.pem
 server/memory/preferences.json
 
 # OS/editor
