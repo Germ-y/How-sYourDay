@@ -625,6 +625,36 @@ def test_preview_insights_uses_final_appointment_and_waypoints(monkeypatch) -> N
     assert any(insight.label == "작업할 카페" for insight in insights)
 
 
+def test_preview_insights_repairs_missing_condition_card_from_llm(monkeypatch) -> None:
+    from tools import preview_insights
+
+    monkeypatch.delenv("HYS_DISABLE_LLM", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(preview_insights, "_post_openai", lambda api_key, payload: {})
+    monkeypatch.setattr(
+        preview_insights,
+        "_response_text",
+        lambda raw: (
+            '{"insights":['
+            '{"label":"경로","value":"홍대입구역 2호선 → 합정역 2호선","kind":"route"},'
+            '{"label":"시간","value":"감지된 시간 조건 없음","kind":"time"},'
+            '{"label":"산책 후보","value":"합정역 주변 산책","kind":"stop"}'
+            "]}"
+        ),
+    )
+
+    insights, source, _ = build_preview_insights(
+        "홍대입구역에서 합정역까지 가고 싶어",
+        None,
+        None,
+        "조용",
+    )
+
+    assert source == "llm"
+    assert any(insight.kind == "mood" for insight in insights)
+    assert any("조용" in insight.value for insight in insights)
+
+
 def test_preview_insights_detects_named_store_errand(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 

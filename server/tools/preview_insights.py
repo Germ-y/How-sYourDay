@@ -202,7 +202,7 @@ def _preview_insights_with_llm(
     except (TypeError, ValueError, ValidationError):
         return None
 
-    return _repair_preview_insights(insights, origin, destination, intent)
+    return _repair_preview_insights(insights, origin, destination, intent, active_mood)
 
 
 def _repair_preview_insights(
@@ -210,6 +210,7 @@ def _repair_preview_insights(
     origin: str | None,
     destination: str | None,
     intent,
+    active_mood: str | None,
 ) -> list[PreviewInsight] | None:
     if not insights:
         return None
@@ -228,6 +229,17 @@ def _repair_preview_insights(
             else "감지된 시간 조건 없음"
         )
         repaired.insert(1, PreviewInsight(label="시간", value=time_value, kind="time"))
+
+    mood_label = (
+        _first_mood_label(active_mood, intent.mood_candidates if intent else [])
+        if _has_condition_signal(
+            " ".join(insight.value for insight in repaired),
+            intent.mood_candidates if intent else [],
+            active_mood,
+        )
+        else None
+    )
+    _ensure_mood_insight(repaired, mood_label)
 
     unique: list[PreviewInsight] = []
     seen: set[str] = set()

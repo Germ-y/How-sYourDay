@@ -2364,7 +2364,7 @@ function PlanPreview({
           </span>
           <div className="min-w-0">
             <p className="text-[11px] font-semibold text-ink/40">경로</p>
-            <p className="mt-0.5 truncate text-base font-semibold">
+            <p className="mt-0.5 text-base font-semibold leading-6 [overflow-wrap:anywhere] [word-break:keep-all]">
               {routeLabel}
             </p>
           </div>
@@ -4046,7 +4046,7 @@ function buildFormRouteLabel(originText: string, destinationText: string) {
 }
 
 function previewCueInsights(insights: PreviewInsight[]) {
-  const cues = insights.filter((insight) => insight.kind !== "route");
+  const cues = ensurePreviewMoodCue(insights).filter((insight) => insight.kind !== "route");
   const seen = new Set<string>();
 
   return cues.filter((insight) => {
@@ -4057,6 +4057,32 @@ function previewCueInsights(insights: PreviewInsight[]) {
     seen.add(key);
     return true;
   });
+}
+
+function ensurePreviewMoodCue(insights: PreviewInsight[]) {
+  if (insights.some((insight) => insight.kind === "mood")) {
+    return insights;
+  }
+
+  const fallbackMood = previewMoodFallback(insights);
+  if (!fallbackMood) {
+    return insights;
+  }
+
+  return [...insights, fallbackMood];
+}
+
+function previewMoodFallback(insights: PreviewInsight[]): PreviewInsight | null {
+  if (insights.some((insight) => insight.kind === "time" && insight.value.includes("도착"))) {
+    return { label: "컨디션", value: "시간 압박 기준으로 경로 비교", kind: "mood" };
+  }
+  if (insights.some((insight) => insight.value.includes("조용"))) {
+    return { label: "컨디션", value: "조용 기준으로 경로 비교", kind: "mood" };
+  }
+  if (insights.some((insight) => insight.value.includes("카페") || insight.value.includes("쉬"))) {
+    return { label: "컨디션", value: "휴식 기준으로 경로 비교", kind: "mood" };
+  }
+  return null;
 }
 
 function buildLocalPreviewInsights(
