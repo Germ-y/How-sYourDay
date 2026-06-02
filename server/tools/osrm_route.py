@@ -53,7 +53,7 @@ def build_osrm_route_candidates(
             estimated_duration_minutes=None,
             distance_meters=distance_meters,
             fare=0,
-            fallback_reason="OSRM 개발용 경로로 계산했어요.",
+            fallback_reason="도로망 기준으로 이동 시간을 계산했어요.",
             cost_estimate=0,
             polyline=polyline,
             segments=_segments(profile, legs, duration_minutes),

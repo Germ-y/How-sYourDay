@@ -2,6 +2,7 @@
 
 import { FormEvent, PointerEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   ArrowRight,
   Brain,
   CalendarDays,
@@ -1034,11 +1035,12 @@ export default function HomePage() {
         className="mx-auto flex min-h-screen w-full max-w-full flex-col overflow-x-hidden sm:max-w-md lg:max-w-6xl lg:px-6"
         onSubmit={handleSubmit}
       >
-        <ServiceTopBar
-          activeView={activeView}
-          hasPlan={Boolean(plan)}
-          onChange={handleViewChange}
-        />
+        {activeView !== "result" ? (
+          <ServiceTopBar
+            activeView={activeView}
+            onChange={handleViewChange}
+          />
+        ) : null}
         {activeView === "planner" ? (
           <>
         <header className="px-5 pb-5 pt-5 lg:px-0">
@@ -1519,20 +1521,16 @@ function buildSignupNickname(email: string) {
 
 function ServiceTopBar({
   activeView,
-  hasPlan,
   onChange
 }: {
   activeView: AppView;
-  hasPlan: boolean;
   onChange: (view: AppView) => void;
 }) {
   const items: Array<{ id: AppView; label: string; icon: LucideIcon }> = [
     { id: "planner" as const, label: "오늘", icon: CalendarDays },
-    ...(hasPlan ? [{ id: "result" as const, label: "경로", icon: Navigation }] : []),
     { id: "taste" as const, label: "취향", icon: MapPin },
     { id: "profile" as const, label: "마이", icon: UserRound }
   ];
-  const gridClass = hasPlan ? "grid-cols-4" : "grid-cols-3";
 
   return (
     <nav className="sticky top-0 z-30 border-b border-ink/8 bg-[#fff9ed]/88 px-4 py-3 backdrop-blur sm:px-5 lg:px-0">
@@ -1554,7 +1552,7 @@ function ServiceTopBar({
         </button>
 
         <div
-          className={`grid shrink-0 ${gridClass} rounded-2xl bg-white p-1 shadow-sm ring-1 ring-ink/8`}
+          className="grid shrink-0 grid-cols-3 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-ink/8"
         >
           {items.map((item) => {
             const selected = activeView === item.id;
@@ -2257,6 +2255,14 @@ function RouteResultPage({
   return (
     <section className="grid gap-5 px-5 pb-8 pt-5 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:px-0">
       <header className="rounded-[28px] bg-[#eef8f2] p-5 shadow-[0_16px_42px_rgba(23,26,24,0.055)] ring-1 ring-ink/8 lg:sticky lg:top-20">
+        <button
+          className="mb-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-3 text-sm font-semibold text-ink/58 shadow-sm ring-1 ring-ink/8 transition hover:text-moss active:scale-[0.98]"
+          type="button"
+          onClick={onBackToPlanner}
+        >
+          <ArrowLeft size={16} aria-hidden />
+          입력으로 돌아가기
+        </button>
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-moss">경로 추천</p>
@@ -2283,8 +2289,7 @@ function RouteResultPage({
           type="button"
           onClick={onBackToPlanner}
         >
-          입력 수정
-          <ArrowRight size={16} aria-hidden />
+          조건 다시 입력
         </button>
       </header>
 
@@ -4343,6 +4348,14 @@ function routeLabel(routeId: string) {
 }
 
 function routeDisplayName(route: RouteCandidate) {
+  const recoveryStop = route.stops.find((stop) => stop.category === "recovery");
+  if (recoveryStop) {
+    return `${recoveryStop.name} 경유 경로`;
+  }
+  const errandStop = route.stops.find((stop) => stop.category === "errand");
+  if (errandStop) {
+    return `${errandStop.name} 경유 경로`;
+  }
   if (route.provider === "tmap-pedestrian") {
     return "Tmap 도보 경로";
   }
@@ -4353,7 +4366,7 @@ function routeDisplayName(route: RouteCandidate) {
     return "Tmap 혼합 경로";
   }
   if (route.provider === "osrm") {
-    return "OSRM 개발용 경로";
+    return "직접 이동 경로";
   }
   return routeLabel(route.id);
 }
@@ -4379,7 +4392,7 @@ function routeProviderLabel(route: RouteCandidate) {
     return "Tmap 혼합";
   }
   if (route.provider === "osrm") {
-    return "OSRM";
+    return "도로망 기준";
   }
   return "추정 경로";
 }

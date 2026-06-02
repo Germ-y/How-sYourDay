@@ -202,9 +202,9 @@ def _explanation(evaluation: TradeoffEvaluation, score: EmotionCost) -> str:
     elif route.provider.startswith("tmap"):
         parts.append(f"{_route_provider_label(route)} 실제 경로를 기준으로 계산했어요.")
     elif route.provider == "osrm":
-        parts.append("OSRM 개발용 실제 경로를 기준으로 계산했어요.")
+        parts.append("도로망 기반 경로를 기준으로 계산했어요.")
     elif route.provider == "mock":
-        parts.append("Tmap 경로 생성에 실패해 추정 fallback 경로를 사용했어요.")
+        parts.append("현재 조건에 맞는 추천 경로를 추정해 계산했어요.")
 
     if evaluation.fallback_used:
         parts.append("deadline을 완전히 만족하는 경로가 없어 가장 덜 늦는 경로를 선택했어요.")
@@ -240,8 +240,8 @@ def _route_provider_label(route: RouteCandidate) -> str:
     if route.provider == "tmap-mixed":
         return "Tmap 혼합"
     if route.provider == "osrm":
-        return "OSRM"
-    return "추정 fallback"
+        return "도로망 기준"
+    return "추천"
 
 
 def _all_points(routes: list[RouteCandidate]) -> list[Coordinate]:

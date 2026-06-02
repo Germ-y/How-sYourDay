@@ -182,6 +182,12 @@ def _route_duration(route: RouteCandidate) -> int:
 
 
 def _route_name(route: RouteCandidate) -> str:
+    recovery_stop = next((stop for stop in route.stops if stop.category == "recovery"), None)
+    if recovery_stop:
+        return f"{recovery_stop.name} 경유 경로"
+    errand_stop = next((stop for stop in route.stops if stop.category == "errand"), None)
+    if errand_stop:
+        return f"{errand_stop.name} 경유 경로"
     if route.provider == "tmap-pedestrian":
         return "Tmap 도보 경로"
     if route.provider == "tmap-transit":
@@ -189,5 +195,5 @@ def _route_name(route: RouteCandidate) -> str:
     if route.provider == "tmap-mixed":
         return "Tmap 혼합 경로"
     if route.provider == "osrm":
-        return "OSRM 개발용 경로"
-    return "추정 fallback 경로"
+        return "직접 이동 경로"
+    return "추천 경로"

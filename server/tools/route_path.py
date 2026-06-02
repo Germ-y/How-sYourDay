@@ -150,7 +150,7 @@ def build_mock_route_candidates(
         *[Coordinate(lat=stop.lat, lng=stop.lng) for stop in stops],
         Coordinate(lat=destination.lat, lng=destination.lng),
     ]
-    fallback_reason = "Tmap 경로를 만들 수 없어 추정 route를 사용했어요."
+    fallback_reason = "현재 조건에 맞춰 예상 이동 경로를 계산했어요."
 
     primary = RouteCandidate(
         id="route-low-stress",
