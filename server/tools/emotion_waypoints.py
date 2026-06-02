@@ -92,15 +92,18 @@ def _search_kakao_waypoints(api_key: str, query, midpoint: Coordinate) -> list[P
     if cache_key in _WAYPOINT_SEARCH_CACHE:
         return _WAYPOINT_SEARCH_CACHE[cache_key]
 
+    params = urlencode(
+        {
+            "query": query.query,
+            "x": midpoint.lng,
+            "y": midpoint.lat,
+            "radius": 1800,
+            "sort": "distance",
+            "size": 3,
+        }
+    )
     request = Request(
-        f"{KAKAO_KEYWORD_SEARCH_URL}?{urlencode({
-            'query': query.query,
-            'x': midpoint.lng,
-            'y': midpoint.lat,
-            'radius': 1800,
-            'sort': 'distance',
-            'size': 3,
-        })}",
+        f"{KAKAO_KEYWORD_SEARCH_URL}?{params}",
         headers={"Authorization": f"KakaoAK {api_key}"},
     )
 

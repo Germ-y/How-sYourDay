@@ -1,0 +1,15 @@
+[Unit]
+Description=How's Your Day API
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+User=ec2-user
+WorkingDirectory=/home/ec2-user/howsyourday/server
+EnvironmentFile=/home/ec2-user/howsyourday/.env
+ExecStart=/home/ec2-user/howsyourday/server/.venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8011
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
