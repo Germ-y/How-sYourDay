@@ -7,6 +7,7 @@ from urllib.request import Request, urlopen
 from api.schemas import Constraints, EmotionState
 from tools.kakao_local import _get_env_value
 from tools.llm_intent import DEFAULT_INTENT_MODEL, OPENAI_RESPONSES_URL, _response_text
+from tools.prompt_loader import kst_runtime_context, load_prompt
 
 _WAYPOINT_POLICY_CACHE: dict[str, "WaypointPolicy"] = {}
 _WAYPOINT_POLICY_CACHE_LIMIT = 80
@@ -126,7 +127,8 @@ def _build_waypoint_policy_with_llm(
         or _get_env_value("OPENAI_INTENT_MODEL")
         or DEFAULT_INTENT_MODEL
     )
-    cache_key = _policy_cache_key(model, user_text, emotion, constraints)
+    runtime_context = kst_runtime_context()
+    cache_key = _policy_cache_key(model, user_text, emotion, constraints, runtime_context)
     if cache_key in _WAYPOINT_POLICY_CACHE:
         return _WAYPOINT_POLICY_CACHE[cache_key]
 
@@ -135,14 +137,11 @@ def _build_waypoint_policy_with_llm(
         "input": [
             {
                 "role": "system",
-                "content": (
-                    "You decide whether an emotion-aware route should add a real "
-                    "optional waypoint. Never invent coordinates. Return search "
-                    "queries and landmark types only. If time pressure is high or "
-                    "there is a hard deadline risk, disallow optional waypoints. "
-                    "Prefer at most one small detour for tired, anxious, low-crowd, "
-                    "or high-recovery users."
-                ),
+                "content": load_prompt("waypoint_policy"),
+            },
+            {
+                "role": "system",
+                "content": runtime_context,
             },
             {
                 "role": "user",
@@ -203,6 +202,7 @@ def _policy_cache_key(
     user_text: str,
     emotion: EmotionState,
     constraints: Constraints,
+    runtime_context: str,
 ) -> str:
     return json.dumps(
         {
@@ -210,6 +210,7 @@ def _policy_cache_key(
             "text": user_text.strip(),
             "emotion": emotion.model_dump(),
             "constraints": constraints.model_dump(),
+            "runtime_context": runtime_context,
         },
         sort_keys=True,
         ensure_ascii=False,
