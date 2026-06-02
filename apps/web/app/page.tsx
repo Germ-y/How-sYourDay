@@ -2416,6 +2416,14 @@ function MobilePlanResult({
 
   return (
     <>
+      {plan.routes.length > 1 ? (
+        <RouteList
+          onSelect={onSelectRoute}
+          routes={plan.routes}
+          selectedRouteId={selectedRoute.id}
+        />
+      ) : null}
+
       <section className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -2490,15 +2498,6 @@ function MobilePlanResult({
       <section className="grid gap-3">
         <SectionTitle icon={<Clock3 size={18} aria-hidden />} title="타임라인" />
         <TimelineList route={selectedRoute} />
-      </section>
-
-      <section className="grid gap-3 pb-8">
-        <SectionTitle icon={<Navigation size={18} aria-hidden />} title="후보 경로" />
-        <RouteList
-          onSelect={onSelectRoute}
-          routes={plan.routes}
-          selectedRouteId={selectedRoute.id}
-        />
       </section>
     </>
   );
@@ -2873,48 +2872,46 @@ function RouteList({
   selectedRouteId: string;
 }) {
   return (
-    <div className="grid gap-2">
-      {routes.map((route) => {
-        const selected = route.id === selectedRouteId;
+    <section className="rounded-2xl bg-white p-3 shadow-[0_12px_34px_rgba(23,26,24,0.04)] ring-1 ring-ink/8">
+      <div className="mb-2 flex items-center gap-2 px-1">
+        <Navigation size={16} aria-hidden className="text-moss" />
+        <h2 className="text-sm font-semibold text-ink/68">경로 선택</h2>
+      </div>
+      <div className="grid gap-2">
+        {routes.map((route, index) => {
+          const selected = route.id === selectedRouteId;
+          const title = routeOptionTitle(route, index);
 
-        return (
-          <button
-            className={`w-full rounded-2xl p-3 text-left shadow-[0_8px_22px_rgba(23,26,24,0.035)] ring-1 transition active:scale-[0.99] ${
-              selected
-                ? "bg-[#fff1f7] ring-tide/35"
-                : "bg-white ring-ink/8 hover:bg-[#fff9ed] hover:ring-moss/20"
-            }`}
-            key={route.id}
-            onClick={() => onSelect(route.id)}
-            type="button"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate text-sm font-semibold">
-                {routeDisplayName(route)}
-              </span>
-              <div className="flex shrink-0 items-center gap-1">
-                <span className="rounded-xl bg-[#fde2ef] px-2 py-1 text-xs font-semibold text-tide">
-                  {routeProviderLabel(route)}
+          return (
+            <button
+              aria-pressed={selected}
+              className={`flex min-h-14 w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left ring-1 transition active:scale-[0.99] ${
+                selected
+                  ? "bg-[#fff1f7] text-ink ring-tide/35"
+                  : "bg-[#fffdf8] text-ink/70 ring-ink/7 hover:bg-[#fff9ed] hover:ring-moss/20"
+              }`}
+              key={route.id}
+              onClick={() => onSelect(route.id)}
+              type="button"
+            >
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold">{title}</span>
+                <span className="mt-0.5 block text-xs font-medium text-ink/42">
+                  {durationLabel(route)} · 걷기 {route.walking_minutes}분
                 </span>
-                {selected ? (
-                  <span className="rounded-xl bg-tide px-2 py-1 text-xs font-semibold text-white">
-                    선택됨
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-ink/62">
-              <span>{durationLabel(route)}</span>
-              <span>걷기 {route.walking_minutes}분</span>
-              <span>{distanceLabel(route.distance_meters)}</span>
-            </div>
-            {route.fallback_reason ? (
-              <p className="mt-2 text-xs leading-5 text-ink/42">{route.fallback_reason}</p>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
+              </span>
+              <span
+                className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                  selected ? "bg-tide text-white" : "bg-[#ddf3eb] text-moss"
+                }`}
+              >
+                {selected ? "선택됨" : "보기"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -4534,6 +4531,30 @@ function routeDisplayName(route: RouteCandidate) {
     return "직접 이동 경로";
   }
   return routeLabel(route.id);
+}
+
+function routeOptionTitle(route: RouteCandidate, index: number) {
+  const recoveryStop = route.stops.find((stop) => stop.category === "recovery");
+  if (recoveryStop) {
+    return `${recoveryStop.name} 들르는 경로`;
+  }
+  const errandStop = route.stops.find((stop) => stop.category === "errand");
+  if (errandStop) {
+    return `${errandStop.name} 들르는 경로`;
+  }
+  if (route.stops.length > 0) {
+    return `${route.stops[0].name} 경유 경로`;
+  }
+  if (index === 0) {
+    return "추천 경로";
+  }
+  if (route.walking_minutes <= 5) {
+    return "걷기 적은 경로";
+  }
+  if (routeDurationMinutes(route) <= 10) {
+    return "짧은 이동 경로";
+  }
+  return `후보 ${index + 1}`;
 }
 
 function translateCrowd(level: string) {
