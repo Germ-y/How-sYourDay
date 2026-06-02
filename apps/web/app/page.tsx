@@ -57,6 +57,7 @@ import {
   type PoiCandidate,
   type PreviewInsight,
   type RouteCandidate,
+  type TimelineItem,
   type PlacePreferenceRecord,
   type SavedPlaceRecord
 } from "@/lib/api";
@@ -2252,6 +2253,21 @@ function RouteResultPage({
   plan: DailyPlan;
   onBackToPlanner: () => void;
 }) {
+  const [selectedRouteId, setSelectedRouteId] = useState(plan.selected_route.id);
+
+  useEffect(() => {
+    setSelectedRouteId(plan.selected_route.id);
+  }, [plan.selected_route.id]);
+
+  const selectedRoute = useMemo(
+    () => plan.routes.find((route) => route.id === selectedRouteId) ?? plan.selected_route,
+    [plan.routes, plan.selected_route, selectedRouteId]
+  );
+  const selectedMap = useMemo(
+    () => mapForSelectedRoute(plan.map_overlays, selectedRoute),
+    [plan.map_overlays, selectedRoute]
+  );
+
   return (
     <section className="grid gap-5 px-5 pb-8 pt-5 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:px-0">
       <header className="rounded-[28px] bg-[#eef8f2] p-5 shadow-[0_16px_42px_rgba(23,26,24,0.055)] ring-1 ring-ink/8 lg:sticky lg:top-20">
@@ -2279,9 +2295,12 @@ function RouteResultPage({
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <MiniStat label="이동" value={durationLabel(plan.selected_route)} />
-          <MiniStat label="걷기" value={`${plan.selected_route.walking_minutes}분`} />
-          <MiniStat label="편안함" value={`${plan.emotional_cost.comfort_score}`} />
+          <MiniStat label="이동" value={durationLabel(selectedRoute)} />
+          <MiniStat label="걷기" value={`${selectedRoute.walking_minutes}분`} />
+          <MiniStat
+            label="선택"
+            value={selectedRoute.id === plan.selected_route.id ? "추천" : "후보"}
+          />
         </div>
 
         <button
@@ -2294,7 +2313,12 @@ function RouteResultPage({
       </header>
 
       <div className="grid gap-4">
-        <MobilePlanResult plan={plan} />
+        <MobilePlanResult
+          onSelectRoute={setSelectedRouteId}
+          plan={plan}
+          selectedMap={selectedMap}
+          selectedRoute={selectedRoute}
+        />
       </div>
     </section>
   );
@@ -2358,19 +2382,30 @@ function PlanPreview({
   );
 }
 
-function MobilePlanResult({ plan }: { plan: DailyPlan }) {
-  const firstTradeoff = plan.tradeoffs[0];
-  const usesKakaoPoi = plan.stops.some((stop) => stop.source_confidence === "kakao");
+function MobilePlanResult({
+  onSelectRoute,
+  plan,
+  selectedMap,
+  selectedRoute
+}: {
+  onSelectRoute: (routeId: string) => void;
+  plan: DailyPlan;
+  selectedMap: MapViewModel;
+  selectedRoute: RouteCandidate;
+}) {
+  const isRecommendedRoute = selectedRoute.id === plan.selected_route.id;
+  const firstTradeoff = isRecommendedRoute ? plan.tradeoffs[0] : null;
+  const usesKakaoPoi = selectedRoute.stops.some((stop) => stop.source_confidence === "kakao");
   const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
 
   async function handleFeedback(liked: boolean) {
     setFeedbackStatus("피드백 저장 중");
     try {
       await sendRouteFeedback({
-        route_id: plan.selected_route.id,
+        route_id: selectedRoute.id,
         liked,
         emotion_primary: plan.emotion.primary,
-        provider: plan.selected_route.provider,
+        provider: selectedRoute.provider,
         reason: firstTradeoff?.reason ?? plan.explanation
       });
       setFeedbackStatus(liked ? "선호 경로로 저장됨" : "비선호 경로로 저장됨");
@@ -2386,13 +2421,13 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
           <div>
             <p className="text-sm font-semibold text-moss">추천 경로</p>
             <h2 className="mt-1 break-words text-2xl font-semibold leading-tight">
-              {routeDisplayName(plan.selected_route)}
+              {routeDisplayName(selectedRoute)}
             </h2>
           </div>
           <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-tide text-white">
-            <span className="text-xs font-semibold text-white/75">편안함</span>
+            <span className="text-xs font-semibold text-white/75">선택</span>
             <span className="text-2xl font-semibold">
-              {plan.emotional_cost.comfort_score}
+              {isRecommendedRoute ? "추천" : "후보"}
             </span>
           </div>
         </div>
@@ -2400,16 +2435,16 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
         <p className="mt-3 text-sm leading-6 text-ink/68">{plan.explanation}</p>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <MiniStat label="이동" value={durationLabel(plan.selected_route)} />
-          <MiniStat label="걷기" value={`${plan.selected_route.walking_minutes}분`} />
-          <MiniStat label="출처" value={routeProviderLabel(plan.selected_route)} />
+          <MiniStat label="이동" value={durationLabel(selectedRoute)} />
+          <MiniStat label="걷기" value={`${selectedRoute.walking_minutes}분`} />
+          <MiniStat label="출처" value={routeProviderLabel(selectedRoute)} />
         </div>
 
         <div className="mt-3 rounded-2xl bg-[#fff9ed] p-3 text-xs leading-5 text-ink/58">
-          {routeReliabilityLabel(plan.selected_route, usesKakaoPoi)}
-          {plan.selected_route.fallback_reason ? (
+          {routeReliabilityLabel(selectedRoute, usesKakaoPoi)}
+          {selectedRoute.fallback_reason ? (
             <span className="mt-1 block text-ink/42">
-              {plan.selected_route.fallback_reason}
+              {selectedRoute.fallback_reason}
             </span>
           ) : null}
         </div>
@@ -2447,7 +2482,7 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
         ) : null}
       </section>
 
-      <KakaoMapPreview map={plan.map_overlays} usesKakaoPoi={usesKakaoPoi} />
+      <KakaoMapPreview map={selectedMap} usesKakaoPoi={usesKakaoPoi} />
 
       <section className="grid gap-3">
         <SectionTitle icon={<HeartPulse size={18} aria-hidden />} title="감정 비용" />
@@ -2465,12 +2500,16 @@ function MobilePlanResult({ plan }: { plan: DailyPlan }) {
 
       <section className="grid gap-3">
         <SectionTitle icon={<Clock3 size={18} aria-hidden />} title="타임라인" />
-        <TimelineList plan={plan} />
+        <TimelineList route={selectedRoute} />
       </section>
 
       <section className="grid gap-3 pb-8">
         <SectionTitle icon={<Navigation size={18} aria-hidden />} title="후보 경로" />
-        <RouteList routes={plan.routes} selectedRouteId={plan.selected_route.id} />
+        <RouteList
+          onSelect={onSelectRoute}
+          routes={plan.routes}
+          selectedRouteId={selectedRoute.id}
+        />
       </section>
     </>
   );
@@ -2723,10 +2762,86 @@ function CostRow({ label, value }: { label: string; value: number }) {
   );
 }
 
-function TimelineList({ plan }: { plan: DailyPlan }) {
+function mapForSelectedRoute(map: MapViewModel, route: RouteCandidate): MapViewModel {
+  return {
+    ...map,
+    selected_route_id: route.id,
+    markers: route.stops.map((stop, index) => ({
+      id: `marker-${route.id}-${stop.id}`,
+      type: "stop",
+      lat: stop.lat,
+      lng: stop.lng,
+      label: stop.name,
+      badge: `${index + 1}`
+    })),
+    polylines: map.polylines.map((polyline) => ({
+      ...polyline,
+      selected: polyline.route_id === route.id
+    }))
+  };
+}
+
+function buildRouteTimeline(route: RouteCandidate): TimelineItem[] {
+  const startMinutes = 14 * 60;
+  const routeMinutes = routeDurationMinutes(route);
+  const travelStep = Math.max(8, Math.floor(routeMinutes / Math.max(1, route.stops.length + 1)));
+  let currentMinutes = startMinutes;
+  const timeline: TimelineItem[] = [
+    {
+      time: formatTimelineMinutes(currentMinutes),
+      label: `출발지에서 ${routeProviderLabel(route)} 경로로 이동을 시작해요.`,
+      type: "depart"
+    }
+  ];
+
+  route.stops.forEach((stop) => {
+    currentMinutes += travelStep;
+    timeline.push({
+      time: formatTimelineMinutes(currentMinutes),
+      label: stopTimelineLabel(stop),
+      type: "task"
+    });
+    currentMinutes += 10;
+  });
+
+  currentMinutes += travelStep;
+  timeline.push({
+    time: formatTimelineMinutes(currentMinutes),
+    label: "최종 목적지에 도착합니다.",
+    type: "arrive"
+  });
+
+  return timeline;
+}
+
+function stopTimelineLabel(stop: PoiCandidate) {
+  if (stop.category === "recovery") {
+    return `${stop.name}에서 잠깐 회복할 수 있어요.`;
+  }
+  if (stop.category === "errand") {
+    return `${stop.name}에 들러 필요한 일을 처리합니다.`;
+  }
+  if (stop.category === "print") {
+    return `${stop.name}에서 인쇄 일을 처리합니다.`;
+  }
+  if (stop.category === "clinic") {
+    return `${stop.name} 방문을 동선에 반영합니다.`;
+  }
+  return `${stop.name}에 들릅니다.`;
+}
+
+function formatTimelineMinutes(totalMinutes: number) {
+  const hours = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+}
+
+function TimelineList({ route }: { route: RouteCandidate }) {
+  const timeline = buildRouteTimeline(route);
+
   return (
     <ol className="grid gap-2">
-      {plan.estimated_timeline.map((item) => (
+      {timeline.map((item) => (
         <li
           className="grid grid-cols-[58px_1fr] gap-3 rounded-2xl bg-white p-3 shadow-[0_8px_22px_rgba(23,26,24,0.035)] ring-1 ring-ink/8"
           key={`${item.time}-${item.label}`}
@@ -2760,9 +2875,11 @@ function timelineTypeLabel(type: string) {
 }
 
 function RouteList({
+  onSelect,
   routes,
   selectedRouteId
 }: {
+  onSelect: (routeId: string) => void;
   routes: RouteCandidate[];
   selectedRouteId: string;
 }) {
@@ -2772,11 +2889,15 @@ function RouteList({
         const selected = route.id === selectedRouteId;
 
         return (
-          <article
-            className={`rounded-2xl p-3 shadow-[0_8px_22px_rgba(23,26,24,0.035)] ring-1 ${
-              selected ? "bg-[#fff1f7] ring-tide/35" : "bg-white ring-ink/8"
+          <button
+            className={`w-full rounded-2xl p-3 text-left shadow-[0_8px_22px_rgba(23,26,24,0.035)] ring-1 transition active:scale-[0.99] ${
+              selected
+                ? "bg-[#fff1f7] ring-tide/35"
+                : "bg-white ring-ink/8 hover:bg-[#fff9ed] hover:ring-moss/20"
             }`}
             key={route.id}
+            onClick={() => onSelect(route.id)}
+            type="button"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="min-w-0 truncate text-sm font-semibold">
@@ -2801,7 +2922,7 @@ function RouteList({
             {route.fallback_reason ? (
               <p className="mt-2 text-xs leading-5 text-ink/42">{route.fallback_reason}</p>
             ) : null}
-          </article>
+          </button>
         );
       })}
     </div>
@@ -4463,11 +4584,19 @@ function routeReliabilityLabel(route: RouteCandidate, usesKakaoPoi: boolean) {
   return `${poiLabel} + ${routeLabelText}`;
 }
 
+function routeDurationMinutes(route: RouteCandidate) {
+  return (
+    route.real_duration_minutes ??
+    route.estimated_duration_minutes ??
+    route.estimated_minutes
+  );
+}
+
 function durationLabel(route: RouteCandidate) {
   if (route.real_duration_minutes) {
     return `${route.real_duration_minutes}분`;
   }
-  return `${route.estimated_duration_minutes ?? route.estimated_minutes}분 추정`;
+  return `${routeDurationMinutes(route)}분 추정`;
 }
 
 function distanceLabel(distanceMeters: number | null) {

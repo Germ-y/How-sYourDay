@@ -57,6 +57,11 @@ def compose_plan(
 
 
 def _ordered_stops(route: RouteCandidate) -> list[OrderedStop]:
+    ordered_stops, _ = _route_timing(route)
+    return ordered_stops
+
+
+def _route_timing(route: RouteCandidate) -> tuple[list[OrderedStop], int]:
     stops = []
     current_minutes = 14 * 60
     travel_step = max(8, _route_duration(route) // max(1, len(route.stops) + 1))
@@ -76,10 +81,12 @@ def _ordered_stops(route: RouteCandidate) -> list[OrderedStop]:
             )
         )
 
-    return stops
+    current_minutes += travel_step
+    return stops, current_minutes
 
 
 def _timeline(route: RouteCandidate) -> list[TimelineItem]:
+    ordered_stops, final_arrival_minutes = _route_timing(route)
     items = [
         TimelineItem(
             time="14:00",
@@ -87,7 +94,7 @@ def _timeline(route: RouteCandidate) -> list[TimelineItem]:
             type="depart",
         )
     ]
-    for stop in _ordered_stops(route):
+    for stop in ordered_stops:
         items.append(
             TimelineItem(
                 time=stop.arrival_time,
@@ -97,7 +104,7 @@ def _timeline(route: RouteCandidate) -> list[TimelineItem]:
         )
     items.append(
         TimelineItem(
-            time=_format_minutes(14 * 60 + _route_duration(route)),
+            time=_format_minutes(final_arrival_minutes),
             label="최종 목적지에 도착합니다.",
             type="arrive",
         )

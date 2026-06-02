@@ -12,6 +12,7 @@ build/
 apps/web/next-dev*.log
 server/api-dev*.log
 server/api-live.log
+logs/
 
 # Environment
 .env

@@ -70,6 +70,17 @@ def test_recovery_request_adds_recovery_poi_and_recommendation() -> None:
     assert any(item.kind == "recovery" for item in plan.recommendations)
 
 
+def test_timeline_keeps_final_arrival_after_stops() -> None:
+    plan = _run("I need to print and visit a clinic before 5. I am tired.")
+
+    minutes = [
+        int(item.time.split(":")[0]) * 60 + int(item.time.split(":")[1])
+        for item in plan.estimated_timeline
+    ]
+
+    assert minutes == sorted(minutes)
+
+
 def test_tired_user_gets_optional_recovery_route_candidate() -> None:
     plan = _run("I need to print before 5. I am tired.")
 
