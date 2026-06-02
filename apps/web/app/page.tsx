@@ -65,6 +65,18 @@ import {
 } from "@/lib/api";
 
 const starterText = "";
+
+const WAYPOINT_CATEGORY_OPTIONS: Array<{
+  label: string;
+  value: string;
+  icon: LucideIcon;
+}> = [
+  { label: "카페", value: "조용한 카페", icon: Coffee },
+  { label: "산책", value: "산책할 곳", icon: Leaf },
+  { label: "쉼", value: "잠깐 쉴 곳", icon: HeartPulse },
+  { label: "볼일", value: "볼일 장소", icon: MapPin },
+  { label: "식사", value: "식사 장소", icon: Building2 }
+];
 const SAVED_PLACES_KEY = "hows-your-day.saved-places.v1";
 const MOOD_PRESETS = [
   {
@@ -3107,12 +3119,30 @@ function PlannerCue({
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-semibold text-ink/38">{label}</span>
         {isEditing ? (
-          <input
-            className="mt-1 block min-h-9 w-full min-w-0 rounded-xl border border-tide/45 bg-white px-3 text-sm font-semibold text-ink outline-none transition placeholder:text-ink/32 focus:border-tide"
-            value={value ?? ""}
-            onChange={(event) => onValueChange?.(event.target.value)}
-            autoFocus
-          />
+          <span className="mt-2 grid grid-cols-5 gap-1.5">
+            {WAYPOINT_CATEGORY_OPTIONS.map((option) => {
+              const selected = value === option.value;
+              const Icon = option.icon;
+              return (
+                <button
+                  className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition active:scale-95 ${
+                    selected
+                      ? "bg-[#fde2ef] text-tide ring-1 ring-tide/35"
+                      : "bg-white text-ink/52 ring-1 ring-ink/8 hover:bg-[#fff9ed]"
+                  }`}
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onValueChange?.(option.value);
+                    onEditToggle?.();
+                  }}
+                >
+                  <Icon size={15} aria-hidden />
+                  <span>{option.label}</span>
+                </button>
+              );
+            })}
+          </span>
         ) : (
           <span className="block text-sm font-semibold leading-5 text-ink/72 [overflow-wrap:anywhere]">
             {value ?? label}

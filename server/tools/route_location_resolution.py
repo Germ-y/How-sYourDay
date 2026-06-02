@@ -473,9 +473,9 @@ def _candidate_score(
     if len(terms) >= 2:
         score += matched_terms * 20
         semantic_score += matched_terms * 20
-        if matched_terms <= 1:
-            score -= 20
-            semantic_score -= 20
+        if matched_terms < len(terms):
+            score -= 45 * (len(terms) - matched_terms)
+            semantic_score -= 45 * (len(terms) - matched_terms)
 
     if semantic_score <= 0:
         return -100
@@ -748,8 +748,8 @@ def _origin_hint_from_text(user_text: str) -> str | None:
 
 def _destination_hint_after_origin_from_text(user_text: str) -> str | None:
     patterns = [
-        r"(?:에서|부터)\s*([^,.;\n]+?)(?:까지|으로|로)\s*(?:가고\s*싶|가야|갈|가기|가려고|도착|이동|$)",
-        r"(?:에서|부터)\s*([^,.;\n]+?)(?:까지|으로|로)",
+        r"(?:에서|부터)\s*([^,.;\n]+?)(?:까지|으로|로(?=\s*(?:가고\s*싶|가야|갈|가기|가려고|도착|이동|$)))\s*(?:가고\s*싶|가야|갈|가기|가려고|도착|이동|$)",
+        r"(?:에서|부터)\s*([^,.;\n]+?)(?:까지|으로)",
     ]
     for pattern in patterns:
         matches = re.findall(pattern, user_text, flags=re.IGNORECASE)
@@ -778,7 +778,7 @@ def _specific_destination_hint_from_text(user_text: str) -> str | None:
 
 def _destination_before_origin_hint_from_text(user_text: str) -> str | None:
     match = re.search(
-        r"(.+?)(?:까지|으로|로)\s*(?:가고\s*싶|가야|갈|가기|가려고|도착|이동)",
+        r"(.+?)(?:까지|으로|로(?=\s*(?:가고\s*싶|가야|갈|가기|가려고|도착|이동)))\s*(?:가고\s*싶|가야|갈|가기|가려고|도착|이동)",
         user_text,
         flags=re.IGNORECASE,
     )

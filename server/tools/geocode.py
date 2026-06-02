@@ -292,7 +292,9 @@ def _candidate_matches_query(query: str, candidate: LocationCandidate) -> bool:
             if value
         )
     )
-    return any(term in candidate_text for term in normalized_terms)
+    if len(normalized_terms) >= 2:
+        return all(term in candidate_text for term in normalized_terms)
+    return normalized_terms[0] in candidate_text
 
 
 def _semantic_terms(query: str) -> list[str]:
