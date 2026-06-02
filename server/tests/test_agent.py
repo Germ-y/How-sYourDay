@@ -5,6 +5,7 @@ from api.schemas import (
     EmotionState,
     Location,
     LocationCandidate,
+    FeedbackRequest,
     PlanRequest,
     PlacePreferenceCreate,
     PoiCandidate,
@@ -22,6 +23,11 @@ from auth.security import (
 from db.models import Base
 from planner.evaluate_tradeoffs import evaluate_tradeoffs
 from repositories.place_preferences import list_place_preferences, upsert_place_preference
+from repositories.route_feedback import (
+    list_route_feedback,
+    load_user_preference_weights,
+    record_user_route_feedback,
+)
 from repositories.saved_places import create_saved_place, list_saved_places
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -536,6 +542,49 @@ def test_place_preferences_are_scoped_and_upserted_by_user() -> None:
     assert user_a_preferences[0].preference == "dislike"
     assert len(user_b_preferences) == 1
     assert user_b_preferences[0].preference == "like"
+
+
+def test_route_feedback_updates_user_scoped_weights() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine)
+
+    with SessionLocal() as db:
+        before_a = load_user_preference_weights(db, "user-a")
+        after_a = record_user_route_feedback(
+            db,
+            "user-a",
+            FeedbackRequest(
+                route_id="route-a",
+                liked=False,
+                emotion_primary="tired",
+                provider="osrm",
+                reason="Too much walking",
+            ),
+        )
+        after_b = record_user_route_feedback(
+            db,
+            "user-b",
+            FeedbackRequest(
+                route_id="route-b",
+                liked=True,
+                emotion_primary="calm",
+                provider="osrm",
+                reason="recovery stop helped",
+            ),
+        )
+
+        user_a_feedback = list_route_feedback(db, "user-a")
+        user_b_feedback = list_route_feedback(db, "user-b")
+        reloaded_a = load_user_preference_weights(db, "user-a")
+        reloaded_b = load_user_preference_weights(db, "user-b")
+
+    assert after_a.walking_sensitivity > before_a.walking_sensitivity
+    assert reloaded_a.walking_sensitivity == after_a.walking_sensitivity
+    assert reloaded_b.walking_sensitivity == after_b.walking_sensitivity
+    assert reloaded_a.walking_sensitivity != reloaded_b.walking_sensitivity
+    assert [feedback.route_id for feedback in user_a_feedback] == ["route-a"]
+    assert [feedback.route_id for feedback in user_b_feedback] == ["route-b"]
 
 
 def test_auth_security_hashes_password_and_decodes_token() -> None:

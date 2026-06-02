@@ -1,5 +1,5 @@
 from api.schemas import PlanRequest, PlanResponse
-from memory.preferences import load_preference_weights
+from memory.preferences import UserPreferenceWeights, load_preference_weights
 from planner.compose_plan import compose_plan
 from planner.evaluate_tradeoffs import evaluate_tradeoffs
 from tools.emotion_score import score_route_for_emotion
@@ -12,7 +12,11 @@ from tools.search_poi import search_poi_candidates
 class DailyPlanningAgent:
     """Coordinates deterministic tools before real LLM/map providers are added."""
 
-    def run(self, request: PlanRequest) -> PlanResponse:
+    def run(
+        self,
+        request: PlanRequest,
+        preference_weights: UserPreferenceWeights | None = None,
+    ) -> PlanResponse:
         intent = extract_intent(request.user_text)
         poi_candidates = search_poi_candidates(
             intent.tasks,
@@ -35,7 +39,7 @@ class DailyPlanningAgent:
             emotion=intent.emotion,
             optional_stops=optional_stops,
         )
-        preference_weights = load_preference_weights()
+        preference_weights = preference_weights or load_preference_weights()
         scores = [
             score_route_for_emotion(
                 route,

@@ -109,6 +109,25 @@ class RouteFeedback(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(String(36), index=True)
     route_recommendation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    route_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    emotion_primary: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(60), nullable=True)
     liked: Mapped[bool] = mapped_column(Boolean)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class UserPreferenceWeight(Base):
+    __tablename__ = "user_preference_weights"
+
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    walking_sensitivity: Mapped[float] = mapped_column(Float, default=1.0)
+    crowd_sensitivity: Mapped[float] = mapped_column(Float, default=1.0)
+    transfer_sensitivity: Mapped[float] = mapped_column(Float, default=1.0)
+    recovery_affinity: Mapped[float] = mapped_column(Float, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=now_utc, onupdate=now_utc
+    )

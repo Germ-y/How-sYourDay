@@ -4,6 +4,7 @@ from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -45,7 +46,33 @@ def _connect_args(url: str) -> dict:
 def init_db() -> None:
     from db.models import Base
 
-    Base.metadata.create_all(bind=get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(bind=engine)
+    _ensure_route_feedback_columns(engine)
+
+
+def _ensure_route_feedback_columns(engine: Engine) -> None:
+    inspector = inspect(engine)
+    if "route_feedback" not in inspector.get_table_names():
+        return
+
+    existing_columns = {
+        column["name"] for column in inspector.get_columns("route_feedback")
+    }
+    missing_columns = [
+        name
+        for name in ("route_id", "emotion_primary", "provider")
+        if name not in existing_columns
+    ]
+    if not missing_columns:
+        return
+
+    type_name = "VARCHAR(120)" if engine.dialect.name != "sqlite" else "VARCHAR(120)"
+    with engine.begin() as connection:
+        for column in missing_columns:
+            connection.execute(
+                text(f"ALTER TABLE route_feedback ADD COLUMN {column} {type_name}")
+            )
 
 
 def get_db() -> Generator[Session, None, None]:

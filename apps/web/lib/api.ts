@@ -290,7 +290,8 @@ export async function requestDailyPlan(
   const response = await fetch(`${API_BASE_URL}/plan`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...userHeaders()
     },
     body: JSON.stringify({
       user_text: userText,
@@ -433,7 +434,8 @@ export async function sendRouteFeedback(payload: FeedbackPayload): Promise<void>
   const response = await fetch(`${API_BASE_URL}/feedback`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...userHeaders()
     },
     body: JSON.stringify(payload)
   });

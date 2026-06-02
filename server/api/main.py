@@ -33,8 +33,11 @@ from api.schemas import (
 from auth.router import router as auth_router
 from auth.security import decode_access_token
 from db.session import get_db, init_db
-from memory.preferences import record_route_feedback
 from repositories.place_preferences import list_place_preferences, upsert_place_preference
+from repositories.route_feedback import (
+    load_user_preference_weights,
+    record_user_route_feedback,
+)
 from repositories.saved_places import create_saved_place, delete_saved_place, list_saved_places
 from tools.extract_route_locations import extract_route_locations
 from tools.geocode import geocode_location, search_location_candidates
@@ -122,8 +125,13 @@ def place_preference_response(preference) -> PlacePreferenceResponse:
 
 
 @app.post("/plan", response_model=PlanResponse)
-def plan_day(request: PlanRequest) -> PlanResponse:
-    return agent.run(request)
+def plan_day(
+    request: PlanRequest,
+    user_id: str = Depends(current_user_id),
+    db: Session = Depends(database),
+) -> PlanResponse:
+    weights = load_user_preference_weights(db, user_id)
+    return agent.run(request, preference_weights=weights)
 
 
 @app.post("/geocode", response_model=GeocodeResponse)
@@ -222,11 +230,12 @@ def save_my_place_preference(
 
 
 @app.post("/feedback", response_model=FeedbackResponse)
-def submit_feedback(request: FeedbackRequest) -> FeedbackResponse:
-    weights = record_route_feedback(
-        liked_route=request.liked,
-        reason=request.reason,
-    )
+def submit_feedback(
+    request: FeedbackRequest,
+    user_id: str = Depends(current_user_id),
+    db: Session = Depends(database),
+) -> FeedbackResponse:
+    weights = record_user_route_feedback(db, user_id, request)
     return FeedbackResponse(
         status="ok",
         walking_sensitivity=weights.walking_sensitivity,
