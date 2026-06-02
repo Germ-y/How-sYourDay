@@ -1391,7 +1391,7 @@ function AuthPage({
             </div>
 
             <div className="grid gap-3">
-              <div className="relative min-h-[76px] overflow-hidden">
+              <div className="relative min-h-[82px] overflow-visible">
                 <div
                   className={`pointer-events-none absolute inset-0 transition duration-200 ease-out ${
                     isSignup
@@ -1399,7 +1399,7 @@ function AuthPage({
                       : "translate-y-0 opacity-100"
                   }`}
                 >
-                  <div className="flex min-h-[76px] items-start justify-center pt-9">
+                  <div className="flex min-h-[82px] items-start justify-center pt-9">
                     <p className="text-sm font-semibold text-ink/35">
                       또 오셨네요. 반가워요!
                     </p>
