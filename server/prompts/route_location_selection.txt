@@ -36,7 +36,8 @@ origin_text: extracted origin place text, or null.
 destination_text: extracted destination place text, or null.
 origin_candidates: Kakao candidates for origin-like queries.
 destination_candidates: Kakao candidates for destination-like queries.
-Each candidate has index, label, address, category, and source.
+Each candidate has index, label, address, category, source, distance_meters, and optional Kakao detail fields such as category_group_name, category_name, phone, and place_url.
+When distance_meters is present, treat it as a useful current-location/search-anchor signal.
 
 Important Context
 Candidate lists may include broad areas.
@@ -53,6 +54,8 @@ Use origin_text and destination_text as the target names.
 Compare target names to candidate label.
 Use category to disambiguate.
 Use address or district to disambiguate.
+Use distance_meters and address together to understand local context.
+Use the origin, current-location/search-anchor distance, and nearby area mentions to resolve ambiguous local branches.
 Prefer exact or near-exact place matches.
 Prefer station candidates when target contains "역".
 Prefer university/campus candidates when target contains university or campus terms.
@@ -106,6 +109,7 @@ Medium quality:
 Label contains a normalized version of the target.
 Candidate is a common representation of a broad area.
 Candidate address is in the expected neighborhood.
+Candidate distance is plausible from the current location or search anchor.
 Candidate source rank is high and no exact candidate exists.
 
 Low quality:
@@ -139,9 +143,13 @@ Broad Area Policy
 "오목교역" should map to the station, not a business named after the station.
 "성균관대학교 수원" should map to the Suwon campus, not Seoul campus.
 "성균관대 서울캠퍼스" should map to Seoul campus, not Suwon campus.
+If the user sentence and candidate distances imply the current movement is around Seoul/Hongdae/Mapo, do not select a same-name branch in another city.
 
 Specific Place Policy
-If destination_text is "숯림 식당", prefer an exact restaurant candidate "숯림".
+If destination_text is "수림식당" or "수림 식당", prefer a real restaurant candidate named "수림식당" or "수림".
+수림식당 is a real restaurant target, not a broad area hint.
+For 수림식당, use the origin/current-location/search-anchor context, district in user_text, address, distance_meters, and restaurant category to choose the plausible local branch.
+If user_text mentions 홍대, 홍대입구역, 합정, 상수, 마포, or nearby movement, choose the 수림식당 candidate in that local context over a far-away same-name place.
 If destination_text is "뉴웨이브 커피", prefer the exact cafe candidate.
 If destination_text is "학림다방", prefer the exact cafe candidate.
 If destination_text is "안양천생태공원", prefer the park candidate.
@@ -199,12 +207,13 @@ Choose destination candidate for Hongdae/Hongik Univ Station if no area candidat
 Do not choose a random Hongdae cafe or shop.
 
 Example 3
-user_text: "오목교역에서 출발해서 홍대까지 갈거야. 홍대 가서 카페에서 과제하다가 숯림 식당에서 3시에 친구 보기로 했어"
+user_text: "오목교역에서 출발해서 홍대까지 갈거야. 홍대 가서 카페에서 과제하다가 수림식당에서 3시에 친구 보기로 했어"
 origin_text: "오목교역"
-destination_text: "숯림 식당"
+destination_text: "수림식당"
 Choose origin candidate for Omokgyo Station.
-Choose destination candidate for 숯림 restaurant.
-Do not choose Hongdae station if 숯림 exists.
+Choose destination candidate for the real 수림식당 restaurant in the Hongdae/Mapo context.
+Use the earlier Hongdae mention, origin context, candidate address, category, and distance_meters to avoid far-away same-name restaurants.
+Do not choose Hongdae station if 수림식당 exists.
 Do not choose a cafe because it is an intermediate waypoint.
 
 Example 4
@@ -227,7 +236,8 @@ For "오목교역", do not choose "오목교역점 카페".
 For "서울역", do not choose "서울역맛집".
 For "홍대", do not choose "홍대네일샵" unless that exact shop is target.
 For "성균관대학교 수원", do not choose "성균관대학교 인문사회과학캠퍼스" if a Suwon campus candidate exists.
-For "숯림 식당", do not choose "홍대입구역" when a 숯림 restaurant candidate exists.
+For "수림식당" or "수림 식당", do not choose "홍대입구역" when a plausible 수림식당 restaurant candidate exists.
+For "수림식당" near Hongdae, do not choose a far-away 수림 candidate only because it has an exact name.
 
 Final Checklist
 Did you use user_text to understand intent?
