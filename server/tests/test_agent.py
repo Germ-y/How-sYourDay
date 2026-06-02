@@ -577,6 +577,37 @@ def test_preview_insights_uses_final_appointment_and_waypoints(monkeypatch) -> N
     assert any(insight.label == "작업할 카페" for insight in insights)
 
 
+def test_preview_insights_detects_daiso_errand(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    insights, _, mood_candidates = build_preview_insights(
+        "서울숲에서 성수역까지 가는데 카페에서 노트북 작업 좀 하다가 가고 싶어. 너무 시끄러운 곳은 싫어 그리고 다이소도 들러야해 살거 있어",
+        None,
+        None,
+        "조용",
+    )
+
+    values = [insight.value for insight in insights]
+
+    assert values[0] == "서울숲 → 성수역"
+    assert any("다이소" in value for value in values)
+    assert any(insight.kind == "task" for insight in insights)
+    assert "조용" in mood_candidates
+
+
+def test_intent_extracts_required_daiso_errand(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    intent = extract_intent(
+        "서울숲에서 성수역까지 가는데 카페에서 노트북 작업 좀 하다가 가고 싶어. 너무 시끄러운 곳은 싫어 그리고 다이소도 들러야해 살거 있어"
+    )
+
+    assert any(task.kind == "recovery" for task in intent.tasks)
+    errand = next(task for task in intent.tasks if task.kind == "errand")
+    assert errand.required is True
+    assert "다이소" in errand.poi_query
+
+
 def test_route_location_extraction_handles_korean_from_to(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 

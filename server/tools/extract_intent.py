@@ -27,6 +27,12 @@ TASK_RULES = {
     "공부": ("recovery", "Find a comfortable place to study", "quiet cafe"),
     "조용": ("recovery", "Find a quiet place", "quiet cafe"),
     "쉬": ("recovery", "Take a short recovery break", "quiet cafe"),
+    "다이소": ("errand", "다이소 들르기", "다이소"),
+    "살거": ("errand", "살 것 사기", "다이소"),
+    "살 것": ("errand", "살 것 사기", "다이소"),
+    "사야": ("errand", "살 것 사기", "생활용품점"),
+    "구매": ("errand", "살 것 사기", "생활용품점"),
+    "장보기": ("errand", "장보기", "마트"),
 }
 
 

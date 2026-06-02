@@ -422,6 +422,9 @@ Errands can be waypoints or final destinations.
 "프린트하러 문구점 가야 해" means 문구점 may be destination.
 "병원 들렀다가 집" means 병원 waypoint, 집 destination.
 "병원 예약 있어서 병원 가야 해" means 병원 destination.
+"서울숲에서 성수역까지 가는데 다이소도 들러야해" means 서울숲 origin, 성수역 destination, 다이소 waypoint.
+"다이소 들렀다가 집" means 다이소 waypoint, 집 destination.
+"다이소에 살 거 있어서 가야 해" means 다이소 may be destination if no later endpoint exists.
 "카페에서 과제하다가 집" means cafe waypoint, 집 destination.
 "카페 가서 과제할래" means cafe may be destination if no later endpoint.
 

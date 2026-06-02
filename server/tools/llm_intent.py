@@ -29,7 +29,7 @@ INTENT_SCHEMA = {
                 "properties": {
                     "kind": {
                         "type": "string",
-                        "enum": ["print", "clinic", "recovery"],
+                        "enum": ["print", "clinic", "recovery", "errand"],
                     },
                     "label": {"type": "string"},
                     "poi_query": {"type": "string"},

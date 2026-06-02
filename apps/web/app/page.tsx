@@ -61,8 +61,6 @@ import {
 } from "@/lib/api";
 
 const starterText = "";
-const LAST_ORIGIN_KEY = "hows-your-day.origin-text.v1";
-const LAST_DESTINATION_KEY = "hows-your-day.destination-text.v1";
 const SAVED_PLACES_KEY = "hows-your-day.saved-places.v1";
 const MOOD_PRESETS = [
   {
@@ -250,15 +248,9 @@ export default function HomePage() {
   );
 
   useEffect(() => {
-    const storedOriginText = window.localStorage.getItem(LAST_ORIGIN_KEY);
-    const storedDestinationText = window.localStorage.getItem(LAST_DESTINATION_KEY);
     const storedSavedPlaces = window.localStorage.getItem(SAVED_PLACES_KEY);
-    if (storedOriginText) {
-      setOriginText(storedOriginText);
-    }
-    if (storedDestinationText) {
-      setDestinationText(storedDestinationText);
-    }
+    window.localStorage.removeItem("hows-your-day.origin-text.v1");
+    window.localStorage.removeItem("hows-your-day.destination-text.v1");
     if (storedSavedPlaces) {
       try {
         const parsed = JSON.parse(storedSavedPlaces);
@@ -829,8 +821,6 @@ export default function HomePage() {
         originResult.location,
         destinationResult.location
       );
-      window.localStorage.setItem(LAST_ORIGIN_KEY, originText.trim());
-      window.localStorage.setItem(LAST_DESTINATION_KEY, destinationText.trim());
       setLocationStatus(
         `${originResult.location.label} → ${destinationResult.location.label}`
       );
@@ -3817,6 +3807,13 @@ function buildLocalStopInsights(text: string): PreviewInsight[] {
       label: "경유 후보",
       value: area ? `${area} 휴식 장소` : "쉴 만한 장소 후보",
       kind: "stop"
+    });
+  }
+  if (/(다이소|살거|살 것|사야|구매|장보기)/.test(text)) {
+    insights.push({
+      label: "들를 곳",
+      value: text.includes("다이소") ? "다이소 들르기" : "살 것 사기",
+      kind: "task"
     });
   }
 

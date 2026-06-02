@@ -248,6 +248,8 @@ def _task_insight(tasks) -> PreviewInsight | None:
         return PreviewInsight(label="할 일", value="인쇄 가능한 지점 반영", kind="task")
     if primary.kind == "clinic":
         return PreviewInsight(label="할 일", value="병원 방문 동선 반영", kind="task")
+    if primary.kind == "errand":
+        return PreviewInsight(label="들를 곳", value=primary.label, kind="task")
     return PreviewInsight(label="할 일", value=primary.label, kind="task")
 
 
@@ -277,6 +279,10 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
         value = f"{area} 근처 조용한 곳" if area else "잠깐 쉬어갈 곳"
         insights.append(PreviewInsight(label="쉴 곳", value=value, kind="stop"))
 
+    if any(marker in text for marker in ["다이소", "살거", "살 것", "사야", "구매", "장보기"]):
+        value = "다이소 들르기" if "다이소" in text else "살 것 사기"
+        insights.append(PreviewInsight(label="들를 곳", value=value, kind="task"))
+
     unique: list[PreviewInsight] = []
     seen: set[str] = set()
     for insight in insights:
@@ -284,7 +290,7 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
             continue
         seen.add(insight.value)
         unique.append(insight)
-    return unique[:3]
+    return unique[:5]
 
 
 def _emotion_insight(primary: str) -> PreviewInsight | None:

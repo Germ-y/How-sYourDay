@@ -16,6 +16,7 @@ TASK_QUERY_OVERRIDES = {
     "print": "인쇄소",
     "clinic": "병원",
     "recovery": "카페",
+    "errand": "다이소",
 }
 
 
@@ -111,6 +112,8 @@ def _infer_landmark_type(document: dict, task: Task) -> str:
 
     if task.kind == "clinic" or any(marker in combined for marker in ["병원", "의료", "약국"]):
         return "medical"
+    if task.kind == "errand" or any(marker in combined for marker in ["다이소", "생활용품", "마트", "편의점", "상점"]):
+        return "commercial"
     if any(marker in combined for marker in ["지하철", "역", "버스", "교통"]):
         return "transit_hub"
     if any(marker in combined for marker in ["대학", "학교", "교육"]):
@@ -129,6 +132,8 @@ def _task_emotion_tags(task: Task) -> list[str]:
         return ["calm", "recovery"]
     if task.kind == "clinic":
         return ["stressful"]
+    if task.kind == "errand":
+        return ["practical", "errand"]
     return []
 
 

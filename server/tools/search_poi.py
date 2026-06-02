@@ -45,6 +45,20 @@ MOCK_POIS = {
             source_confidence="mock",
         )
     ],
+    "errand": [
+        PoiCandidate(
+            id="poi-errand-1",
+            provider_id="mock-daiso-1",
+            name="Daiso Errand Stop",
+            category="errand",
+            landmark_type="commercial",
+            emotion_tags=["practical", "errand"],
+            lat=37.5884,
+            lng=126.9932,
+            distance_meters=320,
+            source_confidence="mock",
+        )
+    ],
 }
 
 
