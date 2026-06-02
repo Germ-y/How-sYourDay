@@ -33,6 +33,12 @@ TASK_RULES = {
     "사야": ("errand", "살 것 사기", "생활용품점"),
     "구매": ("errand", "살 것 사기", "생활용품점"),
     "장보기": ("errand", "장보기", "마트"),
+    "마트": ("errand", "마트 들르기", "마트"),
+    "편의점": ("errand", "편의점 들르기", "편의점"),
+    "약국": ("errand", "약국 들르기", "약국"),
+    "올리브영": ("errand", "올리브영 들르기", "올리브영"),
+    "픽업": ("errand", "물건 픽업", "픽업"),
+    "찾으러": ("errand", "물건 찾기", "픽업"),
 }
 
 
@@ -61,7 +67,7 @@ def _extract_intent_with_rules(user_text: str) -> ExtractedIntent:
     tasks: list[Task] = []
 
     for keyword, (kind, label, poi_query) in TASK_RULES.items():
-        if keyword in lowered and all(task.kind != kind for task in tasks):
+        if keyword in lowered and not _has_equivalent_task(tasks, kind, poi_query):
             tasks.append(
                 Task(
                     kind=kind,
@@ -84,6 +90,15 @@ def _extract_intent_with_rules(user_text: str) -> ExtractedIntent:
         emotion=_analyze_emotion(lowered),
         mood_candidates=_infer_mood_candidates(lowered),
     )
+
+
+def _has_equivalent_task(tasks: list[Task], kind: str, poi_query: str) -> bool:
+    if kind == "errand":
+        return any(
+            task.kind == kind and task.poi_query.replace(" ", "") == poi_query.replace(" ", "")
+            for task in tasks
+        )
+    return any(task.kind == kind for task in tasks)
 
 
 def _extract_deadline(text: str) -> str | None:

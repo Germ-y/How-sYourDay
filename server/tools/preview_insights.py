@@ -105,11 +105,15 @@ def build_preview_insights(
         if emotion_point:
             insights.append(emotion_point)
 
-    mood_label = _first_mood_label(active_mood, intent.mood_candidates if intent else [])
+    mood_candidates = intent.mood_candidates if intent and text else []
+    mood_label = (
+        _first_mood_label(active_mood, mood_candidates)
+        if _has_condition_signal(text, mood_candidates, active_mood)
+        else None
+    )
     _ensure_mood_insight(insights, mood_label)
 
     source = "llm" if route_hints and route_hints.source == "llm" else "rules"
-    mood_candidates = intent.mood_candidates if intent else _default_mood_candidates()
     return _limit_insights(insights), source, mood_candidates[:4]
 
 
@@ -279,8 +283,24 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
         value = f"{area} 근처 조용한 곳" if area else "잠깐 쉬어갈 곳"
         insights.append(PreviewInsight(label="쉴 곳", value=value, kind="stop"))
 
-    if any(marker in text for marker in ["다이소", "살거", "살 것", "사야", "구매", "장보기"]):
-        value = "다이소 들르기" if "다이소" in text else "살 것 사기"
+    if any(
+        marker in text
+        for marker in [
+            "다이소",
+            "살거",
+            "살 것",
+            "사야",
+            "구매",
+            "장보기",
+            "마트",
+            "편의점",
+            "약국",
+            "올리브영",
+            "픽업",
+            "찾으러",
+        ]
+    ):
+        value = _errand_value(text)
         insights.append(PreviewInsight(label="들를 곳", value=value, kind="task"))
 
     unique: list[PreviewInsight] = []
@@ -291,6 +311,17 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
         seen.add(insight.value)
         unique.append(insight)
     return unique[:5]
+
+
+def _errand_value(text: str) -> str:
+    for keyword in ["다이소", "올리브영", "약국", "편의점", "마트"]:
+        if keyword in text:
+            return f"{keyword} 들르기"
+    if "픽업" in text or "찾으러" in text:
+        return "물건 픽업"
+    if "장보기" in text:
+        return "장보기"
+    return "살 것 사기"
 
 
 def _emotion_insight(primary: str) -> PreviewInsight | None:
@@ -319,6 +350,22 @@ def _limit_insights(insights: list[PreviewInsight]) -> list[PreviewInsight]:
 
 def _default_mood_candidates() -> list[str]:
     return ["피곤", "바쁨", "여유", "휴식"]
+
+
+def _has_condition_signal(
+    text: str,
+    mood_candidates: list[str],
+    active_mood: str | None,
+) -> bool:
+    if active_mood and active_mood.strip():
+        return True
+    if not text.strip():
+        return False
+    if not mood_candidates:
+        return False
+    if mood_candidates[:4] == _default_mood_candidates():
+        return False
+    return True
 
 
 def _first_mood_label(active_mood: str | None, mood_candidates: list[str]) -> str | None:

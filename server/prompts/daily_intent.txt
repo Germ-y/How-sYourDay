@@ -107,7 +107,7 @@ Use concise labels.
 Use poi_query values that can be searched on a local map.
 Keep poi_query practical, such as "quiet cafe", "print shop", "clinic", "park", "다이소", or "생활용품점".
 Treat optional stops as optional unless the user says they must visit.
-Treat shopping errands as required tasks when the user says they must buy something or must stop by a store.
+Treat everyday errands as required tasks when the user says they must buy, pick up, return, receive, or stop by a store.
 Use recovery when a stop helps rest, calm, focus, or comfort.
 Use recovery when the user wants to stop at a cafe, drink coffee, study, do an assignment, do laptop work, work quietly, or avoid noise on the way.
 Korean examples that should create a recovery task: "카페에서 과제", "카페에서 노트북 작업", "커피 한잔", "조용한 곳", "시끄러운 곳은 싫어".
@@ -124,8 +124,8 @@ Do not invent tasks.
 Do not create a recovery task for every route request.
 Do not treat the final destination as a waypoint task.
 Do not turn an appointment restaurant into a recovery task.
-Do not ignore store errands such as 다이소 just because they are not emotional recovery stops.
-Do not classify required shopping/store errands as recovery.
+Do not ignore store errands just because they are not emotional recovery stops.
+Do not classify required shopping, pickup, pharmacy, convenience-store, mart, or retail errands as recovery.
 Do not treat "홍대" as a task just because it is a place.
 Do not output coordinates.
 Do not output addresses.
@@ -148,8 +148,8 @@ Task Decision Rules
 Use print when the user needs printing, copying, scanning, document output, or "리포트 출력".
 Use clinic when the user needs hospital, clinic, medical appointment, treatment, or pharmacy-like health visit.
 Use recovery when the user asks for cafe, coffee, rest, quiet place, comfortable place, park, walking break, or reset.
-Use errand when the user needs to buy something, pick up an item, stop by a store, visit 다이소, visit a mart, or do a quick shopping errand.
-Use errand for phrases like "다이소도 들러야해", "살 거 있어", "뭐 사야 해", "생활용품 사야 해", "마트 들러야 해".
+Use errand when the user needs to buy something, pick up an item, stop by a store, visit 다이소, visit a mart, visit a pharmacy, visit a convenience store, or do a quick shopping errand.
+Use errand for phrases like "다이소도 들러야해", "살 거 있어", "뭐 사야 해", "생활용품 사야 해", "마트 들러야 해", "편의점 들러", "약국 가야 해", "픽업해야 해".
 Use recovery when the user says "잠깐 쉬고 싶어".
 Use recovery when the user says "조용한 카페".
 Use recovery when the user says "가는 길에 커피".
@@ -165,7 +165,9 @@ Waypoint Intent Examples
 "프린트하고 가야 해" implies a print task.
 "병원 들렀다가" implies a clinic task.
 "다이소도 들러야해" implies an errand task with poi_query "다이소".
-"살거 있어" implies an errand task. Use poi_query "다이소" when 다이소 is mentioned nearby; otherwise use "생활용품점" or a practical store query.
+"약국 들러야해" implies an errand task with poi_query "약국".
+"편의점에서 택배 찾아야해" implies an errand task with poi_query "편의점" or "택배".
+"살거 있어" implies an errand task. Use poi_query from the named store when present; otherwise use a practical store query such as "생활용품점", "마트", or "편의점".
 "숯림 식당에서 3시에 친구 보기로" is a final destination, not a recovery task.
 "집 가기 전에 카페 들러" means cafe is waypoint and home is final destination.
 
@@ -316,6 +318,15 @@ The errand task should be required because the user says "들러야해" and "살
 crowd_tolerance should be low because the user dislikes noisy places.
 recovery_need should be high or medium because cafe work and quietness matter.
 mood_candidates should include 조용, 집중, 휴식, and one reasonable fourth label such as 여유 or 안정.
+
+Example 8
+User: "회사에서 집 가는 길에 약국 들러서 감기약 사고 편의점 택배도 찾아야 해"
+Expected intent:
+tasks should include errand for pharmacy with poi_query "약국".
+tasks should include errand for convenience-store pickup if multiple errands are allowed by the schema.
+If only one errand can be represented, choose the most required or most specific errand.
+Do not classify either errand as recovery.
+deadline may be null unless there is a time phrase.
 
 Failure Handling
 If the text is empty or meaningless, use empty tasks, null constraints, steady emotion, and default mood candidates.

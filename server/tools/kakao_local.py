@@ -16,7 +16,6 @@ TASK_QUERY_OVERRIDES = {
     "print": "인쇄소",
     "clinic": "병원",
     "recovery": "카페",
-    "errand": "다이소",
 }
 
 

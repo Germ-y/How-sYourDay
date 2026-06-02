@@ -122,9 +122,9 @@ Do not use condition cards as filler if there are better waypoint cards.
 
 Task Card Rules
 Task cards should use kind `task`.
-Use task when the user mentions required errands such as print, clinic, hospital, pickup, buying something, 다이소, mart, or similar.
+Use task when the user mentions required errands such as print, clinic, hospital, pickup, buying something, pharmacy, convenience store, mart, 다이소, or similar.
 If the task is only an optional comfort stop, use kind `stop` instead.
-If the sentence contains "다이소도 들러야해" or "살거 있어", create a task card such as label "들를 곳", value "다이소 들르기".
+If the sentence contains "다이소도 들러야해", "살거 있어", "약국 들러야 해", "편의점 택배 찾아야 해", or another required errand, create a task card such as label "들를 곳" and a concrete value like "다이소 들르기", "약국 들르기", or "물건 픽업".
 
 Runtime Context Policy
 You will receive a separate system message named Runtime Context.
@@ -181,6 +181,15 @@ time: "감지된 시간 조건 없음"
 waypoint: label "작업할 카페", value "성수역 근처" or "서울숲-성수역 주변"
 task: label "들를 곳", value "다이소 들르기"
 condition: label "컨디션", value "조용한 작업 환경 반영" or "조용 기준 반영"
+
+Another Example
+Input sentence:
+"회사에서 집 가는 길에 약국 들러서 감기약 사고 편의점 택배도 찾아야 해"
+Expected preview logic:
+route: "회사 → 집"
+time: "감지된 시간 조건 없음"
+task: label "들를 곳", value "약국 들르기"
+task: label "들를 곳", value "물건 픽업" or "편의점 들르기"
 
 Bad Outputs
 Do not output "쉴 만한 장소 후보 확인" when the user specifically mentions cafe work.

@@ -182,7 +182,7 @@ export default function HomePage() {
   const [originEdited, setOriginEdited] = useState(false);
   const [destinationEdited, setDestinationEdited] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
-  const [activeMood, setActiveMood] = useState(MOOD_PRESETS[0].label);
+  const [activeMood, setActiveMood] = useState("");
   const [moodEdited, setMoodEdited] = useState(false);
   const [poiPreferenceIndex, setPoiPreferenceIndex] = useState(0);
   const [poiVotes, setPoiVotes] = useState<Record<string, PreferenceVote>>({});
@@ -348,10 +348,16 @@ export default function HomePage() {
   }, [text]);
 
   useEffect(() => {
-    if (!moodEdited && moodCandidates[0]?.label) {
-      setActiveMood(moodCandidates[0].label);
+    if (!text.trim()) {
+      setMoodEdited(false);
+      setActiveMood("");
+      return;
     }
-  }, [moodCandidates, moodEdited]);
+
+    if (!moodEdited) {
+      setActiveMood(moodCandidates[0]?.label ?? "");
+    }
+  }, [moodCandidates, moodEdited, text]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1189,26 +1195,32 @@ export default function HomePage() {
                   label="컨디션"
                   support="입력 내용에서 후보 4개 추천"
                 />
-                <div className="mt-3 grid grid-cols-4 gap-2">
-                  {visibleMoodCandidates.map((mood) => {
-                    const selected = activeMood === mood.label;
-                    return (
-                      <button
-                        className={`flex min-h-10 items-center justify-center gap-1.5 rounded-xl border px-2 text-sm font-semibold transition active:scale-[0.98] ${
-                          selected
-                            ? "border-tide bg-[#fde2ef] text-tide shadow-sm"
-                            : "border-ink/10 bg-[#fffdf8] text-ink/62 hover:border-tide/45"
-                        }`}
-                        key={mood.label}
-                        type="button"
-                        onClick={() => handleMoodSelect(mood.label)}
-                      >
-                        {selected ? <CheckCircle2 size={14} aria-hidden /> : null}
-                        {mood.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                {visibleMoodCandidates.length > 0 ? (
+                  <div className="mt-3 grid grid-cols-4 gap-2">
+                    {visibleMoodCandidates.map((mood) => {
+                      const selected = activeMood === mood.label;
+                      return (
+                        <button
+                          className={`flex min-h-10 items-center justify-center gap-1.5 rounded-xl border px-2 text-sm font-semibold transition active:scale-[0.98] ${
+                            selected
+                              ? "border-tide bg-[#fde2ef] text-tide shadow-sm"
+                              : "border-ink/10 bg-[#fffdf8] text-ink/62 hover:border-tide/45"
+                          }`}
+                          key={mood.label}
+                          type="button"
+                          onClick={() => handleMoodSelect(mood.label)}
+                        >
+                          {selected ? <CheckCircle2 size={14} aria-hidden /> : null}
+                          {mood.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-2xl border border-dashed border-ink/12 bg-[#fffdf8] px-4 py-3 text-sm font-semibold text-ink/42">
+                    이동 요청을 입력하면 컨디션 후보가 나타납니다.
+                  </div>
+                )}
               </section>
 
               {error ? (
@@ -3264,7 +3276,7 @@ function buildQuickSavedPlaces(places: SavedPlaceEntry[]) {
       usedAddresses.add(key);
       return true;
     })
-    .slice(0, 3);
+    .slice(0, 5);
 }
 
 function guessSavedPlaceKind(value: string): SavedPlaceKind {
@@ -3633,6 +3645,12 @@ function shouldSearchLocationInput(query: string) {
 
 function buildMoodCandidates(input: string, suggestedLabels: string[] = []) {
   const normalized = input.toLowerCase();
+  const suggestedSet = new Set(
+    suggestedLabels.filter((label) => MOOD_PRESETS.some((mood) => mood.label === label))
+  );
+  const suggestedIsOnlyDefault =
+    suggestedSet.size > 0 &&
+    Array.from(suggestedSet).every((label) => DEFAULT_MOOD_LABELS.includes(label));
   const scored = MOOD_PRESETS.map((mood, index) => {
     const keywordScore = mood.keywords.reduce(
       (score, keyword) => score + (normalized.includes(keyword.toLowerCase()) ? 4 : 0),
@@ -3640,18 +3658,38 @@ function buildMoodCandidates(input: string, suggestedLabels: string[] = []) {
     );
     const suggestedIndex = suggestedLabels.indexOf(mood.label);
     const suggestedScore = suggestedIndex >= 0 ? 40 - suggestedIndex : 0;
-    const defaultScore = DEFAULT_MOOD_LABELS.includes(mood.label) ? 1 : 0;
     return {
       mood,
-      score: suggestedScore + keywordScore + defaultScore,
+      score: suggestedScore + keywordScore,
+      keywordScore,
       index
     };
   });
+  const hasKeywordSignal = scored.some((item) => item.keywordScore > 0);
+  const hasLlmSignal = suggestedSet.size > 0 && !suggestedIsOnlyDefault;
 
-  return scored
+  if (!hasKeywordSignal && !hasLlmSignal) {
+    return [];
+  }
+
+  const selected = scored
+    .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .slice(0, 4)
     .map((item) => item.mood);
+  const labels = selected.map((mood) => mood.label);
+
+  DEFAULT_MOOD_LABELS.forEach((label) => {
+    if (labels.length < 4 && !labels.includes(label)) {
+      const mood = MOOD_PRESETS.find((item) => item.label === label);
+      if (mood) {
+        selected.push(mood);
+        labels.push(label);
+      }
+    }
+  });
+
+  return selected.slice(0, 4);
 }
 
 function buildLocalMoodLabels(input: string) {
@@ -3667,6 +3705,10 @@ function buildLocalMoodLabels(input: string) {
   const labels = scored
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((item) => item.label);
+
+  if (labels.length === 0) {
+    return [];
+  }
 
   DEFAULT_MOOD_LABELS.forEach((label) => {
     if (!labels.includes(label)) {
@@ -3766,11 +3808,13 @@ function buildLocalPreviewInsights(
     insights.push({ label: "상태", value: "피로 낮은 길 우선", kind: "mood" });
   }
 
-  insights.push({
-    label: "컨디션",
-    value: `${activeMood} 기준으로 경로 비교`,
-    kind: "mood"
-  });
+  if (activeMood) {
+    insights.push({
+      label: "컨디션",
+      value: `${activeMood} 기준으로 경로 비교`,
+      kind: "mood"
+    });
+  }
 
   return insights;
 }
@@ -3809,10 +3853,10 @@ function buildLocalStopInsights(text: string): PreviewInsight[] {
       kind: "stop"
     });
   }
-  if (/(다이소|살거|살 것|사야|구매|장보기)/.test(text)) {
+  if (/(다이소|살거|살 것|사야|구매|장보기|마트|편의점|약국|올리브영|픽업|찾으러)/.test(text)) {
     insights.push({
       label: "들를 곳",
-      value: text.includes("다이소") ? "다이소 들르기" : "살 것 사기",
+      value: localErrandValue(text),
       kind: "task"
     });
   }
@@ -3827,6 +3871,21 @@ function buildLocalStopInsights(text: string): PreviewInsight[] {
       return true;
     })
     .slice(0, 3);
+}
+
+function localErrandValue(text: string) {
+  for (const keyword of ["다이소", "올리브영", "약국", "편의점", "마트"]) {
+    if (text.includes(keyword)) {
+      return `${keyword} 들르기`;
+    }
+  }
+  if (/(픽업|찾으러)/.test(text)) {
+    return "물건 픽업";
+  }
+  if (text.includes("장보기")) {
+    return "장보기";
+  }
+  return "살 것 사기";
 }
 
 function extractLocalAreaHint(text: string) {
@@ -3972,9 +4031,7 @@ function buildPlanningText(
   const likedTypes = preferenceTypeSummary(points, votes, "like");
   const dislikedTypes = preferenceTypeSummary(points, votes, "dislike");
   const moodPreset = MOOD_PRESETS.find((mood) => mood.label === activeMood);
-  const additions = [
-    `컨디션 기준: ${moodPreset ? moodPreset.sentence : activeMood}`
-  ];
+  const additions = moodPreset ? [`컨디션 기준: ${moodPreset.sentence}`] : [];
 
   if (liked.length > 0) {
     additions.push(`선호하는 근처 장소: ${liked.join(", ")}`);

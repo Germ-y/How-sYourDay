@@ -577,7 +577,7 @@ def test_preview_insights_uses_final_appointment_and_waypoints(monkeypatch) -> N
     assert any(insight.label == "작업할 카페" for insight in insights)
 
 
-def test_preview_insights_detects_daiso_errand(monkeypatch) -> None:
+def test_preview_insights_detects_named_store_errand(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
     insights, _, mood_candidates = build_preview_insights(
@@ -595,7 +595,7 @@ def test_preview_insights_detects_daiso_errand(monkeypatch) -> None:
     assert "조용" in mood_candidates
 
 
-def test_intent_extracts_required_daiso_errand(monkeypatch) -> None:
+def test_intent_extracts_required_named_store_errand(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
     intent = extract_intent(
@@ -606,6 +606,34 @@ def test_intent_extracts_required_daiso_errand(monkeypatch) -> None:
     errand = next(task for task in intent.tasks if task.kind == "errand")
     assert errand.required is True
     assert "다이소" in errand.poi_query
+
+
+def test_intent_extracts_multiple_generic_errands(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    intent = extract_intent(
+        "회사에서 집 가는 길에 약국 들러서 감기약 사고 편의점 택배도 찾아야 해"
+    )
+
+    errand_queries = [task.poi_query for task in intent.tasks if task.kind == "errand"]
+
+    assert "약국" in errand_queries
+    assert "편의점" in errand_queries
+
+
+def test_preview_insights_detects_generic_errand(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    insights, _, _ = build_preview_insights(
+        "회사에서 집 가는 길에 약국 들러서 감기약 사고 편의점 택배도 찾아야 해",
+        None,
+        None,
+        None,
+    )
+
+    values = [insight.value for insight in insights]
+
+    assert any("약국" in value for value in values)
 
 
 def test_route_location_extraction_handles_korean_from_to(monkeypatch) -> None:
