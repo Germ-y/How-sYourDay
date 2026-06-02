@@ -1207,6 +1207,64 @@ def test_route_location_resolution_prefers_nearby_candidate_with_current_locatio
     assert result.destination.address == "서울 종로구 대학로"
 
 
+def test_route_location_resolution_does_not_pick_nearby_irrelevant_candidate(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    def fake_search(
+        query: str, size: int = 5, current_location=None
+    ) -> list[LocationCandidate]:
+        if query in {"서울 혜화", "종로 혜화", "혜화"}:
+            return [
+                LocationCandidate(
+                    label="우체통",
+                    address="서울 종로구 동숭동 67-6",
+                    lat=37.58233,
+                    lng=127.00177,
+                    source="kakao-keyword",
+                    category="사회,공공기관 > 우체통",
+                    distance_meters=4,
+                ),
+                LocationCandidate(
+                    label="서울 종로구 혜화동",
+                    address="서울 종로구 혜화동",
+                    lat=37.58686,
+                    lng=127.00060,
+                    source="kakao-address",
+                    category="주소",
+                    distance_meters=520,
+                ),
+            ]
+        if query == "카페":
+            return [
+                LocationCandidate(
+                    label="콘크리트 팔레트",
+                    address="서울 종로구 대학로 125",
+                    lat=37.58246,
+                    lng=127.00150,
+                    source="kakao-keyword",
+                    category="카페",
+                    distance_meters=31,
+                )
+            ]
+        return []
+
+    monkeypatch.setattr(
+        route_location_resolution, "search_location_candidates", fake_search
+    )
+
+    result = route_location_resolution.resolve_route_locations(
+        "혜화에서 카페까지 가고 싶어",
+        current_location=Location(label="현재 위치", lat=37.5823, lng=127.0018),
+    )
+
+    assert result.origin is not None
+    assert result.origin.label == "서울 종로구 혜화동"
+    assert result.destination is not None
+    assert result.destination.label == "콘크리트 팔레트"
+
+
 def test_tmap_pedestrian_route_is_normalized(monkeypatch) -> None:
     from tools import tmap_route
 

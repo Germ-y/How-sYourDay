@@ -440,33 +440,45 @@ def _candidate_score(
     address = _normalize(candidate.address or "")
     category = _normalize(candidate.category or "")
     score = 0
+    semantic_score = 0
     matched_terms = 0
 
     if label == query_normalized:
         score += 80
+        semantic_score += 80
     if query_normalized and query_normalized in label:
         score += 42
+        semantic_score += 42
     if label and label in query_normalized:
         score += 34
+        semantic_score += 34
 
     for term in terms:
         term_matched = False
         if term in label:
             score += 12
+            semantic_score += 12
             term_matched = True
         if term in address:
             score += 10
+            semantic_score += 10
             term_matched = True
         if term in category:
             score += 3
+            semantic_score += 3
             term_matched = True
         if term_matched:
             matched_terms += 1
 
     if len(terms) >= 2:
         score += matched_terms * 20
+        semantic_score += matched_terms * 20
         if matched_terms <= 1:
             score -= 20
+            semantic_score -= 20
+
+    if semantic_score <= 0:
+        return -100
 
     score += _region_match_score(query, context_text, candidate)
     score += _distance_match_score(candidate, current_location)
