@@ -220,6 +220,19 @@ def test_route_path_uses_osrm_when_tmap_is_disabled(monkeypatch) -> None:
     assert [route.provider for route in routes] == ["osrm"]
 
 
+def test_tmap_disable_flag_can_come_from_env_file(monkeypatch) -> None:
+    from tools import tmap_route
+
+    monkeypatch.delenv("HYS_DISABLE_TMAP", raising=False)
+    monkeypatch.setattr(
+        tmap_route,
+        "_get_env_value",
+        lambda name: "1" if name == "HYS_DISABLE_TMAP" else "test-key",
+    )
+
+    assert tmap_route._get_tmap_app_key() is None
+
+
 def test_kakao_poi_is_normalized_when_provider_returns_result(monkeypatch) -> None:
     from tools import kakao_local
 

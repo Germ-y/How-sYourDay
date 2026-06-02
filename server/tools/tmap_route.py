@@ -56,7 +56,7 @@ def build_tmap_route_candidates(
 
 
 def _get_tmap_app_key() -> str | None:
-    if os.environ.get("HYS_DISABLE_TMAP") == "1":
+    if (os.environ.get("HYS_DISABLE_TMAP") or _get_env_value("HYS_DISABLE_TMAP")) == "1":
         return None
     return _get_env_value("TMAP_APP_KEY")
 
