@@ -2736,7 +2736,7 @@ function TimelineList({ plan }: { plan: DailyPlan }) {
           </span>
           <span className="min-w-0 text-sm leading-6 text-ink/72">
             <span className="block text-xs font-semibold uppercase tracking-[0.1em] text-ink/38">
-              {item.type}
+              {timelineTypeLabel(item.type)}
             </span>
             {item.label}
           </span>
@@ -2744,6 +2744,19 @@ function TimelineList({ plan }: { plan: DailyPlan }) {
       ))}
     </ol>
   );
+}
+
+function timelineTypeLabel(type: string) {
+  if (type === "depart") {
+    return "출발";
+  }
+  if (type === "arrive") {
+    return "도착";
+  }
+  if (type === "task") {
+    return "경유";
+  }
+  return userFacingCategoryLabel(type);
 }
 
 function RouteList({
@@ -3433,7 +3446,46 @@ function landmarkLabel(candidate: PoiCandidate) {
   if (normalized.includes("hospital") || normalized.includes("medical")) {
     return "의료";
   }
-  return candidate.category || candidate.landmark_type || "장소";
+  if (normalized.includes("errand")) {
+    return "들를 곳";
+  }
+  if (normalized.includes("print")) {
+    return "인쇄";
+  }
+  if (normalized.includes("clinic")) {
+    return "병원";
+  }
+  if (normalized.includes("commercial")) {
+    return "상점";
+  }
+  return userFacingCategoryLabel(candidate.category || candidate.landmark_type);
+}
+
+function userFacingCategoryLabel(value: string | null | undefined) {
+  if (!value) {
+    return "장소";
+  }
+  const normalized = value.toLowerCase();
+  const labels: Record<string, string> = {
+    errand: "들를 곳",
+    recovery: "쉴 곳",
+    print: "인쇄",
+    clinic: "병원",
+    commercial: "상점",
+    medical: "의료",
+    cafe: "카페",
+    bookstore: "서점",
+    library: "도서관",
+    park: "공원",
+    transit_hub: "교통",
+    university: "학교",
+    school: "학교",
+    restaurant: "음식점",
+    depart: "출발",
+    arrive: "도착",
+    task: "경유"
+  };
+  return labels[normalized] ?? value;
 }
 
 function pointDetail(candidate: PoiCandidate) {
@@ -3458,6 +3510,9 @@ function pointTags(candidate: PoiCandidate) {
 }
 
 function translateEmotionTag(tag: string) {
+  if (tag === "errand" || tag === "practical") {
+    return "실용";
+  }
   const labels: Record<string, string> = {
     calm: "차분함",
     recovery: "회복",

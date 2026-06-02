@@ -215,7 +215,13 @@ def _explanation(evaluation: TradeoffEvaluation, score: EmotionCost) -> str:
 def _why_stop(stop) -> str:
     if stop.category == "recovery":
         return f"{stop.name}에서 잠깐 회복할 수 있어요."
-    return f"{stop.name}에서 {stop.category} 일을 처리합니다."
+    if stop.category == "errand":
+        return f"{stop.name}에 들러 필요한 일을 처리합니다."
+    if stop.category == "print":
+        return f"{stop.name}에서 인쇄 일을 처리합니다."
+    if stop.category == "clinic":
+        return f"{stop.name} 방문을 동선에 반영합니다."
+    return f"{stop.name}에 들릅니다."
 
 
 def _format_minutes(total_minutes: int) -> str:
