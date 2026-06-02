@@ -343,12 +343,8 @@ def _candidate_payload(candidates: list[LocationCandidate]) -> list[dict]:
             "label": candidate.label,
             "address": candidate.address,
             "category": candidate.category,
-            "provider_id": candidate.provider_id,
-            "category_group_code": candidate.category_group_code,
             "category_group_name": candidate.category_group_name,
             "category_name": candidate.category_name,
-            "phone": candidate.phone,
-            "place_url": candidate.place_url,
             "distance_meters": candidate.distance_meters,
             "source": candidate.source,
         }
