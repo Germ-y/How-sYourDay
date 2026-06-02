@@ -2,8 +2,9 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from math import cos, radians, sqrt
 
-from api.schemas import LocationCandidate
+from api.schemas import Coordinate, LocationCandidate
 from tools.extract_route_locations import extract_route_locations
 from tools.geocode import search_location_candidates
 from tools.kakao_local import _get_env_value
@@ -88,7 +89,11 @@ class RouteLocationResolution:
     selection_source: str
 
 
-def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResolution:
+def resolve_route_locations(
+    user_text: str,
+    size: int = 5,
+    current_location: Coordinate | None = None,
+) -> RouteLocationResolution:
     hints = extract_route_locations(user_text)
     origin_text = _origin_hint_from_text(user_text) or hints.origin_text
     destination_text = (
@@ -101,10 +106,12 @@ def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResol
     origin_candidates = _candidate_search_many(
         origin_queries,
         size,
+        current_location=current_location,
     )
     destination_candidates = _candidate_search_many(
         destination_queries,
         size,
+        current_location=current_location,
     )
     selection = _select_locations_with_llm(
         user_text,
@@ -119,16 +126,27 @@ def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResol
         destination = _candidate_at(
             destination_candidates, selection.get("destination_index")
         )
-        scored_origin = _select_best_across_queries(origin_queries, origin_candidates)
+        scored_origin = _select_best_across_queries(
+            origin_queries,
+            origin_candidates,
+            current_location=current_location,
+        )
         origin_context = _candidate_region_context(origin or scored_origin)
         scored_destination = _select_best_across_queries(
-            destination_queries, destination_candidates, origin_context
+            destination_queries,
+            destination_candidates,
+            origin_context,
+            current_location=current_location,
         )
         adjusted_origin = _prefer_score_adjusted_candidate(
-            origin_text, None, origin, scored_origin
+            origin_text, None, current_location, origin, scored_origin
         )
         adjusted_destination = _prefer_score_adjusted_candidate(
-            destination_text, origin_context, destination, scored_destination
+            destination_text,
+            origin_context,
+            current_location,
+            destination,
+            scored_destination,
         )
         selection_source = (
             "llm-score-adjusted"
@@ -138,10 +156,17 @@ def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResol
         origin = adjusted_origin
         destination = adjusted_destination
     else:
-        origin = _select_best_across_queries(origin_queries, origin_candidates)
+        origin = _select_best_across_queries(
+            origin_queries,
+            origin_candidates,
+            current_location=current_location,
+        )
         origin_context = _candidate_region_context(origin)
         destination = _select_best_across_queries(
-            destination_queries, destination_candidates, origin_context
+            destination_queries,
+            destination_candidates,
+            origin_context,
+            current_location=current_location,
         )
         selection_source = "score" if origin or destination else "none"
 
@@ -156,6 +181,7 @@ def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResol
             destination_candidates,
             origin,
             _candidate_region_context(origin),
+            current_location,
         )
         if destination:
             selection_source = f"{selection_source}-deduped"
@@ -172,21 +198,36 @@ def resolve_route_locations(user_text: str, size: int = 5) -> RouteLocationResol
     )
 
 
-def _candidate_search(query: str | None, size: int) -> list[LocationCandidate]:
+def _candidate_search(
+    query: str | None,
+    size: int,
+    current_location: Coordinate | None = None,
+) -> list[LocationCandidate]:
     if not query:
         return []
-    return search_location_candidates(query, size=size)
+    return search_location_candidates(
+        query,
+        size=size,
+        current_location=current_location,
+    )
 
 
 def _candidate_search_many(
-    queries: list[str], size: int, context_text: str | None = None
+    queries: list[str],
+    size: int,
+    context_text: str | None = None,
+    current_location: Coordinate | None = None,
 ) -> list[LocationCandidate]:
     candidates: list[LocationCandidate] = []
     seen: set[str] = set()
 
     for query in queries:
         for search_query in _regionalized_queries(query, context_text):
-            for candidate in _candidate_search(search_query, size):
+            for candidate in _candidate_search(
+                search_query,
+                size,
+                current_location=current_location,
+            ):
                 key = f"{_normalize(candidate.label)}:{candidate.lat:.6f}:{candidate.lng:.6f}"
                 if key in seen:
                     continue
@@ -310,6 +351,7 @@ def _select_candidate_by_score(
     query: str | None,
     candidates: list[LocationCandidate],
     context_text: str | None = None,
+    current_location: Coordinate | None = None,
 ) -> LocationCandidate | None:
     if not query or not candidates:
         return None
@@ -317,7 +359,7 @@ def _select_candidate_by_score(
     best: tuple[int, int, LocationCandidate] | None = None
 
     for index, candidate in enumerate(candidates):
-        score = _candidate_score(query, candidate, context_text)
+        score = _candidate_score(query, candidate, context_text, current_location)
         ranked = (score, -index, candidate)
         if best is None or ranked[:2] > best[:2]:
             best = ranked
@@ -332,11 +374,13 @@ def _select_distinct_candidate_by_score(
     candidates: list[LocationCandidate],
     disallowed: LocationCandidate,
     context_text: str | None = None,
+    current_location: Coordinate | None = None,
 ) -> LocationCandidate | None:
     return _select_candidate_by_score(
         query,
         [candidate for candidate in candidates if not _same_candidate(candidate, disallowed)],
         context_text,
+        current_location,
     )
 
 
@@ -344,9 +388,15 @@ def _select_best_across_queries(
     queries: list[str],
     candidates: list[LocationCandidate],
     context_text: str | None = None,
+    current_location: Coordinate | None = None,
 ) -> LocationCandidate | None:
     for query in queries:
-        selected = _select_candidate_by_score(query, candidates, context_text)
+        selected = _select_candidate_by_score(
+            query,
+            candidates,
+            context_text,
+            current_location,
+        )
         if selected:
             return selected
     return None
@@ -355,6 +405,7 @@ def _select_best_across_queries(
 def _prefer_score_adjusted_candidate(
     query: str | None,
     context_text: str | None,
+    current_location: Coordinate | None,
     selected: LocationCandidate | None,
     scored: LocationCandidate | None,
 ) -> LocationCandidate | None:
@@ -365,8 +416,8 @@ def _prefer_score_adjusted_candidate(
     if _same_candidate(selected, scored):
         return selected
 
-    selected_score = _candidate_score(query, selected, context_text)
-    scored_score = _candidate_score(query, scored, context_text)
+    selected_score = _candidate_score(query, selected, context_text, current_location)
+    scored_score = _candidate_score(query, scored, context_text, current_location)
     if scored_score >= selected_score + 35:
         return scored
     return selected
@@ -376,6 +427,7 @@ def _candidate_score(
     query: str | None,
     candidate: LocationCandidate,
     context_text: str | None = None,
+    current_location: Coordinate | None = None,
 ) -> int:
     if not query:
         return 0
@@ -417,6 +469,7 @@ def _candidate_score(
             score -= 20
 
     score += _region_match_score(query, context_text, candidate)
+    score += _distance_match_score(candidate, current_location)
 
     if school_query:
         if "학교" in (candidate.category or ""):
@@ -437,6 +490,30 @@ def _candidate_score(
         score += 2
 
     return score
+
+
+def _distance_match_score(
+    candidate: LocationCandidate,
+    current_location: Coordinate | None,
+) -> int:
+    if not current_location:
+        return 0
+
+    distance = candidate.distance_meters
+    if distance is None:
+        distance = _rough_distance_meters(current_location, candidate)
+
+    if distance <= 700:
+        return 30
+    if distance <= 1500:
+        return 22
+    if distance <= 3000:
+        return 14
+    if distance <= 7000:
+        return 6
+    if distance >= 30_000:
+        return -25
+    return 0
 
 
 def _region_match_score(
@@ -744,6 +821,12 @@ def _terms(value: str) -> list[str]:
         for term in re.split(r"[\s,./·()]+", value)
         if len(_normalize(term)) >= 2
     ]
+
+
+def _rough_distance_meters(start: Coordinate, end: Coordinate) -> int:
+    lat_meters = (end.lat - start.lat) * 111_000
+    lng_meters = (end.lng - start.lng) * 111_000 * cos(radians(start.lat))
+    return round(sqrt(lat_meters * lat_meters + lng_meters * lng_meters))
 
 
 def _normalize(value: str) -> str:

@@ -30,6 +30,7 @@ class GeocodeResponse(BaseModel):
 class LocationSearchRequest(BaseModel):
     query: str = Field(min_length=1)
     size: int = Field(default=5, ge=1, le=10)
+    current_location: Location | None = None
 
 
 class LocationCandidate(BaseModel):
@@ -48,6 +49,7 @@ class LocationSearchResponse(BaseModel):
 
 class RouteExtractionRequest(BaseModel):
     user_text: str = Field(min_length=1)
+    current_location: Location | None = None
 
 
 class RouteExtractionResponse(BaseModel):

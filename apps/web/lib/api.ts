@@ -334,14 +334,19 @@ export async function geocodeLocation(query: string): Promise<GeocodeResult> {
 
 export async function searchLocations(
   query: string,
-  size = 5
+  size = 5,
+  currentLocation?: Location | null
 ): Promise<LocationSearchResult> {
   const response = await fetch(`${API_BASE_URL}/search-locations`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ query, size })
+    body: JSON.stringify({
+      query,
+      size,
+      current_location: currentLocation ?? undefined
+    })
   });
 
   if (!response.ok) {
@@ -370,14 +375,18 @@ export async function extractRouteLocations(
 }
 
 export async function resolveRouteLocations(
-  userText: string
+  userText: string,
+  currentLocation?: Location | null
 ): Promise<RouteLocationResolutionResult> {
   const response = await fetch(`${API_BASE_URL}/resolve-route-locations`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ user_text: userText })
+    body: JSON.stringify({
+      user_text: userText,
+      current_location: currentLocation ?? undefined
+    })
   });
 
   if (!response.ok) {

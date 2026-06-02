@@ -1,9 +1,10 @@
 import json
+from math import cos, radians, sqrt
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from api.schemas import Location, LocationCandidate
+from api.schemas import Coordinate, Location, LocationCandidate
 from tools.kakao_local import KAKAO_KEYWORD_SEARCH_URL, _get_env_value
 
 KAKAO_ADDRESS_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/address.json"
@@ -55,7 +56,11 @@ def geocode_location(query: str) -> tuple[Location, str] | None:
     return None
 
 
-def search_location_candidates(query: str, size: int = 5) -> list[LocationCandidate]:
+def search_location_candidates(
+    query: str,
+    size: int = 5,
+    current_location: Coordinate | None = None,
+) -> list[LocationCandidate]:
     text = query.strip()
     if not text:
         return []
@@ -77,10 +82,35 @@ def search_location_candidates(query: str, size: int = 5) -> list[LocationCandid
 
     api_key = _get_env_value("KAKAO_REST_API_KEY")
     if api_key:
-        candidates.extend(_search_kakao_address_candidates(api_key, text, size))
-        candidates.extend(_search_kakao_keyword_candidates(api_key, text, size))
+        candidates.extend(
+            _search_kakao_address_candidates(
+                api_key,
+                text,
+                size,
+                current_location=current_location,
+            )
+        )
+        candidates.extend(
+            _search_kakao_keyword_candidates(
+                api_key,
+                text,
+                size,
+                current_location=current_location,
+            )
+        )
 
-    return _dedupe_candidates(candidates)[:size]
+    candidates = _dedupe_candidates(candidates)
+    if current_location:
+        candidates = sorted(
+            candidates,
+            key=lambda candidate: (
+                candidate.distance_meters
+                if candidate.distance_meters is not None
+                else _rough_distance_meters(current_location, candidate),
+                0 if candidate.source == "kakao-keyword" else 1,
+            ),
+        )
+    return candidates[:size]
 
 
 def _search_kakao_address(api_key: str, query: str) -> Location | None:
@@ -106,7 +136,10 @@ def _search_kakao_address(api_key: str, query: str) -> Location | None:
 
 
 def _search_kakao_address_candidates(
-    api_key: str, query: str, size: int
+    api_key: str,
+    query: str,
+    size: int,
+    current_location: Coordinate | None = None,
 ) -> list[LocationCandidate]:
     payload = _get_json(
         KAKAO_ADDRESS_SEARCH_URL,
@@ -121,16 +154,17 @@ def _search_kakao_address_candidates(
 
     for document in documents:
         label = str(document.get("address_name") or query)
-        candidates.append(
-            LocationCandidate(
-                label=label,
-                address=_address_label(document),
-                lat=_to_float(document.get("y"), 0),
-                lng=_to_float(document.get("x"), 0),
-                source="kakao-address",
-                category="주소",
-            )
+        candidate = LocationCandidate(
+            label=label,
+            address=_address_label(document),
+            lat=_to_float(document.get("y"), 0),
+            lng=_to_float(document.get("x"), 0),
+            source="kakao-address",
+            category="주소",
         )
+        if current_location:
+            candidate.distance_meters = _rough_distance_meters(current_location, candidate)
+        candidates.append(candidate)
 
     return candidates
 
@@ -158,15 +192,27 @@ def _search_kakao_keyword(api_key: str, query: str) -> Location | None:
 
 
 def _search_kakao_keyword_candidates(
-    api_key: str, query: str, size: int
+    api_key: str,
+    query: str,
+    size: int,
+    current_location: Coordinate | None = None,
 ) -> list[LocationCandidate]:
+    params = {
+        "query": query,
+        "size": size,
+    }
+    if current_location:
+        params.update(
+            {
+                "x": current_location.lng,
+                "y": current_location.lat,
+                "sort": "distance",
+            }
+        )
     payload = _get_json(
         KAKAO_KEYWORD_SEARCH_URL,
         api_key,
-        {
-            "query": query,
-            "size": size,
-        },
+        params,
     )
     documents = payload.get("documents", []) if payload else []
     candidates: list[LocationCandidate] = []
@@ -268,3 +314,9 @@ def _to_int(value) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _rough_distance_meters(start: Coordinate, end: Coordinate) -> int:
+    lat_meters = (end.lat - start.lat) * 111_000
+    lng_meters = (end.lng - start.lng) * 111_000 * cos(radians(start.lat))
+    return round(sqrt(lat_meters * lat_meters + lng_meters * lng_meters))

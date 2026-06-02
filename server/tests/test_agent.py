@@ -869,7 +869,9 @@ def test_route_location_extraction_allows_missing_origin(monkeypatch) -> None:
 def test_route_location_resolution_selects_real_search_candidates(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
-    def fake_search(query: str, size: int = 5) -> list[LocationCandidate]:
+    def fake_search(
+        query: str, size: int = 5, current_location=None
+    ) -> list[LocationCandidate]:
         if query == "성균관대학교 수원":
             return [
                 LocationCandidate(
@@ -921,7 +923,9 @@ def test_route_location_resolution_selects_real_search_candidates(monkeypatch) -
 def test_route_location_resolution_retrieves_specific_final_place(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
-    def fake_search(query: str, size: int = 5) -> list[LocationCandidate]:
+    def fake_search(
+        query: str, size: int = 5, current_location=None
+    ) -> list[LocationCandidate]:
         if query == "오목교역":
             return [
                 LocationCandidate(
@@ -978,7 +982,9 @@ def test_route_location_resolution_searches_final_place_with_area_context(
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
     captured_queries: list[str] = []
 
-    def fake_search(query: str, size: int = 5) -> list[LocationCandidate]:
+    def fake_search(
+        query: str, size: int = 5, current_location=None
+    ) -> list[LocationCandidate]:
         captured_queries.append(query)
         if query == "오목교":
             return [
@@ -1044,7 +1050,9 @@ def test_route_location_resolution_falls_back_to_broad_area_when_specific_missin
 ) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
-    def fake_search(query: str, size: int = 5) -> list[LocationCandidate]:
+    def fake_search(
+        query: str, size: int = 5, current_location=None
+    ) -> list[LocationCandidate]:
         if query == "오목교역":
             return [
                 LocationCandidate(
@@ -1089,7 +1097,9 @@ def test_route_location_resolution_prefers_address_region_for_ambiguous_area(
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
     captured_queries: list[str] = []
 
-    def fake_search(query: str, size: int = 5) -> list[LocationCandidate]:
+    def fake_search(
+        query: str, size: int = 5, current_location=None
+    ) -> list[LocationCandidate]:
         captured_queries.append(query)
         if query == "혜화":
             return [
@@ -1139,6 +1149,62 @@ def test_route_location_resolution_prefers_address_region_for_ambiguous_area(
     assert result.destination is not None
     assert result.destination.label == "대학로예술극장 소극장"
     assert "서울 종로구" in (result.destination.address or "")
+
+
+def test_route_location_resolution_prefers_nearby_candidate_with_current_location(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    def fake_search(
+        query: str, size: int = 5, current_location=None
+    ) -> list[LocationCandidate]:
+        if query == "집":
+            return [
+                LocationCandidate(
+                    label="집",
+                    address="서울 종로구",
+                    lat=37.586,
+                    lng=127.001,
+                    source="known",
+                    category="저장 키워드",
+                    distance_meters=200,
+                )
+            ]
+        if query == "카페":
+            return [
+                LocationCandidate(
+                    label="카페",
+                    address="부산 부산진구",
+                    lat=35.157,
+                    lng=129.059,
+                    source="kakao-keyword",
+                    category="음식점 > 카페",
+                    distance_meters=320_000,
+                ),
+                LocationCandidate(
+                    label="카페",
+                    address="서울 종로구 대학로",
+                    lat=37.582,
+                    lng=127.003,
+                    source="kakao-keyword",
+                    category="음식점 > 카페",
+                    distance_meters=450,
+                ),
+            ]
+        return []
+
+    monkeypatch.setattr(
+        route_location_resolution, "search_location_candidates", fake_search
+    )
+
+    result = route_location_resolution.resolve_route_locations(
+        "집에서 카페까지 가고 싶어",
+        current_location=Location(label="현재 위치", lat=37.5823, lng=127.0018),
+    )
+
+    assert result.destination is not None
+    assert result.destination.address == "서울 종로구 대학로"
 
 
 def test_tmap_pedestrian_route_is_normalized(monkeypatch) -> None:

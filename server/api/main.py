@@ -150,7 +150,11 @@ def geocode(request: GeocodeRequest) -> GeocodeResponse:
 @app.post("/search-locations", response_model=LocationSearchResponse)
 def search_locations(request: LocationSearchRequest) -> LocationSearchResponse:
     return LocationSearchResponse(
-        candidates=search_location_candidates(request.query, size=request.size)
+        candidates=search_location_candidates(
+            request.query,
+            size=request.size,
+            current_location=request.current_location,
+        )
     )
 
 
@@ -166,7 +170,10 @@ def extract_route(request: RouteExtractionRequest) -> RouteExtractionResponse:
 
 @app.post("/resolve-route-locations", response_model=RouteLocationResolutionResponse)
 def resolve_route(request: RouteExtractionRequest) -> RouteLocationResolutionResponse:
-    result = resolve_route_locations(request.user_text)
+    result = resolve_route_locations(
+        request.user_text,
+        current_location=request.current_location,
+    )
     return RouteLocationResolutionResponse(
         origin_text=result.origin_text,
         destination_text=result.destination_text,

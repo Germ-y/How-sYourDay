@@ -417,7 +417,7 @@ export default function HomePage() {
     setLocationSearchLoading("origin");
     const timer = window.setTimeout(async () => {
       try {
-        const result = await searchLocations(query, 5);
+        const result = await searchLocations(query, 5, currentLocation);
         if (!cancelled) {
           setOriginCandidates(result.candidates);
         }
@@ -438,7 +438,7 @@ export default function HomePage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [originText]);
+  }, [originText, currentLocation]);
 
   useEffect(() => {
     const query = destinationText.trim();
@@ -454,7 +454,7 @@ export default function HomePage() {
     setLocationSearchLoading("destination");
     const timer = window.setTimeout(async () => {
       try {
-        const result = await searchLocations(query, 5);
+        const result = await searchLocations(query, 5, currentLocation);
         if (!cancelled) {
           setDestinationCandidates(result.candidates);
         }
@@ -475,7 +475,7 @@ export default function HomePage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [destinationText]);
+  }, [destinationText, currentLocation]);
 
   function persistSavedPlaces(nextPlaces: SavedPlaceEntry[]) {
     setSavedPlaces(nextPlaces);
@@ -681,13 +681,15 @@ export default function HomePage() {
     const localRoute = extractLocalPreviewRoute(trimmed, "", "");
 
     try {
-      const resolved = await resolveRouteLocations(trimmed);
+      const resolved = await resolveRouteLocations(trimmed, currentLocation);
       const originHint = resolved.origin_text ?? localRoute.origin;
       const destinationHint = resolved.destination_text ?? localRoute.destination;
       const [originFallback, destinationFallback] = await Promise.all([
-        !resolved.origin && originHint ? searchFirstLocationCandidate(originHint) : null,
+        !resolved.origin && originHint
+          ? searchFirstLocationCandidate(originHint, currentLocation)
+          : null,
         !resolved.destination && destinationHint
-          ? searchFirstLocationCandidate(destinationHint)
+          ? searchFirstLocationCandidate(destinationHint, currentLocation)
           : null
       ]);
       let changed = false;
@@ -743,9 +745,11 @@ export default function HomePage() {
       }
     } catch {
       const [originFallback, destinationFallback] = await Promise.all([
-        localRoute.origin ? searchFirstLocationCandidate(localRoute.origin) : null,
+        localRoute.origin
+          ? searchFirstLocationCandidate(localRoute.origin, currentLocation)
+          : null,
         localRoute.destination
-          ? searchFirstLocationCandidate(localRoute.destination)
+          ? searchFirstLocationCandidate(localRoute.destination, currentLocation)
           : null
       ]);
       let changed = false;
@@ -3893,6 +3897,17 @@ async function resolveLocationInput(
     };
   }
 
+  const nearbyCandidate = await searchFirstLocationCandidate(
+    rawText.trim(),
+    currentLocation
+  );
+  if (nearbyCandidate) {
+    return {
+      location: locationFromCandidate(nearbyCandidate),
+      source: "nearby-search"
+    };
+  }
+
   return geocodeLocation(rawText.trim());
 }
 
@@ -3904,14 +3919,17 @@ function locationFromCandidate(candidate: LocationCandidate): Location {
   };
 }
 
-async function searchFirstLocationCandidate(query: string) {
+async function searchFirstLocationCandidate(
+  query: string,
+  currentLocation: Location | null = null
+) {
   const trimmed = query.trim();
   if (!trimmed) {
     return null;
   }
 
   try {
-    const result = await searchLocations(trimmed, 3);
+    const result = await searchLocations(trimmed, 3, currentLocation);
     return result.candidates[0] ?? null;
   } catch {
     return null;
