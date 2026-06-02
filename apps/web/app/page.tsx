@@ -3766,8 +3766,10 @@ function buildLocalPreviewInsights(
     }
   ];
 
-  if (/[0-9]+시|까지|전|deadline/.test(normalized)) {
+  if (hasLocalTimeHint(normalized)) {
     insights.push({ label: "시간", value: "도착 시간 조건 반영", kind: "time" });
+  } else {
+    insights.push({ label: "시간", value: "감지된 시간 조건 없음", kind: "time" });
   }
   insights.push(...buildLocalStopInsights(text));
   if (/(피곤|지쳐|tired|exhausted)/.test(normalized)) {
@@ -3781,6 +3783,15 @@ function buildLocalPreviewInsights(
   });
 
   return insights;
+}
+
+function hasLocalTimeHint(normalized: string) {
+  return (
+    /\d+\s*(시|분)\s*(까지|전|안에)?/.test(normalized) ||
+    /(오전|오후)\s*\d+/.test(normalized) ||
+    /\d+\s*시간\s*안/.test(normalized) ||
+    /(deadline|마감|늦지|촉박)/.test(normalized)
+  );
 }
 
 function buildLocalStopInsights(text: string): PreviewInsight[] {

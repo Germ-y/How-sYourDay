@@ -88,6 +88,10 @@ def build_preview_insights(
         insights.append(
             PreviewInsight(label="시간", value="시간 조건 감지", kind="time")
         )
+    else:
+        insights.append(
+            PreviewInsight(label="시간", value="감지된 시간 조건 없음", kind="time")
+        )
 
     stop_points = _stop_insights(text, destination)
     insights.extend(stop_points)
@@ -194,13 +198,14 @@ def _preview_insights_with_llm(
     except (TypeError, ValueError, ValidationError):
         return None
 
-    return _repair_preview_insights(insights, origin, destination)
+    return _repair_preview_insights(insights, origin, destination, intent)
 
 
 def _repair_preview_insights(
     insights: list[PreviewInsight],
     origin: str | None,
     destination: str | None,
+    intent,
 ) -> list[PreviewInsight] | None:
     if not insights:
         return None
@@ -211,6 +216,14 @@ def _repair_preview_insights(
         repaired.insert(0, PreviewInsight(label="경로", value=route_value, kind="route"))
     elif origin or destination:
         repaired[0] = PreviewInsight(label=repaired[0].label, value=route_value, kind="route")
+
+    if not any(insight.kind == "time" for insight in repaired):
+        time_value = (
+            f"{intent.constraints.deadline} 전 도착 우선"
+            if intent and intent.constraints.deadline
+            else "감지된 시간 조건 없음"
+        )
+        repaired.insert(1, PreviewInsight(label="시간", value=time_value, kind="time"))
 
     unique: list[PreviewInsight] = []
     seen: set[str] = set()

@@ -35,6 +35,7 @@ mood
 Card Order
 Card 1 must be route.
 Card 2 should be time if there is a deadline or appointment time.
+If no time condition is present, include a time card with value "감지된 시간 조건 없음".
 After route and time, list meaningful waypoint, task, and condition cards in priority order.
 If there is no time signal, use waypoint or condition cards after route.
 Do not force exactly three non-route cards.
