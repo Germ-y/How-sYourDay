@@ -338,6 +338,7 @@ class PlanResponse(BaseModel):
     stops: list[PoiCandidate]
     routes: list[RouteCandidate]
     score: EmotionScore
+    route_scores: list[EmotionCost] = Field(default_factory=list)
     tradeoffs: list[Tradeoff]
     tradeoff_summaries: list[str] = Field(default_factory=list)
     ordered_stops: list[OrderedStop]

@@ -2264,6 +2264,10 @@ function RouteResultPage({
     () => plan.routes.find((route) => route.id === selectedRouteId) ?? plan.selected_route,
     [plan.routes, plan.selected_route, selectedRouteId]
   );
+  const selectedScore = useMemo(
+    () => scoreForRoute(plan, selectedRoute),
+    [plan, selectedRoute]
+  );
   const selectedMap = useMemo(
     () => mapForSelectedRoute(plan.map_overlays, selectedRoute),
     [plan.map_overlays, selectedRoute]
@@ -2298,10 +2302,7 @@ function RouteResultPage({
         <div className="mt-4 grid grid-cols-3 gap-2">
           <MiniStat label="이동" value={durationLabel(selectedRoute)} />
           <MiniStat label="걷기" value={`${selectedRoute.walking_minutes}분`} />
-          <MiniStat
-            label="선택"
-            value={selectedRoute.id === plan.selected_route.id ? "추천" : "후보"}
-          />
+          <MiniStat label="추천 점수" value={`${selectedScore.comfort_score}점`} />
         </div>
 
         <button
@@ -2319,6 +2320,7 @@ function RouteResultPage({
           plan={plan}
           selectedMap={selectedMap}
           selectedRoute={selectedRoute}
+          selectedScore={selectedScore}
         />
       </div>
     </section>
@@ -2387,12 +2389,14 @@ function MobilePlanResult({
   onSelectRoute,
   plan,
   selectedMap,
-  selectedRoute
+  selectedRoute,
+  selectedScore
 }: {
   onSelectRoute: (routeId: string) => void;
   plan: DailyPlan;
   selectedMap: MapViewModel;
   selectedRoute: RouteCandidate;
+  selectedScore: EmotionCost;
 }) {
   const isRecommendedRoute = selectedRoute.id === plan.selected_route.id;
   const firstTradeoff = isRecommendedRoute ? plan.tradeoffs[0] : null;
@@ -2429,6 +2433,7 @@ function MobilePlanResult({
       {plan.routes.length > 1 ? (
         <RouteList
           onSelect={onSelectRoute}
+          plan={plan}
           routes={plan.routes}
           selectedRouteId={selectedRoute.id}
         />
@@ -2443,9 +2448,9 @@ function MobilePlanResult({
             </h2>
           </div>
           <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-tide text-white">
-            <span className="text-xs font-semibold text-white/75">선택</span>
+            <span className="text-xs font-semibold text-white/75">추천</span>
             <span className="text-2xl font-semibold">
-              {isRecommendedRoute ? "추천" : "후보"}
+              {selectedScore.comfort_score}점
             </span>
           </div>
         </div>
@@ -2457,7 +2462,7 @@ function MobilePlanResult({
         </div>
 
         <RouteXaiCard
-          cost={plan.emotional_cost}
+          cost={selectedScore}
           route={selectedRoute}
           tradeoff={firstTradeoff}
         />
@@ -2496,7 +2501,7 @@ function MobilePlanResult({
 
       <section className="grid gap-3">
         <SectionTitle icon={<HeartPulse size={18} aria-hidden />} title="감정 비용" />
-        <EmotionalCostCard cost={plan.emotional_cost} />
+        <EmotionalCostCard cost={selectedScore} />
       </section>
 
       {plan.recommendations.length > 0 ? (
@@ -2845,6 +2850,13 @@ function routeXaiFallbackSummary(cost: EmotionCost, route: RouteCandidate) {
   return "이동 시간과 감정 비용을 함께 비교해서 균형이 좋은 후보를 골랐어요.";
 }
 
+function scoreForRoute(plan: DailyPlan, route: RouteCandidate) {
+  return (
+    (plan.route_scores ?? []).find((score) => score.route_id === route.id) ??
+    (route.id === plan.emotional_cost.route_id ? plan.emotional_cost : plan.score)
+  );
+}
+
 function mapForSelectedRoute(map: MapViewModel, route: RouteCandidate): MapViewModel {
   return {
     ...map,
@@ -2959,10 +2971,12 @@ function timelineTypeLabel(type: string) {
 
 function RouteList({
   onSelect,
+  plan,
   routes,
   selectedRouteId
 }: {
   onSelect: (routeId: string) => void;
+  plan: DailyPlan;
   routes: RouteCandidate[];
   selectedRouteId: string;
 }) {
@@ -2976,6 +2990,7 @@ function RouteList({
         {routes.map((route, index) => {
           const selected = route.id === selectedRouteId;
           const title = routeOptionTitle(route, index);
+          const score = scoreForRoute(plan, route);
 
           return (
             <button
@@ -2992,7 +3007,7 @@ function RouteList({
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold">{title}</span>
                 <span className="mt-0.5 block text-xs font-medium text-ink/42">
-                  {durationLabel(route)} · 걷기 {route.walking_minutes}분
+                  {score.comfort_score}점 · {durationLabel(route)} · 걷기 {route.walking_minutes}분
                 </span>
               </span>
               <span

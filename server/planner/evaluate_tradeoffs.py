@@ -14,6 +14,7 @@ from api.schemas import (
 class TradeoffEvaluation:
     selected_route: RouteCandidate
     selected_score: EmotionCost
+    route_scores: list[EmotionCost]
     tradeoffs: list[Tradeoff]
     tradeoff_summaries: list[str]
     fallback_used: bool
@@ -68,6 +69,7 @@ def evaluate_tradeoffs(
     return TradeoffEvaluation(
         selected_route=selected_route,
         selected_score=selected_score,
+        route_scores=emotion_scores,
         tradeoffs=tradeoffs,
         tradeoff_summaries=summaries,
         fallback_used=fallback_used,

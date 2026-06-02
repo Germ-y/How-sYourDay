@@ -84,9 +84,6 @@ def _stop_variants(
         stop for stop in required_stops if stop.category != "recovery"
     ]
 
-    if emotion and emotion.time_pressure_tolerance == "high":
-        return [("base", base_required_stops)]
-
     required_recovery_candidates = _unique_stops(
         stop for stop in required_stops if stop.category == "recovery"
     )[:3]
@@ -98,6 +95,9 @@ def _stop_variants(
         ]
 
     variants = [("base", base_required_stops)]
+    if emotion and emotion.time_pressure_tolerance == "high":
+        return variants
+
     if not emotion:
         return variants
 

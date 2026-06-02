@@ -44,6 +44,9 @@ def compose_plan(
         stops=selected_route.stops,
         routes=routes,
         score=EmotionScore(**selected_score.model_dump()),
+        route_scores=[
+            EmotionCost(**score.model_dump()) for score in evaluation.route_scores
+        ],
         tradeoffs=evaluation.tradeoffs,
         tradeoff_summaries=evaluation.tradeoff_summaries,
         ordered_stops=ordered_stops,

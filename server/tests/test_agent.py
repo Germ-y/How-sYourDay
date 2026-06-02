@@ -51,6 +51,9 @@ def test_tired_user_gets_lower_stress_route() -> None:
     assert plan.emotion.primary == "tired"
     assert plan.selected_route.id != "route-faster"
     assert plan.emotional_cost.route_id == plan.selected_route.id
+    assert {score.route_id for score in plan.route_scores} == {
+        route.id for route in plan.routes
+    }
     assert plan.map_overlays.selected_route_id == plan.selected_route.id
     assert plan.score.comfort_score + plan.score.stress_score == 100
 
@@ -382,6 +385,40 @@ def test_recovery_candidates_become_alternative_route_variants() -> None:
     assert {route.stops[0].name for route in routes} == {"카페 A", "카페 B"}
     assert any(route.id.endswith("recovery-1") for route in routes)
     assert any(route.id.endswith("recovery-2") for route in routes)
+
+
+def test_optional_recovery_candidate_keeps_direct_route_variant() -> None:
+    optional_recovery = PoiCandidate(
+        id="poi-optional-cafe",
+        provider_id="optional-cafe",
+        name="잠깐 쉬는 카페",
+        category="recovery",
+        landmark_type="cafe",
+        emotion_tags=["calm", "recovery"],
+        lat=37.552,
+        lng=126.923,
+    )
+
+    routes = build_route_candidates(
+        [],
+        Location(label="오목교", lat=37.5243, lng=126.8780),
+        Location(label="수림식당 홍대점", lat=37.5515, lng=126.9227),
+        emotion=EmotionState(
+            primary="tired",
+            walking_tolerance="low",
+            crowd_tolerance="low",
+            transfer_tolerance="medium",
+            time_pressure_tolerance="medium",
+            recovery_need="high",
+        ),
+        optional_stops=[optional_recovery],
+    )
+
+    assert any(len(route.stops) == 0 for route in routes)
+    assert any(
+        route.stops and route.stops[0].name == "잠깐 쉬는 카페"
+        for route in routes
+    )
 
 
 def test_kakao_poi_falls_back_to_mock_when_provider_has_no_result(monkeypatch) -> None:

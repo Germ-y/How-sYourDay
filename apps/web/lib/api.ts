@@ -209,6 +209,7 @@ export type DailyPlan = {
   stops: PoiCandidate[];
   routes: RouteCandidate[];
   score: EmotionCost;
+  route_scores: EmotionCost[];
   tradeoffs: Tradeoff[];
   tradeoff_summaries: string[];
   ordered_stops: OrderedStop[];
