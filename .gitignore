@@ -11,6 +11,7 @@ build/
 *.egg-info/
 apps/web/next-dev*.log
 server/api-dev*.log
+server/api-live.log
 
 # Environment
 .env
