@@ -2396,10 +2396,18 @@ function MobilePlanResult({
   const isRecommendedRoute = selectedRoute.id === plan.selected_route.id;
   const firstTradeoff = isRecommendedRoute ? plan.tradeoffs[0] : null;
   const usesKakaoPoi = selectedRoute.stops.some((stop) => stop.source_confidence === "kakao");
-  const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
+  const [feedbackChoice, setFeedbackChoice] = useState<"liked" | "disliked" | null>(null);
+  const [feedbackPending, setFeedbackPending] = useState(false);
+
+  useEffect(() => {
+    setFeedbackChoice(null);
+    setFeedbackPending(false);
+  }, [selectedRoute.id]);
 
   async function handleFeedback(liked: boolean) {
-    setFeedbackStatus("피드백 저장 중");
+    const nextChoice = liked ? "liked" : "disliked";
+    setFeedbackChoice(nextChoice);
+    setFeedbackPending(true);
     try {
       await sendRouteFeedback({
         route_id: selectedRoute.id,
@@ -2408,9 +2416,10 @@ function MobilePlanResult({
         provider: selectedRoute.provider,
         reason: firstTradeoff?.reason ?? plan.explanation
       });
-      setFeedbackStatus(liked ? "선호 경로로 저장됨" : "비선호 경로로 저장됨");
     } catch {
-      setFeedbackStatus("피드백 저장 실패");
+      setFeedbackChoice(null);
+    } finally {
+      setFeedbackPending(false);
     }
   }
 
@@ -2458,25 +2467,32 @@ function MobilePlanResult({
 
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button
-            className="min-h-11 rounded-xl bg-[#ddf3eb] px-3 text-sm font-semibold text-moss transition active:scale-[0.99]"
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition active:scale-[0.99] ${
+              feedbackChoice === "liked"
+                ? "bg-moss text-white"
+                : "bg-[#ddf3eb] text-moss"
+            }`}
+            disabled={feedbackPending}
             type="button"
             onClick={() => handleFeedback(true)}
           >
-            이 길 괜찮았어요
+            {feedbackChoice === "liked" ? <CheckCircle2 size={16} aria-hidden /> : null}
+            {feedbackChoice === "liked" ? "저장됨" : "이 길 괜찮았어요"}
           </button>
           <button
-            className="min-h-11 rounded-xl bg-[#fde2ef] px-3 text-sm font-semibold text-coral transition active:scale-[0.99]"
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition active:scale-[0.99] ${
+              feedbackChoice === "disliked"
+                ? "bg-tide text-white"
+                : "bg-[#fde2ef] text-coral"
+            }`}
+            disabled={feedbackPending}
             type="button"
             onClick={() => handleFeedback(false)}
           >
-            별로였어요
+            {feedbackChoice === "disliked" ? <CheckCircle2 size={16} aria-hidden /> : null}
+            {feedbackChoice === "disliked" ? "저장됨" : "별로였어요"}
           </button>
         </div>
-        {feedbackStatus ? (
-          <p className="mt-2 text-center text-xs font-medium text-ink/48">
-            {feedbackStatus}
-          </p>
-        ) : null}
       </section>
 
       <KakaoMapPreview map={selectedMap} usesKakaoPoi={usesKakaoPoi} />
