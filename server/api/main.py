@@ -52,6 +52,8 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://localhost:4000",
         "http://127.0.0.1:4000",
+        "http://howsyourday.germy.kr",
+        "https://howsyourday.germy.kr",
     ],
     allow_credentials=True,
     allow_methods=["*"],
