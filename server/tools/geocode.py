@@ -11,6 +11,10 @@ KAKAO_ADDRESS_SEARCH_URL = "https://dapi.kakao.com/v2/local/search/address.json"
 _GEOCODE_CACHE: dict[str, tuple[Location, str]] = {}
 _GET_JSON_CACHE: dict[str, dict] = {}
 _CACHE_LIMIT = 120
+SEMANTIC_ALIASES = {
+    "소극장": ["극장", "씨어터", "공연", "연극", "아트홀", "문화시설"],
+    "극장": ["소극장", "씨어터", "공연", "연극", "아트홀", "문화시설"],
+}
 
 KNOWN_LOCATIONS = {
     "집": Location(label="집", lat=37.5826, lng=127.0019),
@@ -293,8 +297,15 @@ def _candidate_matches_query(query: str, candidate: LocationCandidate) -> bool:
         )
     )
     if len(normalized_terms) >= 2:
-        return all(term in candidate_text for term in normalized_terms)
-    return normalized_terms[0] in candidate_text
+        return all(_term_matches_candidate(term, candidate_text) for term in normalized_terms)
+    return _term_matches_candidate(normalized_terms[0], candidate_text)
+
+
+def _term_matches_candidate(term: str, candidate_text: str) -> bool:
+    return any(
+        alias in candidate_text
+        for alias in [term, *SEMANTIC_ALIASES.get(term, [])]
+    )
 
 
 def _semantic_terms(query: str) -> list[str]:

@@ -76,6 +76,11 @@ SEOUL_AREA_REGION_HINTS = {
     "오목교": ["서울", "양천", "오목"],
 }
 
+SEMANTIC_ALIASES = {
+    "소극장": ["극장", "씨어터", "공연", "연극", "아트홀", "문화시설"],
+    "극장": ["소극장", "씨어터", "공연", "연극", "아트홀", "문화시설"],
+}
+
 
 @dataclass(frozen=True)
 class RouteLocationResolution:
@@ -455,15 +460,15 @@ def _candidate_score(
 
     for term in terms:
         term_matched = False
-        if term in label:
+        if _term_matches_candidate(term, label):
             score += 12
             semantic_score += 12
             term_matched = True
-        if term in address:
+        if _term_matches_candidate(term, address):
             score += 10
             semantic_score += 10
             term_matched = True
-        if term in category:
+        if _term_matches_candidate(term, category):
             score += 3
             semantic_score += 3
             term_matched = True
@@ -494,14 +499,25 @@ def _candidate_score(
             score -= 12
     if station_query and "역" in candidate.label:
         score += 10
+        if "지하철역" in (candidate.category or ""):
+            score += 18
         if "기차역" in (candidate.category or ""):
             score += 12
+        if "역무실" in candidate.label or "관리,운영" in (candidate.category or ""):
+            score -= 28
     if candidate.source == "kakao-address":
         score += 3
     if candidate.source == "kakao-keyword":
         score += 2
 
     return score
+
+
+def _term_matches_candidate(term: str, candidate_text: str) -> bool:
+    return any(
+        alias in candidate_text
+        for alias in [term, *SEMANTIC_ALIASES.get(term, [])]
+    )
 
 
 def _distance_match_score(
