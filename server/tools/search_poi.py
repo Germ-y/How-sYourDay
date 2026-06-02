@@ -56,21 +56,21 @@ def search_poi_candidates(
 ) -> list[PoiCandidate]:
     candidates: list[PoiCandidate] = []
     for task in tasks:
-        kakao_candidate = _search_task_candidate(task, origin, destination, user_text)
-        if kakao_candidate:
-            candidates.append(kakao_candidate)
+        kakao_candidates = _search_task_candidates(task, origin, destination, user_text)
+        if kakao_candidates:
+            candidates.extend(kakao_candidates)
             continue
         candidates.extend(MOCK_POIS.get(task.kind, MOCK_POIS["recovery"]))
 
     return candidates
 
 
-def _search_task_candidate(
+def _search_task_candidates(
     task: Task,
     origin: Location,
     destination: Location | None,
     user_text: str,
-) -> PoiCandidate | None:
+) -> list[PoiCandidate]:
     anchors = _task_search_anchors(task, origin, destination, user_text)
     seen: set[str] = set()
 
@@ -81,9 +81,30 @@ def _search_task_candidate(
         seen.add(key)
         candidates = search_kakao_poi_candidates([task], anchor)
         if candidates:
-            return candidates[0]
+            return _dedupe_poi_candidates(candidates)[: _task_candidate_limit(task)]
 
-    return None
+    return []
+
+
+def _task_candidate_limit(task: Task) -> int:
+    return 3 if task.kind == "recovery" else 1
+
+
+def _dedupe_poi_candidates(candidates: list[PoiCandidate]) -> list[PoiCandidate]:
+    seen: set[str] = set()
+    unique: list[PoiCandidate] = []
+
+    for candidate in candidates:
+        key = (
+            candidate.provider_id
+            or f"{candidate.name}:{candidate.lat:.6f}:{candidate.lng:.6f}"
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+
+    return unique
 
 
 def _task_search_anchors(

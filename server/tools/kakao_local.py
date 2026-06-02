@@ -32,9 +32,16 @@ def search_kakao_poi_candidates(
         documents = _fetch_kakao_documents(api_key, task, origin)
         if not documents:
             continue
-        candidates.append(_normalize_document(documents[0], task))
+        candidates.extend(
+            _normalize_document(document, task)
+            for document in documents[: _candidate_limit(task)]
+        )
 
     return candidates
+
+
+def _candidate_limit(task: Task) -> int:
+    return 3 if task.kind == "recovery" else 1
 
 
 def _fetch_kakao_documents(

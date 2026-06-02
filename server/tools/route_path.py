@@ -51,19 +51,47 @@ def _stop_variants(
     emotion: EmotionState | None,
     optional_stops: list[PoiCandidate],
 ) -> list[tuple[str, list[PoiCandidate]]]:
-    variants = [("base", required_stops)]
-    if not emotion or emotion.time_pressure_tolerance == "high":
+    base_required_stops = [
+        stop for stop in required_stops if stop.category != "recovery"
+    ]
+
+    if emotion and emotion.time_pressure_tolerance == "high":
+        return [("base", base_required_stops)]
+
+    required_recovery_candidates = _unique_stops(
+        stop for stop in required_stops if stop.category == "recovery"
+    )[:3]
+
+    if required_recovery_candidates:
+        return [
+            (f"recovery-{index}", [*base_required_stops, recovery_stop])
+            for index, recovery_stop in enumerate(required_recovery_candidates, start=1)
+        ]
+
+    variants = [("base", base_required_stops)]
+    if not emotion:
         return variants
 
-    recovery_stop = next(
-        (stop for stop in optional_stops if stop.category == "recovery"),
-        None,
-    )
-    if recovery_stop is None:
-        return variants
-
-    variants.append(("recovery", [*required_stops, recovery_stop]))
+    optional_recovery_candidates = _unique_stops(
+        stop for stop in optional_stops if stop.category == "recovery"
+    )[:2]
+    for index, recovery_stop in enumerate(optional_recovery_candidates, start=1):
+        variants.append((f"recovery-{index}", [*base_required_stops, recovery_stop]))
     return variants
+
+
+def _unique_stops(stops) -> list[PoiCandidate]:
+    seen: set[str] = set()
+    unique: list[PoiCandidate] = []
+
+    for stop in stops:
+        key = stop.provider_id or f"{stop.name}:{stop.lat:.6f}:{stop.lng:.6f}"
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(stop)
+
+    return unique
 
 
 def _tag_variant_routes(

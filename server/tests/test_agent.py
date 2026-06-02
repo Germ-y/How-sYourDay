@@ -188,6 +188,17 @@ def test_recovery_poi_uses_destination_area_when_text_places_task_there(
                     lat=37.552,
                     lng=126.923,
                     source_confidence="kakao",
+                ),
+                PoiCandidate(
+                    id="poi-cafe-hongdae-2",
+                    provider_id="cafe-hongdae-2",
+                    name="홍대 조용한 카페",
+                    category="recovery",
+                    landmark_type="cafe",
+                    emotion_tags=["calm", "recovery"],
+                    lat=37.553,
+                    lng=126.924,
+                    source_confidence="kakao",
                 )
             ]
         return [
@@ -223,6 +234,45 @@ def test_recovery_poi_uses_destination_area_when_text_places_task_there(
 
     assert captured_anchors[0] == "수림식당 홍대점"
     assert candidates[0].name == "홍대 작업 카페"
+    assert [candidate.name for candidate in candidates] == [
+        "홍대 작업 카페",
+        "홍대 조용한 카페",
+    ]
+
+
+def test_recovery_candidates_become_alternative_route_variants() -> None:
+    recovery_a = PoiCandidate(
+        id="poi-cafe-a",
+        provider_id="cafe-a",
+        name="카페 A",
+        category="recovery",
+        landmark_type="cafe",
+        emotion_tags=["calm", "recovery"],
+        lat=37.552,
+        lng=126.923,
+    )
+    recovery_b = PoiCandidate(
+        id="poi-cafe-b",
+        provider_id="cafe-b",
+        name="카페 B",
+        category="recovery",
+        landmark_type="cafe",
+        emotion_tags=["calm", "recovery"],
+        lat=37.553,
+        lng=126.924,
+    )
+
+    routes = build_route_candidates(
+        [recovery_a, recovery_b],
+        Location(label="오목교", lat=37.5243, lng=126.8780),
+        Location(label="수림식당 홍대점", lat=37.5515, lng=126.9227),
+    )
+
+    assert routes
+    assert all(len(route.stops) == 1 for route in routes)
+    assert {route.stops[0].name for route in routes} == {"카페 A", "카페 B"}
+    assert any(route.id.endswith("recovery-1") for route in routes)
+    assert any(route.id.endswith("recovery-2") for route in routes)
 
 
 def test_kakao_poi_falls_back_to_mock_when_provider_has_no_result(monkeypatch) -> None:
