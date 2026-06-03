@@ -89,6 +89,8 @@ def _stop_variants(
     )[:3]
 
     if required_recovery_candidates:
+        if len(required_recovery_candidates) == 1:
+            return [("base", [*base_required_stops, required_recovery_candidates[0]])]
         return [
             (f"recovery-{index}", [*base_required_stops, recovery_stop])
             for index, recovery_stop in enumerate(required_recovery_candidates, start=1)

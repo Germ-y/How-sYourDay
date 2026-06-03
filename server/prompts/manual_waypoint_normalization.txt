@@ -23,6 +23,8 @@ The user message is JSON containing:
 - `origin`: selected origin label/lat/lng.
 - `destination`: selected destination label/lat/lng, or null.
 - `waypoint_hints`: manually edited waypoint hint strings from the UI.
+  - A hint may be prefixed with `필수 경유:`. This means the user manually added it in the UI, so treat it as a strong required waypoint unless the text explicitly says it is optional.
+  - Strip `필수 경유:` from `label` and `poi_query`; never send that prefix to Kakao search.
 
 Output Contract
 Return only JSON that matches the provided schema.
@@ -53,6 +55,7 @@ Core Rules
    - “들러도 돼” -> recovery, required false.
    - “다이소도 들러야해” -> errand, required true.
    - “공원 있으면 들러도 돼” -> recovery, required false.
+   - `필수 경유: 조용한 카페` -> recovery, required true, poi_query `조용한 카페`.
 7. Use route context only as context. Do not output addresses, coordinates, or selected Kakao place IDs.
 8. Do not invent extra stops not present in `waypoint_hints`.
 9. Keep labels short and service-facing, not explanatory.

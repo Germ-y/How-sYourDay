@@ -44,6 +44,7 @@ MANUAL_WAYPOINT_SCHEMA = {
 
 _NORMALIZATION_CACHE: dict[str, list[Task]] = {}
 _NORMALIZATION_CACHE_LIMIT = 80
+REQUIRED_HINT_PREFIX = "필수 경유:"
 
 
 def normalize_manual_waypoints(
@@ -155,18 +156,19 @@ def _normalize_with_rules(hints: list[str], user_text: str) -> list[Task]:
     tasks: list[Task] = []
     context = user_text.lower()
     for hint in hints:
-        lowered = hint.lower()
+        clean_hint = _strip_hint_strength(hint)
+        lowered = clean_hint.lower()
         kind = _infer_kind(lowered, context)
-        query = _query_for_hint(hint, kind)
+        query = _query_for_hint(clean_hint, kind)
         if not query:
             continue
         tasks.append(
             Task(
                 kind=kind,
-                label=_label_for_hint(hint, kind),
+                label=_label_for_hint(clean_hint, kind),
                 poi_query=query,
                 priority=len(tasks) + 1,
-                required=_is_required_hint(lowered, context),
+                required=_is_strong_hint(hint) or _is_required_hint(lowered, context),
             )
         )
     return tasks
@@ -291,6 +293,17 @@ def _clean_text(value: object) -> str:
     if not isinstance(value, str):
         return ""
     return value.strip()
+
+
+def _is_strong_hint(value: str) -> bool:
+    return value.strip().startswith(REQUIRED_HINT_PREFIX)
+
+
+def _strip_hint_strength(value: str) -> str:
+    text = value.strip()
+    if text.startswith(REQUIRED_HINT_PREFIX):
+        return text[len(REQUIRED_HINT_PREFIX) :].strip()
+    return text
 
 
 def _location_payload(location: Location | None) -> dict | None:

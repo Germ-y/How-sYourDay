@@ -29,8 +29,16 @@ class DailyPlanningAgent:
         )
         tasks = _merge_tasks(intent.tasks, manual_tasks)
         intent = replace(intent, tasks=tasks)
+        required_tasks = [task for task in tasks if task.required]
+        optional_tasks = [task for task in tasks if not task.required]
         poi_candidates = search_poi_candidates(
-            tasks,
+            required_tasks,
+            request.origin,
+            request.destination,
+            request.user_text,
+        )
+        optional_poi_candidates = search_poi_candidates(
+            optional_tasks,
             request.origin,
             request.destination,
             request.user_text,
@@ -43,6 +51,7 @@ class DailyPlanningAgent:
             request.destination,
             poi_candidates,
         )
+        optional_stops = _merge_optional_stops(optional_poi_candidates, optional_stops)
         routes = build_route_candidates(
             stops=poi_candidates,
             origin=request.origin,
@@ -85,4 +94,17 @@ def _merge_tasks(base_tasks, manual_tasks):
         merged.append(
             task.model_copy(update={"priority": len(merged) + 1})
         )
+    return merged
+
+
+def _merge_optional_stops(*groups):
+    merged = []
+    seen = set()
+    for group in groups:
+        for stop in group:
+            key = stop.provider_id or f"{stop.name}:{stop.lat:.6f}:{stop.lng:.6f}"
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(stop)
     return merged

@@ -349,11 +349,10 @@ def _emotion_insight(primary: str) -> PreviewInsight | None:
 def _empty_insight(index: int) -> PreviewInsight:
     defaults = [
         PreviewInsight(label="이동", value="출발지와 도착지 확인", kind="route"),
-        PreviewInsight(label="들를 곳", value="선호 장소를 후보로 확인", kind="stop"),
-        PreviewInsight(label="상태", value="컨디션 기준으로 경로 비교", kind="mood"),
-        PreviewInsight(label="취향", value="선호 지도 반영", kind="stop"),
+        PreviewInsight(label="시간", value="감지된 시간 조건 없음", kind="time"),
+        PreviewInsight(label="컨디션", value="컨디션 조건 없음", kind="mood"),
     ]
-    return defaults[index]
+    return defaults[index % len(defaults)]
 
 
 def _limit_insights(insights: list[PreviewInsight]) -> list[PreviewInsight]:
@@ -390,14 +389,19 @@ def _first_mood_label(active_mood: str | None, mood_candidates: list[str]) -> st
 
 
 def _ensure_mood_insight(insights: list[PreviewInsight], mood_label: str | None) -> None:
-    if not mood_label or any(insight.kind == "mood" for insight in insights):
+    if any(insight.kind == "mood" for insight in insights):
         return
 
     if len(insights) < 4:
+        value = (
+            f"{mood_label} 기준으로 경로 비교"
+            if mood_label
+            else "컨디션 조건 없음"
+        )
         insights.append(
             PreviewInsight(
                 label="컨디션",
-                value=f"{mood_label} 기준으로 경로 비교",
+                value=value,
                 kind="mood",
             )
         )

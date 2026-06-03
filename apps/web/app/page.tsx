@@ -274,7 +274,10 @@ export default function HomePage() {
           editedWaypoints,
           deletedWaypoints
         ),
-        ...customWaypoints.map((waypoint) => waypoint.value.trim()).filter(Boolean)
+        ...customWaypoints
+          .map((waypoint) => waypoint.value.trim())
+          .filter(Boolean)
+          .map((value) => `필수 경유: ${value}`)
       ].slice(0, 5),
     [customWaypoints, deletedWaypoints, editedWaypoints, previewInsights]
   );
@@ -391,15 +394,9 @@ export default function HomePage() {
     }
 
     if (!moodEdited) {
-      setActiveMood((current) => {
-        if (!moodCandidates.length) {
-          return "";
-        }
-        if (current && moodCandidates.some((mood) => mood.label === current)) {
-          return current;
-        }
-        return moodCandidates[0]?.label ?? "";
-      });
+      setActiveMood((current) =>
+        current && moodCandidates.some((mood) => mood.label === current) ? current : ""
+      );
     }
   }, [moodCandidates, moodEdited, text]);
 
@@ -4423,9 +4420,8 @@ function ensureActiveMoodCandidate(
 function defaultPreviewInsights(): PreviewInsight[] {
   return [
     { label: "이동", value: "출발지와 도착지 확인", kind: "route" },
-    { label: "경유 후보", value: "선호 장소 후보 확인", kind: "stop" },
-    { label: "상태", value: "컨디션 기준으로 경로 비교", kind: "mood" },
-    { label: "취향", value: "선호 지도 반영", kind: "stop" }
+    { label: "시간", value: "감지된 시간 조건 없음", kind: "time" },
+    { label: "컨디션", value: "컨디션 조건 없음", kind: "mood" }
   ];
 }
 
@@ -4521,7 +4517,10 @@ function ensurePreviewMoodCue(insights: PreviewInsight[]) {
 
   const fallbackMood = previewMoodFallback(insights);
   if (!fallbackMood) {
-    return insights;
+    return [
+      ...insights,
+      { label: "컨디션", value: "컨디션 조건 없음", kind: "mood" as const }
+    ];
   }
 
   return [...insights, fallbackMood];
@@ -4570,6 +4569,12 @@ function buildLocalPreviewInsights(
     insights.push({
       label: "컨디션",
       value: `${activeMood} 기준으로 경로 비교`,
+      kind: "mood"
+    });
+  } else {
+    insights.push({
+      label: "컨디션",
+      value: "컨디션 조건 없음",
       kind: "mood"
     });
   }

@@ -479,6 +479,38 @@ def test_optional_recovery_candidate_keeps_direct_route_variant() -> None:
     )
 
 
+def test_required_recovery_and_errand_stay_in_same_route_variant() -> None:
+    cafe = PoiCandidate(
+        id="poi-cafe-required",
+        provider_id="cafe-required",
+        name="조용한 카페",
+        category="recovery",
+        landmark_type="cafe",
+        emotion_tags=["calm", "recovery"],
+        lat=37.545,
+        lng=127.043,
+    )
+    daiso = PoiCandidate(
+        id="poi-daiso-required",
+        provider_id="daiso-required",
+        name="다이소",
+        category="errand",
+        landmark_type="commercial",
+        emotion_tags=["practical", "errand"],
+        lat=37.545,
+        lng=127.049,
+    )
+
+    routes = build_route_candidates(
+        [cafe, daiso],
+        Location(label="서울숲", lat=37.5446, lng=127.0374),
+        Location(label="성수역", lat=37.5446, lng=127.0559),
+    )
+
+    assert routes
+    assert all({stop.name for stop in route.stops} == {"조용한 카페", "다이소"} for route in routes)
+
+
 def test_kakao_poi_falls_back_to_mock_when_provider_has_no_result(monkeypatch) -> None:
     from tools import kakao_local
 
@@ -542,6 +574,22 @@ def test_manual_waypoint_normalization_preserves_brand_and_errand(monkeypatch) -
         ("errand", "다이소"),
     ]
     assert all(task.required for task in tasks)
+
+
+def test_manual_waypoint_required_prefix_is_stripped_for_search(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    tasks = normalize_manual_waypoints(
+        ["필수 경유: 조용한 카페"],
+        "서울숲에서 성수역까지 가고 싶어",
+        Location(label="서울숲", lat=37.5446, lng=127.0374),
+        Location(label="성수역", lat=37.5446, lng=127.0559),
+    )
+
+    assert len(tasks) == 1
+    assert tasks[0].kind == "recovery"
+    assert tasks[0].poi_query == "조용한 카페"
+    assert tasks[0].required is True
 
 
 def test_plan_request_waypoint_hints_feed_poi_search(monkeypatch) -> None:
@@ -777,6 +825,20 @@ def test_preview_insights_reflect_route_and_time(monkeypatch) -> None:
     assert "성균관대학교" in insights[0].value
     assert any(insight.kind == "time" for insight in insights)
     assert "바쁨" in mood_candidates
+
+
+def test_preview_insights_empty_state_has_no_waypoint_or_condition_signal(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    insights, source, mood_candidates = build_preview_insights("", None, None, None)
+
+    assert source == "rules"
+    assert mood_candidates == []
+    assert not any(insight.kind in {"stop", "task"} for insight in insights)
+    assert any(
+        insight.kind == "mood" and insight.value == "컨디션 조건 없음"
+        for insight in insights
+    )
 
 
 def test_preview_insights_prefers_typed_route_over_saved_fields(monkeypatch) -> None:
