@@ -70,7 +70,7 @@ def list_route_feedback(db: Session, user_id: str) -> list[RouteFeedback]:
 
 
 def list_route_recommendations(
-    db: Session, user_id: str, limit: int = 5
+    db: Session, user_id: str, limit: int = 20
 ) -> list[RouteRecommendation]:
     ensure_user(db, user_id)
     statement = (

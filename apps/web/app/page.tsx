@@ -2177,8 +2177,7 @@ function ProfilePage({
     target: "origin" | "destination"
   ) => void;
 }) {
-  const latestRecommendation = recentRoutes[0] ?? null;
-  const recentPlan = plan ?? latestRecommendation?.plan_snapshot ?? null;
+  const recentItems = recentRoutes.filter((item) => item.plan_snapshot);
 
   return (
     <section className="grid gap-4 px-5 py-5 lg:grid-cols-[360px_1fr] lg:px-0">
@@ -2200,39 +2199,35 @@ function ProfilePage({
         <article className="rounded-2xl bg-white p-4 shadow-[0_12px_34px_rgba(23,26,24,0.045)] ring-1 ring-ink/8">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-tide">최근 추천</p>
+              <p className="text-sm font-semibold text-tide">저장한 경로</p>
               <h2 className="mt-1 text-xl font-semibold [word-break:keep-all]">
-                {recentPlan
-                  ? routeDisplayName(recentPlan.selected_route)
-                  : "최근 추천 기록 없음"}
+                {recentItems.length > 0 ? "좋았던 길 모아보기" : "저장한 경로 없음"}
               </h2>
-              {latestRecommendation?.destination ? (
-                <p className="mt-1 text-xs leading-5 text-ink/45 [word-break:keep-all]">
-                  {latestRecommendation.origin.label} → {latestRecommendation.destination.label}
-                </p>
-              ) : null}
+              <p className="mt-1 text-xs leading-5 text-ink/45 [word-break:keep-all]">
+                좋았던 경로만 저장되고, 별로였던 경로는 취향 학습에만 반영됩니다.
+              </p>
             </div>
             <button
               className="min-h-10 shrink-0 rounded-xl bg-ink px-3 text-sm font-semibold text-white transition active:scale-[0.98]"
               type="button"
-              onClick={
-                recentPlan
-                  ? () => onOpenRecentRoute(latestRecommendation)
-                  : onOpenPlanner
-              }
+              onClick={onOpenPlanner}
             >
-              {recentPlan ? "다시 보기" : "경로 만들기"}
+              경로 만들기
             </button>
           </div>
-          {recentPlan ? (
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <MiniStat label="이동" value={durationLabel(recentPlan.selected_route)} />
-              <MiniStat label="걷기" value={`${recentPlan.selected_route.walking_minutes}분`} />
-              <MiniStat label="편안함" value={`${recentPlan.emotional_cost.comfort_score}`} />
+          {recentItems.length > 0 ? (
+            <div className="mt-4 grid gap-2">
+              {recentItems.map((item) => (
+                <SavedRouteCard
+                  key={item.id}
+                  recommendation={item}
+                  onOpen={() => onOpenRecentRoute(item)}
+                />
+              ))}
             </div>
           ) : (
             <p className="mt-4 rounded-2xl bg-[#fff9ed] p-4 text-sm leading-6 text-ink/58 [word-break:keep-all]">
-              출발지와 도착지를 입력하면 최근 추천과 피드백이 이곳에 기록됩니다.
+              경로 추천 후 “이 길 괜찮았어요”를 누르면 여기에 차곡차곡 쌓입니다.
             </p>
           )}
         </article>
@@ -2282,6 +2277,52 @@ function AccountCard({
         />
       </div>
     </article>
+  );
+}
+
+function SavedRouteCard({
+  onOpen,
+  recommendation
+}: {
+  onOpen: () => void;
+  recommendation: RouteRecommendationRecord;
+}) {
+  const savedPlan = recommendation.plan_snapshot;
+  if (!savedPlan) {
+    return null;
+  }
+
+  const route = savedPlan.selected_route;
+  return (
+    <button
+      className="w-full rounded-2xl bg-[#fffdf8] p-3 text-left ring-1 ring-ink/7 transition hover:bg-[#fff9ed] active:scale-[0.99]"
+      type="button"
+      onClick={onOpen}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block text-xs font-semibold text-moss">
+            {formatSavedRouteDate(recommendation.created_at)}
+          </span>
+          <span className="mt-1 block text-base font-semibold leading-tight text-ink [word-break:keep-all]">
+            {routeDisplayName(route)}
+          </span>
+          {recommendation.destination ? (
+            <span className="mt-1 block text-xs leading-5 text-ink/45 [word-break:keep-all]">
+              {recommendation.origin.label} → {recommendation.destination.label}
+            </span>
+          ) : null}
+        </span>
+        <span className="shrink-0 rounded-xl bg-ink px-3 py-2 text-xs font-semibold text-white">
+          보기
+        </span>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <MiniStat label="이동" value={durationLabel(route)} />
+        <MiniStat label="걷기" value={`${route.walking_minutes}분`} />
+        <MiniStat label="편안함" value={`${savedPlan.emotional_cost.comfort_score}`} />
+      </div>
+    </button>
   );
 }
 
@@ -5622,6 +5663,19 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate text-sm font-semibold">{value}</p>
     </div>
   );
+}
+
+function formatSavedRouteDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "저장한 경로";
+  }
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }
 
 function InfoCard({ children }: { children: ReactNode }) {
