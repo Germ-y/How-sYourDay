@@ -1525,7 +1525,7 @@ export default function HomePage() {
                   </div>
                 ) : (
                   <div className="mt-3 rounded-2xl border border-dashed border-ink/12 bg-[#fffdf8] px-4 py-3 text-sm font-semibold text-ink/42">
-                    이동 요청 입력 후 컨디션 후보 표시
+                    이동 요청을 쓰면 컨디션을 추천해요.
                   </div>
                 )}
               </section>
