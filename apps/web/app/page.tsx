@@ -3755,7 +3755,7 @@ function PreferenceDeck({
         </button>
       </div>
 
-      <div className="relative mt-4 h-[470px] rounded-[24px] bg-[#fff9ed] p-3 shadow-[inset_0_0_0_1px_rgba(217,120,166,0.10)]">
+      <div className="relative mt-4 h-[430px] rounded-[24px] bg-[#fff9ed] p-3 shadow-[inset_0_0_0_1px_rgba(217,120,166,0.10)]">
         <div className="absolute inset-x-8 bottom-5 top-7 rotate-[-5deg] rounded-2xl bg-white/60 ring-1 ring-ink/5" />
         <div className="absolute inset-x-5 bottom-4 top-5 rotate-[4deg] rounded-2xl bg-white/75 ring-1 ring-ink/6" />
         <div
@@ -3813,13 +3813,13 @@ function PreferenceDeck({
             ))}
           </div>
 
-          <div className="px-4 pb-3">
-            <p className="rounded-xl bg-[#eef8f4] px-3 py-2 text-xs font-medium leading-5 text-moss [word-break:keep-all]">
+          <div className="px-4 pb-2">
+            <p className="line-clamp-2 rounded-xl bg-[#eef8f4] px-3 py-2 text-xs font-medium leading-5 text-moss [word-break:keep-all]">
               {preferenceLearningHint(active)}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-4">
+          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
             {preferenceDisplayTags(active, visiblePoints, votes).map((tag) => (
               <span
                 className="rounded-lg bg-[#fff9ed] px-2.5 py-1 text-xs font-semibold text-ink/50"
@@ -3898,7 +3898,7 @@ function PreferenceVisual({
 }) {
   return (
     <div
-      className={`relative h-44 overflow-hidden ${preferenceVisualTone(point)} text-white`}
+      className={`relative h-28 overflow-hidden ${preferenceVisualTone(point)} text-white`}
     >
       <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.20),transparent_45%),radial-gradient(circle_at_78%_22%,rgba(255,255,255,0.30),transparent_28%)]" />
       <div className="absolute -bottom-12 -right-10 h-36 w-36 rounded-full bg-white/18" />
@@ -3906,10 +3906,8 @@ function PreferenceVisual({
         <Icon size={16} aria-hidden />
         {point.kind}
       </div>
-      <div className="absolute bottom-5 left-5 right-5">
-        <h3 className="mt-1 line-clamp-2 text-2xl font-semibold leading-tight [word-break:keep-all]">
-          {point.name}
-        </h3>
+      <div className="absolute bottom-5 left-5 text-xs font-semibold text-white/72">
+        내 주변 실제 장소
       </div>
     </div>
   );
