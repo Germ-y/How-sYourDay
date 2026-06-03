@@ -117,6 +117,12 @@ def _rank_documents_for_task(documents: list[dict], task: Task) -> list[dict]:
         ):
             points += 25
 
+        if task.kind == "photo" and any(
+            marker in combined
+            for marker in ["인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "스튜디오"]
+        ):
+            points += 35
+
         if any(marker in combined for marker in ["축제", "이벤트", "행사"]):
             points -= 80
 
@@ -164,6 +170,8 @@ def _infer_landmark_type(document: dict, task: Task) -> str:
 
     if task.kind == "clinic" or any(marker in combined for marker in ["병원", "의료", "약국"]):
         return "medical"
+    if task.kind == "photo" or any(marker in combined for marker in ["인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "스튜디오"]):
+        return "culture"
     if task.kind == "errand" or any(marker in combined for marker in ["다이소", "생활용품", "마트", "편의점", "상점"]):
         return "commercial"
     if any(marker in combined for marker in ["지하철", "역", "버스", "교통"]):
@@ -188,6 +196,8 @@ def _task_emotion_tags(task: Task) -> list[str]:
         return ["stressful"]
     if task.kind == "errand":
         return ["practical", "errand"]
+    if task.kind == "photo":
+        return ["social", "photo", "culture"]
     return []
 
 

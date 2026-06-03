@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Brain,
   CalendarDays,
+  Camera,
   CheckCircle2,
   Clock3,
   Coffee,
@@ -67,7 +68,7 @@ import {
 
 const starterText = "";
 
-type WaypointCategoryValue = "cafe" | "walk" | "rest" | "errand" | "meal";
+type WaypointCategoryValue = "cafe" | "walk" | "rest" | "errand" | "meal" | "photo";
 
 const WAYPOINT_CATEGORY_OPTIONS: Array<{
   label: string;
@@ -80,6 +81,7 @@ const WAYPOINT_CATEGORY_OPTIONS: Array<{
   { label: "산책", value: "walk", hint: "산책할 곳", placeholder: "예: 공원, 산책로", icon: Leaf },
   { label: "쉼", value: "rest", hint: "잠깐 쉴 곳", placeholder: "예: 벤치 있는 공원, 조용한 곳", icon: HeartPulse },
   { label: "볼일", value: "errand", hint: "볼일 장소", placeholder: "예: 약국, 다이소, 올리브영", icon: MapPin },
+  { label: "사진", value: "photo", hint: "사진 찍기", placeholder: "예: 인생네컷, 포토이즘", icon: Camera },
   { label: "식사", value: "meal", hint: "식사 장소", placeholder: "예: 김밥집, 수림식당", icon: Building2 }
 ];
 const SAVED_PLACES_KEY = "hows-your-day.saved-places.v1";
@@ -3471,6 +3473,9 @@ function stopTimelineLabel(stop: PoiCandidate) {
   if (stop.category === "errand") {
     return `${stop.name}에 들러 필요한 일을 처리합니다.`;
   }
+  if (stop.category === "photo") {
+    return `${stop.name}에서 사진을 찍습니다.`;
+  }
   if (stop.category === "print") {
     return `${stop.name}에서 인쇄 일을 처리합니다.`;
   }
@@ -4395,6 +4400,9 @@ function iconForLandmark(landmarkType: string, category: string): LucideIcon {
   if (normalized.includes("hospital") || normalized.includes("medical")) {
     return HeartPulse;
   }
+  if (normalized.includes("photo") || normalized.includes("culture")) {
+    return Camera;
+  }
   return MapPin;
 }
 
@@ -4436,6 +4444,9 @@ function landmarkLabel(candidate: PoiCandidate) {
   if (normalized.includes("errand")) {
     return "들를 곳";
   }
+  if (normalized.includes("photo")) {
+    return "사진";
+  }
   if (normalized.includes("print")) {
     return "인쇄";
   }
@@ -4455,6 +4466,7 @@ function userFacingCategoryLabel(value: string | null | undefined) {
   const normalized = value.toLowerCase();
   const labels: Record<string, string> = {
     errand: "들를 곳",
+    photo: "사진",
     recovery: "쉴 곳",
     print: "인쇄",
     clinic: "병원",
@@ -5068,16 +5080,16 @@ function hasLocalTimeHint(normalized: string) {
 function buildLocalStopInsights(text: string): PreviewInsight[] {
   const area = extractLocalAreaHint(text);
   const insights: PreviewInsight[] = [];
-  const explicitWaypoint = extractLocalWaypointHint(text);
+  const explicitWaypoints = extractLocalWaypointHints(text);
 
-  if (explicitWaypoint) {
+  explicitWaypoints.slice(0, 3).forEach((explicitWaypoint) => {
     insights.push({
       label: "거쳐 갈 곳",
       value: `${explicitWaypoint} 주변`,
       kind: "stop",
       strength: "strong"
     });
-  }
+  });
 
   if (/(걷|걸을|산책|돌아다니|주변|근처|선선)/.test(text)) {
     insights.push({
@@ -5111,6 +5123,14 @@ function buildLocalStopInsights(text: string): PreviewInsight[] {
       strength: /있으면|괜찮으면|들러도|가능하면/.test(text) ? "weak" : "strong"
     });
   }
+  if (/(인생네컷|네컷|포토부스|포토이즘|사진관)/.test(text)) {
+    insights.push({
+      label: "사진 찍기",
+      value: localPhotoValue(text),
+      kind: "task",
+      strength: /있으면|괜찮으면|들러도|가능하면/.test(text) ? "weak" : "strong"
+    });
+  }
 
   const seen = new Set<string>();
   return insights
@@ -5139,6 +5159,19 @@ function localErrandValue(text: string) {
   return "살 것 사기";
 }
 
+function localPhotoValue(text: string) {
+  if (text.includes("포토이즘")) {
+    return "포토이즘";
+  }
+  if (text.includes("포토부스")) {
+    return "포토부스";
+  }
+  if (text.includes("인생네컷") || text.includes("네컷")) {
+    return "인생네컷";
+  }
+  return "사진 찍기";
+}
+
 function extractLocalAreaHint(text: string) {
   const direct = text.match(/([가-힣A-Za-z0-9]+)\s*(?:주변|근처)/);
   if (direct?.[1]) {
@@ -5152,8 +5185,7 @@ function extractLocalAreaHint(text: string) {
 }
 
 function collectTextWaypointHints(text: string) {
-  const waypoint = extractLocalWaypointHint(text);
-  return waypoint ? [`필수 경유: ${waypoint} 주변`] : [];
+  return extractLocalWaypointHints(text).map((waypoint) => `필수 경유: ${waypoint} 주변`);
 }
 
 function uniqueWaypointHints(hints: string[]) {
@@ -5169,22 +5201,45 @@ function uniqueWaypointHints(hints: string[]) {
 }
 
 function extractLocalWaypointHint(text: string) {
+  return extractLocalWaypointHints(text)[0] ?? "";
+}
+
+function extractLocalWaypointHints(text: string) {
   const patterns = [
-    /(?:에서|부터)\s*([가-힣A-Za-z0-9\s]+?)\s*(?:지나서|지나|거쳐서|거쳐|들러서|들러|경유)\s*[가-힣A-Za-z0-9\s]+?(?:까지|으로|로|에)/,
-    /([가-힣A-Za-z0-9\s]+?)\s*(?:지나서|지나|거쳐서|거쳐|들러서|들러|경유)\s*[가-힣A-Za-z0-9\s]+?(?:까지|으로|로|에)/,
-    /(?:에서|부터)\s*([가-힣A-Za-z0-9\s]+?)(?:까지|으로|로|에)\s*(?:가서|간\s*뒤|갔다가|들러|들렀다가|경유)/,
-    /([가-힣A-Za-z0-9\s]+?)(?:까지|으로|로|에)\s*(?:가서|간\s*뒤|갔다가|들러|들렀다가|경유)/
+    /(?:에서|부터)\s*([가-힣A-Za-z0-9\s]+?)\s*(?:지나서|지나|거쳐서|거쳐|들러서|들러|경유)\s*[가-힣A-Za-z0-9\s]+?(?:까지|으로|로|에)/g,
+    /([가-힣A-Za-z0-9\s]+?)\s*(?:지나서|지나|거쳐서|거쳐|들러서|들러|경유)\s*[가-힣A-Za-z0-9\s]+?(?:까지|으로|로|에)/g,
+    /(?:에서|부터)\s*([가-힣A-Za-z0-9\s]+?)(?:까지|으로|로|에)\s*(?:가서|간\s*뒤|갔다가|들러|들렀다가|경유)/g,
+    /([가-힣A-Za-z0-9\s]+?)(?:까지|으로|로|에)\s*(?:가서|간\s*뒤|갔다가|들러|들렀다가|경유)/g,
+    /(?:가기\s*전에|전에)\s*([가-힣A-Za-z0-9\s]+?)(?:에)?\s*(?:들러야|들러|갔다가|가야)/g,
+    /(?:만나서|만난\s*뒤|만나고)\s*([가-힣A-Za-z0-9\s]+?)(?:도)?\s*(?:갈거야|갈\s*거야|가야|들러|찍)/g
   ];
+  const waypoints: string[] = [];
+  const seen = new Set<string>();
 
   for (const pattern of patterns) {
-    const match = text.match(pattern);
-    const waypoint = cleanLocalLocationHint(match?.[1] ?? "");
-    if (waypoint) {
-      return waypoint;
+    for (const match of text.matchAll(pattern)) {
+      const waypoint = cleanLocalLocationHint(match[1] ?? "");
+      const key = waypoint.replace(/\s+/g, "").toLowerCase();
+      if (waypoint && !seen.has(key)) {
+        seen.add(key);
+        waypoints.push(waypoint);
+      }
     }
   }
 
-  return "";
+  for (const keyword of ["다이소", "올리브영", "약국", "편의점", "마트", "인생네컷", "포토부스"]) {
+    const key = keyword.replace(/\s+/g, "").toLowerCase();
+    if (text.includes(keyword) && !seen.has(key)) {
+      seen.add(key);
+      waypoints.push(keyword);
+    }
+  }
+  if (text.includes("네컷") && !seen.has("인생네컷")) {
+    seen.add("인생네컷");
+    waypoints.push("인생네컷");
+  }
+
+  return waypoints.slice(0, 5);
 }
 
 function extractLocalPreviewRoute(
@@ -5259,6 +5314,9 @@ function previewInsightIcon(insight: PreviewInsight) {
   }
   if (insight.kind === "time") {
     return <Clock3 size={15} aria-hidden />;
+  }
+  if (/(사진|인생네컷|네컷|포토부스|포토이즘)/.test(text)) {
+    return <Camera size={15} aria-hidden />;
   }
   if (insight.kind === "stop" && /(카페|커피|과제|작업)/.test(text)) {
     return <Coffee size={15} aria-hidden />;
@@ -5637,6 +5695,10 @@ function routeDisplayName(route: RouteCandidate) {
   if (errandStop) {
     return `${errandStop.name} 경유 경로`;
   }
+  const photoStop = route.stops.find((stop) => stop.category === "photo");
+  if (photoStop) {
+    return `${photoStop.name} 사진 경유 경로`;
+  }
   if (route.provider === "tmap-pedestrian") {
     return "Tmap 도보 경로";
   }
@@ -5660,6 +5722,10 @@ function routeOptionTitle(route: RouteCandidate, index: number) {
   const errandStop = route.stops.find((stop) => stop.category === "errand");
   if (errandStop) {
     return `${errandStop.name} 들르는 경로`;
+  }
+  const photoStop = route.stops.find((stop) => stop.category === "photo");
+  if (photoStop) {
+    return `${photoStop.name} 사진 찍는 경로`;
   }
   if (route.stops.length > 0) {
     return `${route.stops[0].name} 경유 경로`;

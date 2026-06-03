@@ -58,3 +58,13 @@ If the user asks to rest, work quietly, read, or stay for a while, comic cafe/ma
 If the user sentence clearly asks for printing/output/copying, prefer print candidates.
 If the candidate is merely near the desired place but not the desired function, reject.
 When unsure and the candidate has a high chance of causing the wrong waypoint, reject.
+
+Additional Task Kind: photo
+Validate `photo` tasks as instant photo / photo booth places.
+Accept candidates whose name or Kakao category clearly indicates 인생네컷, 네컷사진, 포토부스, 포토이즘, 셀프사진관, 사진관, 스튜디오, or a photo studio.
+Reject generic cafes, Daiso/marts, pharmacies, and unrelated stores for `photo` tasks even if they are near the desired place.
+Examples:
+- Task photo + candidate "인생네컷 홍대점" category "문화,예술 > 사진": accepted true.
+- Task photo + candidate "포토이즘박스 홍대점" category "문화,예술 > 사진": accepted true.
+- Task photo + candidate "다이소 홍대점" category "가정,생활 > 생활용품": accepted false.
+- Task photo + candidate "사진관 근처 카페" category "음식점 > 카페": accepted false.

@@ -203,6 +203,9 @@ def _route_name(route: RouteCandidate) -> str:
     errand_stop = next((stop for stop in route.stops if stop.category == "errand"), None)
     if errand_stop:
         return f"{errand_stop.name} 경유 경로"
+    photo_stop = next((stop for stop in route.stops if stop.category == "photo"), None)
+    if photo_stop:
+        return f"{photo_stop.name} 사진 경유 경로"
     if route.provider == "tmap-pedestrian":
         return "Tmap 도보 경로"
     if route.provider == "tmap-transit":

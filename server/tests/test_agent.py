@@ -1218,6 +1218,54 @@ def test_intent_extracts_multiple_generic_errands(monkeypatch) -> None:
     assert "편의점" in errand_queries
 
 
+def test_intent_extracts_photo_booth_as_photo_task(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    intent = extract_intent(
+        "지금 성균관대야. 홍대입구역 3번 출구 앞에서 친구 만나야 해. 아 친구 만나서 인생네컷도 갈거야"
+    )
+
+    photo = next(task for task in intent.tasks if task.kind == "photo")
+    assert photo.label == "사진 찍기"
+    assert photo.poi_query == "인생네컷"
+    assert photo.required is True
+
+
+def test_manual_waypoint_normalization_promotes_photo_text(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    tasks = normalize_manual_waypoints(
+        ["필수 경유: [볼일] 인생네컷"],
+        "친구 만나서 인생네컷도 갈거야",
+        Location(label="성균관대", lat=37.5882, lng=126.9936),
+        Location(label="홍대입구역 3번 출구", lat=37.5568, lng=126.9241),
+    )
+
+    assert len(tasks) == 1
+    assert tasks[0].kind == "photo"
+    assert tasks[0].label == "사진 찍기"
+    assert tasks[0].poi_query == "인생네컷"
+    assert tasks[0].required is True
+
+
+def test_preview_insights_detects_photo_booth_waypoint(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    insights, _, _ = build_preview_insights(
+        "지금 성균관대야. 홍대입구역 3번 출구 앞에서 친구 만나야 하는데 약속까지 1시간 반 남았어. "
+        "가기 전에 상도 건영 106동에 들러야 해. 시간 되면 다이소에서 공책도 사고 싶어. "
+        "아 친구 만나서 인생네컷도 갈거야",
+        "성균관대",
+        "홍대입구역 3번 출구",
+        None,
+    )
+
+    values = [insight.value for insight in insights]
+    assert any("상도" in value for value in values)
+    assert any("다이소" in value for value in values)
+    assert any("인생네컷" in value for value in values)
+
+
 def test_preview_insights_detects_generic_errand(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 

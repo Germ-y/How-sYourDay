@@ -344,3 +344,13 @@ You are feeding a route planner, not writing a user-facing explanation.
 The JSON must be strict.
 The mood candidates must be useful for the UI.
 The tasks must be useful for finding optional waypoint POIs.
+
+Additional Task Kind: photo
+The schema allows task kind `photo`.
+Use `photo` for instant photo or photo booth intents: 인생네컷, 네컷사진, 네컷, 포토부스, 포토이즘, 셀프사진관, 사진관, 스튜디오 when the user wants to take photos.
+Do not classify these as `errand` unless the user is buying a physical item unrelated to taking photos.
+Keep the search keyword concrete:
+- "인생네컷도 갈거야" -> kind photo, label "사진 찍기", poi_query "인생네컷", required true.
+- "친구 만나서 네컷 찍을래" -> kind photo, label "사진 찍기", poi_query "인생네컷", required true.
+- "포토부스 있으면 들러도 돼" -> kind photo, label "사진 찍기", poi_query "포토부스", required false.
+If a photo stop happens after meeting a friend, it is still a waypoint task unless the user explicitly says it is outside today's route.

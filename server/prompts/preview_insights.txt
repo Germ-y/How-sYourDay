@@ -223,3 +223,10 @@ The destination is the final committed endpoint.
 Waypoint cards show concrete intermediate candidates.
 Time card is specific when time exists.
 Output strict JSON only.
+
+Additional Preview Rule: photo
+Use kind `task` with label "사진 찍기" for photo booth intents such as 인생네컷, 네컷사진, 네컷, 포토부스, 포토이즘, 사진관.
+Photo booth intents should not be described as generic errands in preview cards.
+Examples:
+- "친구 만나서 인생네컷도 갈거야" -> label "사진 찍기", value "인생네컷", kind "task", strength "strong".
+- "포토부스 있으면 들러도 돼" -> label "사진 찍기", value "포토부스", kind "task", strength "weak".

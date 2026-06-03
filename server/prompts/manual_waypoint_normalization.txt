@@ -121,3 +121,13 @@ Bad Examples
 - Do not output `부산대학교 부산캠퍼스` because the route context has 혜화/대학로.
 - Do not add a direct route waypoint when the user already has origin and destination.
 - Do not turn optional walking/park hints into required errands.
+
+Additional Waypoint Kind: photo
+The schema allows waypoint kind `photo`.
+Use `photo` for instant photo or photo booth stops: 인생네컷, 네컷사진, 네컷, 포토부스, 포토이즘, 셀프사진관, 사진관, 스튜디오.
+Photo stops are not generic errands. They should appear as "사진 찍기" in labels.
+Examples:
+- `[사진] 인생네컷` -> kind `photo`, poi_query `인생네컷`, label `사진 찍기`, required true.
+- `[볼일] 인생네컷` -> kind `photo`, poi_query `인생네컷`, label `사진 찍기`, required true.
+- `[볼일] 포토이즘` -> kind `photo`, poi_query `포토이즘`, label `사진 찍기`, required true.
+- `참고 경유: 포토부스` -> kind `photo`, poi_query `포토부스`, label `사진 찍기`, required false.

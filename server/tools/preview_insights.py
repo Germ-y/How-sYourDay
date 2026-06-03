@@ -318,6 +318,13 @@ def _task_insight(tasks) -> PreviewInsight | None:
             kind="task",
             strength="strong" if primary.required else "weak",
         )
+    if primary.kind == "photo":
+        return PreviewInsight(
+            label="사진 찍기",
+            value=primary.poi_query or primary.label,
+            kind="task",
+            strength="strong" if primary.required else "weak",
+        )
     return PreviewInsight(
         label="할 일",
         value=primary.label,
@@ -328,10 +335,11 @@ def _task_insight(tasks) -> PreviewInsight | None:
 
 def _stop_insights(text: str, destination: str | None = None) -> list[PreviewInsight]:
     insights: list[PreviewInsight] = []
-    waypoint = _waypoint_hint(text, destination)
+    waypoints = _waypoint_hints(text, destination)
+    waypoint = waypoints[0] if waypoints else None
     area = waypoint or _area_hint(text)
 
-    if waypoint:
+    for waypoint in waypoints[:3]:
         insights.append(
             PreviewInsight(
                 label="거쳐 갈 곳",
@@ -523,19 +531,42 @@ def _has_optional_signal(text: str) -> bool:
 
 
 def _waypoint_hint(text: str, destination: str | None = None) -> str | None:
+    hints = _waypoint_hints(text, destination)
+    return hints[0] if hints else None
+
+
+def _waypoint_hints(text: str, destination: str | None = None) -> list[str]:
     patterns = [
         r"(?:에서|부터)\s*([가-힣A-Za-z0-9\s]+?)\s*(?:지나서|지나|거쳐서|거쳐|들러서|들러|경유)\s*[가-힣A-Za-z0-9\s]+?(?:까지|으로|로|에)",
         r"([가-힣A-Za-z0-9\s]+?)\s*(?:지나서|지나|거쳐서|거쳐|들러서|들러|경유)\s*[가-힣A-Za-z0-9\s]+?(?:까지|으로|로|에)",
         r"(?:에서|부터)\s*([가-힣A-Za-z0-9\s]+?)(?:까지|으로|로|에)\s*(?:가서|간\s*뒤|갔다가|들러|들렀다가|경유)",
         r"([가-힣A-Za-z0-9\s]+?)(?:까지|으로|로|에)\s*(?:가서|간\s*뒤|갔다가|들러|들렀다가|경유)",
+        r"(?:가기\s*전에|전에)\s*([가-힣A-Za-z0-9\s]+?)(?:에)?\s*(?:들러야|들러|갔다가|가야)",
+        r"(?:만나서|만난\s*뒤|만나고)\s*([가-힣A-Za-z0-9\s]+?)(?:도)?\s*(?:갈거야|갈\s*거야|가야|들러|찍)",
     ]
+    hints: list[str] = []
+    seen: set[str] = set()
     for pattern in patterns:
         matches = re.findall(pattern, text)
-        for value in reversed(matches):
+        for value in matches:
             cleaned = _clean_hint(value)
-            if cleaned and _normalize(cleaned) != _normalize(destination or ""):
-                return cleaned
-    return None
+            if not cleaned or _normalize(cleaned) == _normalize(destination or ""):
+                continue
+            key = _normalize(cleaned)
+            if key in seen:
+                continue
+            seen.add(key)
+            hints.append(cleaned)
+
+    for keyword in ["다이소", "올리브영", "약국", "편의점", "마트", "인생네컷", "포토부스"]:
+        if keyword in text and _normalize(keyword) not in seen:
+            seen.add(_normalize(keyword))
+            hints.append(keyword)
+    if "네컷" in text and _normalize("인생네컷") not in seen:
+        seen.add(_normalize("인생네컷"))
+        hints.append("인생네컷")
+
+    return hints[:5]
 
 
 def _area_hint(text: str) -> str | None:

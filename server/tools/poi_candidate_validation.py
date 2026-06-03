@@ -36,6 +36,7 @@ ERRAND_MARKERS = [
     "올리브영",
     "약국",
 ]
+PHOTO_MARKERS = ["인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "스튜디오"]
 
 _VALIDATION_CACHE: dict[str, bool] = {}
 _VALIDATION_CACHE_LIMIT = 160
@@ -106,6 +107,13 @@ def _rule_match(document: dict, task: Task, user_text: str) -> bool | None:
         if _has_any(candidate_combined, CAFE_MARKERS) and not _has_any(
             combined, CAFE_MARKERS
         ):
+            return False
+        return None
+
+    if task.kind == "photo":
+        if _has_any(candidate_combined, PHOTO_MARKERS):
+            return True
+        if _has_any(candidate_combined, CAFE_MARKERS + ERRAND_MARKERS + CLINIC_MARKERS):
             return False
         return None
 

@@ -60,6 +60,20 @@ MOCK_POIS = {
             source_confidence="mock",
         )
     ],
+    "photo": [
+        PoiCandidate(
+            id="poi-photo-1",
+            provider_id="mock-photo-1",
+            name="Life Four Cut",
+            category="photo",
+            landmark_type="culture",
+            emotion_tags=["social", "photo"],
+            lat=37.5886,
+            lng=126.9938,
+            distance_meters=280,
+            source_confidence="mock",
+        )
+    ],
 }
 
 
@@ -311,6 +325,8 @@ def _landmark_type_for_location(location) -> str:
         ]
         if value
     )
+    if any(marker in combined for marker in ["인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "스튜디오"]):
+        return "culture"
     if any(marker in combined for marker in ["공원", "숲"]):
         return "park"
     if any(marker in combined for marker in ["호수", "강", "하천"]):
@@ -327,6 +343,8 @@ def _emotion_tags_for_landmark(landmark_type: str) -> list[str]:
         return ["calm", "recovery", "walkable"]
     if landmark_type == "transit_hub":
         return ["crowded", "walkable"]
+    if landmark_type == "culture":
+        return ["social", "photo", "walkable"]
     return ["walkable"]
 
 
