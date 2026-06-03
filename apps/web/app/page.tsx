@@ -3872,7 +3872,7 @@ function PreferenceDeck({
         </button>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-3">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1">
           {visiblePoints.map((item, index) => (
             <span
@@ -3883,9 +3883,17 @@ function PreferenceDeck({
             />
           ))}
         </div>
-        <p className="text-xs font-medium text-ink/42">
-          선호 {liked.length} · 비선호 {disliked.length} · 반영 {affected.length}
-        </p>
+        <div className="flex flex-wrap justify-end gap-1 text-[11px] font-semibold text-ink/48">
+          <span className="whitespace-nowrap rounded-full bg-[#ddf3eb] px-2 py-1 text-moss">
+            선호 {liked.length}
+          </span>
+          <span className="whitespace-nowrap rounded-full bg-[#fde2ef] px-2 py-1 text-tide">
+            비선호 {disliked.length}
+          </span>
+          <span className="whitespace-nowrap rounded-full bg-[#fff9ed] px-2 py-1">
+            반영 {affected.length}
+          </span>
+        </div>
       </div>
     </article>
   );
