@@ -220,6 +220,7 @@ export default function HomePage() {
   const [activeMood, setActiveMood] = useState("");
   const [moodEdited, setMoodEdited] = useState(false);
   const [poiPreferenceIndex, setPoiPreferenceIndex] = useState(0);
+  const [isPreferenceReviewing, setIsPreferenceReviewing] = useState(false);
   const [poiVotes, setPoiVotes] = useState<Record<string, PreferenceVote>>({});
   const [nearbyPreferencePoints, setNearbyPreferencePoints] = useState<
     PreferencePoint[]
@@ -752,6 +753,7 @@ export default function HomePage() {
     setPreferenceRadiusMeters(INITIAL_PREFERENCE_RADIUS_METERS);
     setPreferenceStatus("내 주변 장소 준비");
     setPoiVotes({});
+    setIsPreferenceReviewing(false);
     setPoiPreferenceIndex(0);
     setActiveView("planner");
   }
@@ -983,6 +985,7 @@ export default function HomePage() {
       const nextPoints = result.points.map((candidate) =>
         preferencePointFromCandidate(candidate)
       );
+      setIsPreferenceReviewing(false);
       setNearbyPreferencePoints((current) =>
         append ? mergePreferencePoints(current, nextPoints) : nextPoints
       );
@@ -1160,6 +1163,10 @@ export default function HomePage() {
       [id]: vote
     }));
     setPoiPreferenceIndex((current) => {
+      if (isPreferenceReviewing) {
+        const reviewCount = preferencePoints.filter((item) => poiVotes[item.id]).length;
+        return (current + 1) % Math.max(1, reviewCount);
+      }
       const remaining = Math.max(0, pendingBeforeVote - 1);
       return remaining === 0 ? 0 : Math.min(current, remaining - 1);
     });
@@ -1178,13 +1185,20 @@ export default function HomePage() {
   }
 
   function handlePoiSkip() {
-    const pendingCount = preferencePoints.filter((item) => !poiVotes[item.id]).length;
+    const pendingCount = isPreferenceReviewing
+      ? preferencePoints.length
+      : preferencePoints.filter((item) => !poiVotes[item.id]).length;
     setPoiPreferenceIndex(
       (current) => (current + 1) % Math.max(1, pendingCount)
     );
   }
 
   function handlePoiReset() {
+    setPoiPreferenceIndex(0);
+  }
+
+  function handlePreferenceReviewPrevious() {
+    setIsPreferenceReviewing(true);
     setPoiPreferenceIndex(0);
   }
 
@@ -1197,11 +1211,13 @@ export default function HomePage() {
     [nearbyPreferencePoints]
   );
   useEffect(() => {
-    const pendingCount = preferencePoints.filter((item) => !poiVotes[item.id]).length;
-    if (poiPreferenceIndex >= pendingCount) {
+    const activeCount = isPreferenceReviewing
+      ? preferencePoints.filter((item) => poiVotes[item.id]).length
+      : preferencePoints.filter((item) => !poiVotes[item.id]).length;
+    if (poiPreferenceIndex >= activeCount) {
       setPoiPreferenceIndex(0);
     }
-  }, [poiPreferenceIndex, preferencePoints, poiVotes]);
+  }, [isPreferenceReviewing, poiPreferenceIndex, preferencePoints, poiVotes]);
   const primaryLabel = isLoading ? "경로 계산 중" : "경로 추천";
 
   if (!authChecked) {
@@ -1476,6 +1492,7 @@ export default function HomePage() {
         ) : activeView === "taste" ? (
           <TastePage
             activeIndex={poiPreferenceIndex}
+            isReviewing={isPreferenceReviewing}
             isLoading={isPreferenceLoading}
             points={preferencePoints}
             status={preferenceStatus}
@@ -1484,6 +1501,7 @@ export default function HomePage() {
             onLoadNearby={loadNearbyPreferencePoints}
             onLoadMore={loadMorePreferencePoints}
             onReset={handlePoiReset}
+            onReviewPrevious={handlePreferenceReviewPrevious}
             onSkip={handlePoiSkip}
             onVote={handlePoiVote}
           />
@@ -1788,6 +1806,7 @@ function ServiceTopBar({
 function TastePage({
   activeIndex,
   canLoadMore,
+  isReviewing,
   isLoading,
   points,
   status,
@@ -1795,11 +1814,13 @@ function TastePage({
   onLoadNearby,
   onLoadMore,
   onReset,
+  onReviewPrevious,
   onSkip,
   onVote
 }: {
   activeIndex: number;
   canLoadMore: boolean;
+  isReviewing: boolean;
   isLoading: boolean;
   points: PreferencePoint[];
   status: string;
@@ -1807,6 +1828,7 @@ function TastePage({
   onLoadNearby: () => void;
   onLoadMore: () => void;
   onReset: () => void;
+  onReviewPrevious: () => void;
   onSkip: () => void;
   onVote: (id: string, vote: PreferenceVote) => void;
 }) {
@@ -1847,10 +1869,12 @@ function TastePage({
           <PreferenceDeck
             activeIndex={activeIndex}
             canLoadMore={canLoadMore}
+            isReviewing={isReviewing}
             points={points}
             votes={votes}
             onLoadMore={onLoadMore}
             onReset={onReset}
+            onReviewPrevious={onReviewPrevious}
             onSkip={onSkip}
             onVote={onVote}
           />
@@ -1953,11 +1977,13 @@ function PreferenceEmptyDeck() {
 function PreferenceCompleteDeck({
   canLoadMore,
   judgedCount,
-  onLoadMore
+  onLoadMore,
+  onReviewPrevious
 }: {
   canLoadMore: boolean;
   judgedCount: number;
   onLoadMore: () => void;
+  onReviewPrevious: () => void;
 }) {
   return (
     <article className="order-1 rounded-[24px] border border-ink/8 bg-white p-5 text-center shadow-[0_18px_48px_rgba(23,26,24,0.07)]">
@@ -1968,15 +1994,26 @@ function PreferenceCompleteDeck({
       <p className="mt-2 text-sm leading-6 text-ink/54 [word-break:keep-all]">
         {judgedCount}개의 선택이 저장됐고, 지도와 경로 후보에 취향으로 반영됩니다.
       </p>
-      <button
-        className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#ddf3eb] px-4 text-sm font-semibold text-moss transition active:scale-[0.98] disabled:bg-[#fff9ed] disabled:text-ink/36"
-        type="button"
-        onClick={onLoadMore}
-        disabled={!canLoadMore}
-      >
-        <Plus size={17} aria-hidden />
-        {canLoadMore ? "범위 넓혀 더 보기" : "최대 범위까지 확인"}
-      </button>
+      <div className="mt-4 grid gap-2">
+        <button
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#ddf3eb] px-4 text-sm font-semibold text-moss transition active:scale-[0.98] disabled:bg-[#fff9ed] disabled:text-ink/36"
+          type="button"
+          onClick={onLoadMore}
+          disabled={!canLoadMore}
+        >
+          <Plus size={17} aria-hidden />
+          {canLoadMore ? "범위 넓혀 더 보기" : "최대 범위까지 확인"}
+        </button>
+        <button
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#fff9ed] px-4 text-sm font-semibold text-ink/58 transition active:scale-[0.98] disabled:text-ink/32"
+          type="button"
+          onClick={onReviewPrevious}
+          disabled={judgedCount === 0}
+        >
+          <RotateCcw size={16} aria-hidden />
+          이전 선택 다시 보기
+        </button>
+      </div>
     </article>
   );
 }
@@ -3765,27 +3802,32 @@ function PreferenceMap({
 function PreferenceDeck({
   activeIndex,
   canLoadMore,
+  isReviewing,
   points,
   votes,
   onLoadMore,
   onReset,
+  onReviewPrevious,
   onSkip,
   onVote
 }: {
   activeIndex: number;
   canLoadMore: boolean;
+  isReviewing: boolean;
   points: PreferencePoint[];
   votes: Record<string, PreferenceVote>;
   onLoadMore: () => void;
   onReset: () => void;
+  onReviewPrevious: () => void;
   onSkip: () => void;
   onVote: (id: string, vote: PreferenceVote) => void;
 }) {
-  const visiblePoints = points.filter((point) => !votes[point.id]);
-  const active = visiblePoints[activeIndex % Math.max(1, visiblePoints.length)];
+  const pendingPoints = points.filter((point) => !votes[point.id]);
   const judgedPoints = points.filter(
     (item) => votes[item.id] === "like" || votes[item.id] === "dislike"
   );
+  const visiblePoints = isReviewing ? judgedPoints : pendingPoints;
+  const active = visiblePoints[activeIndex % Math.max(1, visiblePoints.length)];
   const liked = points.filter((item) => votes[item.id] === "like");
   const disliked = points.filter((item) => votes[item.id] === "dislike");
   const affected = points.filter(
@@ -3811,11 +3853,13 @@ function PreferenceDeck({
         canLoadMore={canLoadMore}
         judgedCount={judgedPoints.length}
         onLoadMore={onLoadMore}
+        onReviewPrevious={onReviewPrevious}
       />
     );
   }
 
   const Icon = active.icon;
+  const previousVote = votes[active.id];
 
   function commitSwipe(vote: PreferenceVote) {
     setLeavingVote(vote);
@@ -3863,7 +3907,9 @@ function PreferenceDeck({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-tide">위치 포인트</p>
-          <p className="mt-1 text-xs leading-5 text-ink/48">스와이프</p>
+          <p className="mt-1 text-xs leading-5 text-ink/48">
+            {isReviewing ? "이전 선택 다시 보기" : "스와이프"}
+          </p>
         </div>
         <button
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fff9ed] text-ink/54 transition hover:text-tide active:scale-95"
@@ -3924,7 +3970,20 @@ function PreferenceDeck({
               <Icon size={24} aria-hidden />
             </span>
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-ink/42">{active.kind}</p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="text-xs font-semibold text-ink/42">{active.kind}</p>
+                {isReviewing && previousVote ? (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      previousVote === "like"
+                        ? "bg-[#ddf3eb] text-moss"
+                        : "bg-[#fde2ef] text-tide"
+                    }`}
+                  >
+                    {previousVote === "like" ? "전에 선호" : "전에 별로"}
+                  </span>
+                ) : null}
+              </div>
               <h3 className="mt-1 text-xl font-semibold leading-tight [word-break:keep-all]">
                 {active.name}
               </h3>
@@ -3953,7 +4012,7 @@ function PreferenceDeck({
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
-            {preferenceDisplayTags(active, visiblePoints, votes).map((tag) => (
+            {preferenceDisplayTags(active, points, votes).map((tag) => (
               <span
                 className="rounded-lg bg-[#fff9ed] px-2.5 py-1 text-xs font-semibold text-ink/50"
                 key={tag}
