@@ -131,8 +131,12 @@ def _has_equivalent_task(tasks: list[Task], kind: str, poi_query: str) -> bool:
 
 
 def _sanitize_tasks(user_text: str, tasks: list[Task]) -> list[Task]:
+    tasks = [_normalize_photo_task(task) for task in tasks]
+    tasks = [task for task in tasks if _task_supported_by_text(user_text, task)]
+    tasks = [_strengthen_task_requirement(user_text, task) for task in tasks]
+
     if not _looks_like_print_cafe_reference(user_text):
-        return tasks
+        return _renumber_tasks(tasks)
 
     has_separate_recovery = _has_recovery_intent_beyond_print_cafe(user_text)
     sanitized = [
@@ -152,6 +156,67 @@ def _sanitize_tasks(user_text: str, tasks: list[Task]) -> list[Task]:
             ),
         )
 
+    return _renumber_tasks(sanitized)
+
+
+def _normalize_photo_task(task: Task) -> Task:
+    combined = f"{task.label} {task.poi_query}".replace(" ", "")
+    if not any(
+        marker in combined
+        for marker in ["인생네컷", "네컷사진", "네컷", "포토부스", "포토이즘", "셀프사진관"]
+    ):
+        return task
+    return Task(
+        kind="photo",
+        label="사진 찍기",
+        poi_query="인생네컷" if "인생네컷" in combined or "네컷" in combined else task.poi_query,
+        priority=task.priority,
+        required=task.required or "갈거야" in combined or "찍" in combined,
+    )
+
+
+def _task_supported_by_text(user_text: str, task: Task) -> bool:
+    compact = user_text.replace(" ", "")
+    lowered = user_text.lower().replace(" ", "")
+    query = task.poi_query.replace(" ", "")
+    label = task.label.replace(" ", "")
+    combined = f"{query}{label}"
+
+    if task.kind == "clinic":
+        return any(marker in compact for marker in ["병원", "의원", "치과", "진료", "약국"]) or any(
+            marker in lowered for marker in ["clinic", "hospital", "dentist", "pharmacy"]
+        )
+    if task.kind == "print":
+        return any(marker in compact for marker in ["프린트", "인쇄", "출력", "복사", "제본"]) or any(
+            marker in lowered for marker in ["print", "copy", "scan", "report"]
+        )
+    if task.kind == "photo":
+        return any(
+            marker in compact or marker in combined
+            for marker in ["인생네컷", "네컷", "포토부스", "포토이즘", "사진"]
+        ) or any(marker in lowered for marker in ["photo", "photobooth", "picture"])
+    if task.kind == "errand":
+        return (
+            bool(query and query in compact)
+            or any(marker in compact for marker in ["사야", "구매", "살거", "다이소", "마트", "편의점", "문구"])
+            or any(marker in lowered for marker in ["buy", "errand", "store", "mart"])
+        )
+    if task.kind == "place":
+        terms = [term for term in re.split(r"\s+", task.poi_query.strip()) if len(term) >= 2]
+        return not terms or any(term in user_text for term in terms)
+    return True
+
+
+def _strengthen_task_requirement(user_text: str, task: Task) -> Task:
+    compact = user_text.replace(" ", "")
+    if task.kind == "photo" and any(marker in compact for marker in ["갈거야", "찍을래", "찍기로"]):
+        return task.model_copy(update={"required": True})
+    if task.kind == "place" and any(marker in compact for marker in ["들러야", "가기전에", "거쳐서", "지나서"]):
+        return task.model_copy(update={"required": True})
+    return task
+
+
+def _renumber_tasks(tasks: list[Task]) -> list[Task]:
     return [
         Task(
             kind=task.kind,
@@ -160,7 +225,7 @@ def _sanitize_tasks(user_text: str, tasks: list[Task]) -> list[Task]:
             priority=index,
             required=task.required,
         )
-        for index, task in enumerate(sanitized, start=1)
+        for index, task in enumerate(tasks, start=1)
     ]
 
 

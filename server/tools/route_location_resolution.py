@@ -312,7 +312,8 @@ def _select_locations_with_llm(
                 "schema": LOCATION_SELECTION_SCHEMA,
             }
         },
-        "max_output_tokens": 1500,
+        "reasoning": {"effort": "minimal"},
+        "max_output_tokens": 2000,
     }
 
     raw = _post_openai(api_key, payload)

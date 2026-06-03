@@ -50,14 +50,18 @@ def build_preview_insights(
     active_mood: str | None,
 ) -> tuple[list[PreviewInsight], str, list[str]]:
     text = user_text.strip()
-    route_hints = extract_route_locations(text) if text else None
+    route_hints = extract_route_locations(text) if _needs_route_hints(
+        text,
+        origin_text,
+        destination_text,
+    ) else None
     intent = extract_intent(text) if text else None
 
     origin = _first_present(route_hints.origin_text if route_hints else None, origin_text)
     destination = _first_present(
         route_hints.destination_text if route_hints else None,
-        intent.constraints.destination if intent else None,
         destination_text,
+        intent.constraints.destination if intent else None,
     )
     llm_insights = _preview_insights_with_llm(
         text=text,
@@ -108,8 +112,12 @@ def build_preview_insights(
     insights.extend(stop_points)
 
     if intent:
-        task_point = None if stop_points else _task_insight(intent.tasks)
-        if task_point:
+        existing_keys = {_insight_identity(insight) for insight in insights}
+        for task_point in _task_insights(intent.tasks):
+            key = _insight_identity(task_point)
+            if key in existing_keys:
+                continue
+            existing_keys.add(key)
             insights.append(task_point)
 
         emotion_point = _emotion_insight(intent.emotion.primary)
@@ -128,6 +136,22 @@ def build_preview_insights(
     return _limit_insights(insights), source, mood_candidates[:4]
 
 
+def _needs_route_hints(
+    text: str,
+    origin_text: str | None,
+    destination_text: str | None,
+) -> bool:
+    if not text:
+        return False
+    generic_labels = {"집", "학교", "회사"}
+    return (
+        not origin_text
+        or not destination_text
+        or origin_text in generic_labels
+        or destination_text in generic_labels
+    )
+
+
 def _preview_insights_with_llm(
     text: str,
     origin: str | None,
@@ -142,6 +166,8 @@ def _preview_insights_with_llm(
 
     api_key = _get_env_value("OPENAI_API_KEY")
     if not api_key:
+        return None
+    if not _preview_llm_enabled():
         return None
 
     model = (
@@ -194,10 +220,11 @@ def _preview_insights_with_llm(
                 "schema": PREVIEW_INSIGHTS_SCHEMA,
             }
         },
-        "max_output_tokens": 600,
+        "reasoning": {"effort": "minimal"},
+        "max_output_tokens": 1000,
     }
 
-    raw = _post_openai(api_key, payload)
+    raw = _post_openai_with_timeout(api_key, payload, 5)
     if raw is None:
         return None
 
@@ -214,6 +241,20 @@ def _preview_insights_with_llm(
         return None
 
     return _repair_preview_insights(insights, origin, destination, intent, active_mood, text)
+
+
+def _post_openai_with_timeout(api_key: str, payload: dict, timeout: int):
+    try:
+        return _post_openai(api_key, payload, timeout)
+    except TypeError:
+        return _post_openai(api_key, payload)
+
+
+def _preview_llm_enabled() -> bool:
+    value = os.environ.get("HYS_ENABLE_PREVIEW_LLM") or _get_env_value(
+        "HYS_ENABLE_PREVIEW_LLM"
+    )
+    return value == "1"
 
 
 def _repair_preview_insights(
@@ -308,6 +349,15 @@ def _repair_preview_insights(
         unique.append(insight)
 
     return _limit_insights(unique)
+
+
+def _task_insights(tasks) -> list[PreviewInsight]:
+    insights: list[PreviewInsight] = []
+    for task in tasks or []:
+        insight = _task_insight([task])
+        if insight:
+            insights.append(insight)
+    return insights
 
 
 def _task_insight(tasks) -> PreviewInsight | None:
@@ -516,8 +566,12 @@ def _insight_identity(insight: PreviewInsight) -> str:
 
 def _waypoint_identity_value(value: str) -> str:
     cleaned = _clean_waypoint_display_value(value)
+    compact = cleaned.replace(" ", "")
+    for keyword in ["다이소", "인생네컷", "스타벅스", "약국", "편의점", "올리브영"]:
+        if keyword in compact:
+            return keyword
     cleaned = re.sub(r"\s*주변(?:\s*산책)?$", "", cleaned)
-    cleaned = re.sub(r"\s*(?:들르기|들를 곳|가기|방문|후보|확인)$", "", cleaned)
+    cleaned = re.sub(r"\s*(?:들르기|들리기|들를 곳|가기|구매|방문|후보|확인)$", "", cleaned)
     return cleaned.strip()
 
 

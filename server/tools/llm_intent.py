@@ -171,7 +171,8 @@ def extract_intent_with_llm(user_text: str) -> ExtractedIntent | None:
                 "schema": INTENT_SCHEMA,
             }
         },
-        "max_output_tokens": 900,
+        "reasoning": {"effort": "minimal"},
+        "max_output_tokens": 1800,
     }
 
     raw = _post_openai(api_key, payload)
@@ -207,7 +208,14 @@ def extract_intent_with_llm(user_text: str) -> ExtractedIntent | None:
 
 
 def _intent_cache_key(model: str, user_text: str, runtime_context: str) -> str:
-    return f"{model}:{runtime_context}:{user_text.strip()}"
+    return f"{model}:{_runtime_cache_bucket(runtime_context)}:{user_text.strip()}"
+
+
+def _runtime_cache_bucket(runtime_context: str) -> str:
+    for line in runtime_context.splitlines():
+        if line.startswith("Current KST datetime: "):
+            return line.removeprefix("Current KST datetime: ")[:16]
+    return runtime_context
 
 
 def _remember_intent(cache_key: str, intent: ExtractedIntent) -> None:
@@ -216,7 +224,7 @@ def _remember_intent(cache_key: str, intent: ExtractedIntent) -> None:
     _LLM_INTENT_CACHE[cache_key] = intent
 
 
-def _post_openai(api_key: str, payload: dict) -> dict | None:
+def _post_openai(api_key: str, payload: dict, timeout: int = 20) -> dict | None:
     request = Request(
         OPENAI_RESPONSES_URL,
         data=json.dumps(payload).encode("utf-8"),
@@ -228,7 +236,7 @@ def _post_openai(api_key: str, payload: dict) -> dict | None:
     )
 
     try:
-        with urlopen(request, timeout=20) as response:
+        with urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except (HTTPError, URLError, TimeoutError, OSError, ValueError):
         return None

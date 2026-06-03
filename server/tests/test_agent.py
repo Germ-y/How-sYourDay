@@ -1224,6 +1224,7 @@ def test_preview_insights_repairs_missing_condition_card_from_llm(monkeypatch) -
 
     monkeypatch.delenv("HYS_DISABLE_LLM", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("HYS_ENABLE_PREVIEW_LLM", "1")
     monkeypatch.setattr(preview_insights, "_post_openai", lambda api_key, payload: {})
     monkeypatch.setattr(
         preview_insights,
@@ -1256,6 +1257,7 @@ def test_preview_insights_uses_rules_as_llm_backfill_without_duplicates(
 
     monkeypatch.delenv("HYS_DISABLE_LLM", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("HYS_ENABLE_PREVIEW_LLM", "1")
     monkeypatch.setattr(preview_insights, "_post_openai", lambda api_key, payload: {})
     monkeypatch.setattr(
         preview_insights,

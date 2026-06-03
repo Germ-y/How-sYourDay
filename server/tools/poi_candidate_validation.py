@@ -196,7 +196,8 @@ def _llm_match(document: dict, task: Task, user_text: str) -> bool | None:
                 "schema": POI_VALIDATION_SCHEMA,
             }
         },
-        "max_output_tokens": 120,
+        "reasoning": {"effort": "minimal"},
+        "max_output_tokens": 400,
     }
 
     raw = _post_openai(api_key, payload)

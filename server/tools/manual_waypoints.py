@@ -130,7 +130,8 @@ def _normalize_with_llm(
                 "schema": MANUAL_WAYPOINT_SCHEMA,
             }
         },
-        "max_output_tokens": 650,
+        "reasoning": {"effort": "minimal"},
+        "max_output_tokens": 1200,
     }
 
     raw = _post_openai(api_key, payload)

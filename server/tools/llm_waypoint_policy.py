@@ -163,7 +163,8 @@ def _build_waypoint_policy_with_llm(
                 "schema": WAYPOINT_POLICY_SCHEMA,
             }
         },
-        "max_output_tokens": 700,
+        "reasoning": {"effort": "minimal"},
+        "max_output_tokens": 1000,
     }
 
     raw = _post_openai(api_key, payload)

@@ -116,7 +116,8 @@ def _extract_route_locations_with_llm(user_text: str) -> RouteLocationHints | No
                 "schema": ROUTE_EXTRACTION_SCHEMA,
             }
         },
-        "max_output_tokens": 1000,
+        "reasoning": {"effort": "minimal"},
+        "max_output_tokens": 1500,
     }
 
     raw = _post_openai(api_key, payload)
