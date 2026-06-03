@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="apps/web/public/logo.svg" alt="How's Your Day logo" width="96" />
+  <img src="apps/web/public/logo.svg" alt="How's Your Day 로고" width="96" />
 </p>
 
 <h1 align="center">How's Your Day</h1>
@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <a href="https://howsyourday.germy.kr">Live Demo</a>
+  <a href="https://howsyourday.germy.kr">서비스 보기</a>
   ·
-  <a href="#local-development">Local Development</a>
+  <a href="#로컬-실행">로컬 실행</a>
   ·
-  <a href="#api-overview">API</a>
+  <a href="#api-개요">API 개요</a>
 </p>
 
 How's Your Day는 사용자가 길찾기 앱처럼 출발지와 도착지를 직접 입력할 수도 있고,
@@ -23,7 +23,7 @@ How's Your Day는 사용자가 길찾기 앱처럼 출발지와 도착지를 직
 단순히 가장 빠른 길만 고르는 대신, 사용자의 컨디션, 시간 압박, 걷기 부담,
 선호/비선호 장소, 저장 장소, 경유 의도를 함께 반영합니다.
 
-## What It Does
+## 무엇을 하나요
 
 - 자연어 이동 요청에서 출발지, 도착지, 시간 조건, 컨디션, 경유 의도를 추출합니다.
 - 출발지와 도착지는 Kakao Local 검색 후보를 바탕으로 실제 장소에 가깝게 보정합니다.
@@ -34,7 +34,7 @@ How's Your Day는 사용자가 길찾기 앱처럼 출발지와 도착지를 직
 - “별로였어요” 피드백은 저장하지 않고 사용자별 선호 가중치에만 반영합니다.
 - 근처 실제 POI를 스와이프하며 선호/비선호를 쌓고, 경로 후보 판단에 반영합니다.
 
-## Product Flow
+## 사용자 흐름
 
 ```text
 사용자 문장 입력
@@ -43,11 +43,11 @@ How's Your Day는 사용자가 길찾기 앱처럼 출발지와 도착지를 직
   -> 출발지/도착지/경유 의도 미리보기
   -> Kakao POI + OSRM/Tmap 경로 후보 생성
   -> 감정 비용과 선호/비선호 점수 반영
-  -> 추천 경로, 지도, XAI, 타임라인 표시
+  -> 추천 경로, 지도, 판단 근거, 타임라인 표시
   -> 좋았던 경로 저장 / 별로였던 경로 학습
 ```
 
-## Example Prompts
+## 데모 문장 예시
 
 ```text
 지금 성균관대야. 홍대입구역 3번 출구 앞에서 친구 만나야 하는데
@@ -67,47 +67,47 @@ How's Your Day는 사용자가 길찾기 앱처럼 출발지와 도착지를 직
 오늘은 여유 있어서 예쁜 길이면 좀 돌아가도 괜찮아.
 ```
 
-## Tech Stack
+## 기술 스택
 
-- Frontend: Next.js 15, React 19, Tailwind CSS, lucide-react
-- Backend: FastAPI, Pydantic, SQLAlchemy
-- Database: PostgreSQL
-- Auth: JWT access token
-- LLM: OpenAI API for intent, condition, waypoint, and location reasoning
-- Places: Kakao Local API
-- Map: Kakao Maps JavaScript SDK
-- Routing: OSRM fallback-first in development, Tmap optional
+- 프론트엔드: Next.js 15, React 19, Tailwind CSS, lucide-react
+- 백엔드: FastAPI, Pydantic, SQLAlchemy
+- 데이터베이스: PostgreSQL
+- 인증: JWT access token
+- LLM: OpenAI API를 활용한 의도, 컨디션, 경유지, 장소 판단
+- 장소 검색: Kakao Local API
+- 지도: Kakao Maps JavaScript SDK
+- 경로 탐색: 개발 환경에서는 OSRM 우선, Tmap은 선택적으로 사용
 
-## Repository Structure
+## 저장소 구조
 
 ```text
-apps/web               Next.js web app
-server/api             FastAPI endpoints and schemas
-server/agent           Planner orchestration
-server/auth            JWT and password handling
-server/db              SQLAlchemy session and models
-server/memory          Feedback weight model
-server/planner         Route scoring, tradeoff, final plan composition
-server/prompts         LLM prompts
-server/repositories    User-scoped DB access
-server/tools           Kakao, OSRM, Tmap, LLM, geocoding tools
-docs                   Design notes and tool contracts
-deploy/ec2             systemd/nginx deployment files
+apps/web               Next.js 웹 앱
+server/api             FastAPI 엔드포인트와 스키마
+server/agent           플래너 오케스트레이션
+server/auth            JWT와 비밀번호 처리
+server/db              SQLAlchemy 세션과 모델
+server/memory          피드백 기반 가중치 모델
+server/planner         경로 점수, 균형점, 최종 계획 조합
+server/prompts         LLM 프롬프트
+server/repositories    사용자별 DB 접근 계층
+server/tools           Kakao, OSRM, Tmap, LLM, 지오코딩 도구
+docs                   설계 메모와 도구 계약 문서
+deploy/ec2             systemd/nginx 배포 파일
 ```
 
-## Requirements
+## 준비물
 
-- Node.js 20+
-- Python 3.11+
-- Docker or local PostgreSQL
-- Kakao REST API key
-- Kakao JavaScript key
-- OpenAI API key
-- Tmap app key if Tmap routing is enabled
+- Node.js 20 이상
+- Python 3.11 이상
+- Docker 또는 로컬 PostgreSQL
+- Kakao REST API 키
+- Kakao JavaScript 키
+- OpenAI API 키
+- Tmap 경로 탐색을 켤 경우 Tmap 앱 키
 
-## Environment
+## 환경 변수
 
-Create `.env` in the repository root. `.env.example` is the starting point.
+저장소 루트에 `.env`를 만듭니다. `.env.example`을 시작점으로 사용하면 됩니다.
 
 ```env
 OPENAI_API_KEY=
@@ -129,34 +129,34 @@ JWT_SECRET_KEY=change-me-in-production
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8010
 ```
 
-If you run the API on `8011`, also set:
+API 서버를 `8011`번 포트에서 실행한다면 아래 값도 맞춰야 합니다.
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8011
 ```
 
-For Kakao Maps JavaScript SDK, add the local web origin to Kakao Developers:
+Kakao Maps JavaScript SDK를 로컬에서 쓰려면 Kakao Developers에 아래 웹 출처를 등록합니다.
 
 ```text
 http://localhost:4000
 http://127.0.0.1:4000
 ```
 
-## Local Development
+## 로컬 실행
 
-Install web dependencies:
+웹 의존성을 설치합니다.
 
 ```bash
 npm install
 ```
 
-Start PostgreSQL:
+PostgreSQL을 실행합니다.
 
 ```bash
 docker compose up -d db
 ```
 
-Install and run the API:
+API 서버 의존성을 설치하고 실행합니다.
 
 ```bash
 cd server
@@ -166,36 +166,42 @@ pip install -e ".[dev]"
 python -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8010
 ```
 
-Run the web app on port 4000:
+웹 앱은 4000번 포트로 실행합니다.
 
 ```bash
 npm --workspace apps/web run dev -- -p 4000
 ```
 
-Open:
+브라우저에서 아래 주소를 엽니다.
 
 ```text
 http://localhost:4000
 ```
 
-## Useful Commands
+## 자주 쓰는 명령
+
+웹 빌드:
 
 ```bash
 npm run web:build
 ```
+
+서버 테스트:
 
 ```bash
 cd server
 python -m pytest
 ```
 
+API 서버 실행:
+
 ```bash
 python -m uvicorn api.main:app --host 127.0.0.1 --port 8010
 ```
 
-## API Overview
+## API 개요
 
-Auth:
+인증:
 
 ```text
 POST /auth/signup
@@ -203,7 +209,7 @@ POST /auth/login
 GET  /auth/me
 ```
 
-Planning:
+경로 추천:
 
 ```text
 POST /plan
@@ -214,7 +220,7 @@ POST /geocode
 POST /feedback
 ```
 
-User data:
+사용자 데이터:
 
 ```text
 GET  /me/saved-places
@@ -227,53 +233,53 @@ POST /me/place-preferences
 GET  /me/route-recommendations
 ```
 
-## Personalization
+## 개인화 구조
 
-Personalization currently has three layers.
+개인화는 현재 세 가지 층으로 동작합니다.
 
-1. Place preference
+1. 장소 선호
 
-   Users swipe nearby real POIs as `like` or `dislike`.
-   These are stored per user and included in route planning context.
+   사용자는 주변 실제 POI를 `like` 또는 `dislike`로 스와이프합니다.
+   이 데이터는 사용자별로 저장되고 경로 계획 맥락에 포함됩니다.
 
-2. Route feedback
+2. 경로 피드백
 
-   Positive feedback saves the selected route snapshot as a user route recommendation.
-   Negative feedback updates user preference weights but does not save the route.
+   긍정 피드백은 선택한 경로 스냅샷을 사용자별 추천 기록으로 저장합니다.
+   부정 피드백은 경로를 저장하지 않고 사용자별 선호 가중치만 업데이트합니다.
 
-3. Preference weights
+3. 선호 가중치
 
-   Route feedback adjusts walking, crowd, transfer, and recovery sensitivity per user.
-   These weights influence future emotional cost scoring.
+   경로 피드백은 사용자별 걷기 민감도, 혼잡 민감도, 환승 민감도, 회복 선호도를 조정합니다.
+   이 가중치는 이후 경로의 감정 비용 계산에 반영됩니다.
 
-## Design Principles
+## 설계 원칙
 
-- Emotion is a decision variable, not decoration.
-- The service should reduce choice load, not make the user manage more controls.
-- LLM output must be grounded by Kakao place candidates where possible.
-- Provider calls stay behind tool modules, not directly inside UI components.
-- User-scoped data must stay user-scoped: saved places, place preferences, route feedback, and route recommendations should not bleed across accounts.
+- 감정은 장식이 아니라 경로 판단 변수로 다룹니다.
+- 서비스는 사용자의 선택 부담을 줄여야 하며, 더 많은 조작을 강요하지 않아야 합니다.
+- LLM 출력은 가능한 한 Kakao 장소 후보로 검증합니다.
+- 외부 제공자 호출은 UI 컴포넌트에 직접 넣지 않고 도구 모듈 뒤에 둡니다.
+- 저장 장소, 장소 선호, 경로 피드백, 경로 추천 기록은 사용자별로 분리되어야 합니다.
 
-## Deployment
+## 배포
 
-Deployment files live in `deploy/ec2`.
+배포 관련 파일은 `deploy/ec2`에 있습니다.
 
-Production domain:
+운영 도메인:
 
 ```text
 https://howsyourday.germy.kr
 ```
 
-The EC2 deployment uses:
+EC2 배포는 아래 구성으로 동작합니다.
 
 - Nginx
-- systemd service for FastAPI
-- systemd service for Next web
-- PostgreSQL-backed user data
+- FastAPI용 systemd 서비스
+- Next 웹 앱용 systemd 서비스
+- PostgreSQL 기반 사용자 데이터 저장
 
-## Notes
+## 메모
 
-- Tmap can be disabled in development with `HYS_DISABLE_TMAP=1`.
-- OSRM is used as a cheaper routing fallback for development and demos.
-- The root `logo.svg` is treated as the source asset. The web app serves the committed copy at `apps/web/public/logo.svg`.
-- Do not commit real API keys or production secrets.
+- 개발 중에는 `HYS_DISABLE_TMAP=1`로 Tmap 호출을 끌 수 있습니다.
+- OSRM은 개발과 데모에서 비용이 적은 경로 탐색 대체 수단으로 사용합니다.
+- 루트의 `logo.svg`는 원본 에셋으로 취급하고, 웹 앱은 `apps/web/public/logo.svg`에 커밋된 사본을 제공합니다.
+- 실제 API 키나 운영 시크릿은 커밋하지 않습니다.
