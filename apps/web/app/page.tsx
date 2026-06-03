@@ -1637,9 +1637,7 @@ function AuthLoading() {
     <main className="flex min-h-screen items-center justify-center bg-[#fff9ed] px-5 text-ink">
       <section className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#fde2ef] text-tide">
-            <LogoMark className="h-7 w-7" />
-          </span>
+          <LogoMark className="h-12 w-12 shrink-0" />
           <div>
             <p className="text-xs font-semibold text-tide">How's Your Day</p>
             <h1 className="mt-1 text-xl font-semibold">로그인 확인 중</h1>
@@ -1687,9 +1685,7 @@ function AuthPage({
                   저장 장소와 취향 데이터를 계정에 연결합니다.
                 </p>
               </div>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-moss shadow-sm ring-1 ring-ink/8">
-                <LogoMark className="h-8 w-8" />
-              </span>
+              <LogoMark className="h-14 w-14 shrink-0" />
             </div>
           </div>
 
@@ -1882,9 +1878,7 @@ function ServiceTopBar({
           type="button"
           onClick={() => onChange("planner")}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-tide shadow-sm ring-1 ring-ink/8 sm:h-10 sm:w-10">
-            <LogoMark className="h-8 w-8 sm:h-9 sm:w-9" />
-          </span>
+          <LogoMark className="h-11 w-11 shrink-0" />
           <span className="min-w-0">
             <span className="block text-sm font-semibold leading-4">How's Your Day</span>
             <span className="block truncate text-[11px] font-medium text-ink/45">
