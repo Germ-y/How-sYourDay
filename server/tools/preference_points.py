@@ -11,9 +11,12 @@ from tools.landmark_emotion_prior import get_landmark_emotion_prior
 PREFERENCE_QUERIES = [
     ("recovery", "카페", "cafe"),
     ("park", "공원", "park"),
+    ("walk", "산책로", "park"),
     ("bookstore", "서점", "commercial"),
     ("library", "도서관", "university"),
+    ("bakery", "베이커리", "commercial"),
     ("food", "분식", "commercial"),
+    ("culture", "문화시설", "commercial"),
     ("transit", "지하철역", "transit_hub"),
 ]
 
@@ -44,7 +47,7 @@ def search_preference_points(
                 fallback_landmark_type,
             )
 
-    return list(points_by_id.values())[:18]
+    return list(points_by_id.values())[:_result_limit(radius_meters)]
 
 
 def _fetch_preference_documents(
@@ -59,7 +62,7 @@ def _fetch_preference_documents(
         "y": origin.lat,
         "radius": radius_meters,
         "sort": "distance",
-        "size": 4,
+        "size": _query_size(radius_meters),
     }
     url = f"{KAKAO_KEYWORD_SEARCH_URL}?{urlencode(params)}"
     request = Request(url, headers={"Authorization": f"KakaoAK {api_key}"})
@@ -72,6 +75,22 @@ def _fetch_preference_documents(
 
     documents = payload.get("documents", [])
     return documents if isinstance(documents, list) else []
+
+
+def _query_size(radius_meters: int) -> int:
+    if radius_meters >= 4200:
+        return 12
+    if radius_meters >= 3000:
+        return 9
+    return 6
+
+
+def _result_limit(radius_meters: int) -> int:
+    if radius_meters >= 4200:
+        return 60
+    if radius_meters >= 3000:
+        return 45
+    return 30
 
 
 def _normalize_preference_document(

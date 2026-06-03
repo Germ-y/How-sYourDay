@@ -203,6 +203,9 @@ type PreferencePoint = {
   source: string;
 };
 const SWIPE_THRESHOLD = 86;
+const INITIAL_PREFERENCE_RADIUS_METERS = 1800;
+const MAX_PREFERENCE_RADIUS_METERS = 5000;
+const PREFERENCE_RADIUS_STEP_METERS = 1200;
 
 export default function HomePage() {
   const [text, setText] = useState(starterText);
@@ -221,6 +224,9 @@ export default function HomePage() {
   const [nearbyPreferencePoints, setNearbyPreferencePoints] = useState<
     PreferencePoint[]
   >([]);
+  const [preferenceRadiusMeters, setPreferenceRadiusMeters] = useState(
+    INITIAL_PREFERENCE_RADIUS_METERS
+  );
   const [isPreferenceLoading, setIsPreferenceLoading] = useState(false);
   const [preferenceStatus, setPreferenceStatus] = useState(
     "내 주변 장소 준비"
@@ -743,6 +749,8 @@ export default function HomePage() {
     setSavedPlaces([]);
     setSavedPlaceNotice("");
     setNearbyPreferencePoints([]);
+    setPreferenceRadiusMeters(INITIAL_PREFERENCE_RADIUS_METERS);
+    setPreferenceStatus("내 주변 장소 준비");
     setPoiVotes({});
     setPoiPreferenceIndex(0);
     setActiveView("planner");
@@ -958,6 +966,48 @@ export default function HomePage() {
     }
   }
 
+  async function loadPreferencePointsForLocation(
+    location: Location,
+    radiusMeters: number,
+    append: boolean
+  ) {
+    setIsPreferenceLoading(true);
+    setPreferenceStatus(
+      append
+        ? `범위 넓히는 중 · 약 ${formatDistanceMeters(radiusMeters)}`
+        : "장소 불러오는 중"
+    );
+
+    try {
+      const result = await fetchPreferencePoints(location, radiusMeters);
+      const nextPoints = result.points.map((candidate) =>
+        preferencePointFromCandidate(candidate)
+      );
+      setNearbyPreferencePoints((current) =>
+        append ? mergePreferencePoints(current, nextPoints) : nextPoints
+      );
+      setPreferenceStatus(() => {
+        if (nextPoints.length === 0) {
+          return append ? "새 장소를 더 찾지 못했어요" : "내 주변 실제 장소 없음";
+        }
+        const mergedCount = append
+          ? mergePreferencePoints(nearbyPreferencePoints, nextPoints).length
+          : nextPoints.length;
+        return `내 주변 실제 장소 ${mergedCount}개 · 약 ${formatDistanceMeters(
+          radiusMeters
+        )}`;
+      });
+      setPoiPreferenceIndex(0);
+    } catch {
+      if (!append) {
+        setNearbyPreferencePoints([]);
+      }
+      setPreferenceStatus("실제 장소를 불러오지 못했어요");
+    } finally {
+      setIsPreferenceLoading(false);
+    }
+  }
+
   function loadNearbyPreferencePoints() {
     if (!navigator.geolocation) {
       setPreferenceStatus("위치 사용 불가");
@@ -974,25 +1024,12 @@ export default function HomePage() {
           lng: position.coords.longitude
         };
         setCurrentLocation(location);
-        setPreferenceStatus("장소 불러오는 중");
-
-        try {
-          const result = await fetchPreferencePoints(location);
-          setNearbyPreferencePoints(
-            result.points.map((candidate) => preferencePointFromCandidate(candidate))
-          );
-          setPreferenceStatus(
-            result.points.length > 0
-              ? `내 주변 실제 장소 ${result.points.length}개`
-              : "내 주변 실제 장소 없음"
-          );
-          setPoiPreferenceIndex(0);
-        } catch {
-          setNearbyPreferencePoints([]);
-          setPreferenceStatus("실제 장소를 불러오지 못했어요");
-        } finally {
-          setIsPreferenceLoading(false);
-        }
+        setPreferenceRadiusMeters(INITIAL_PREFERENCE_RADIUS_METERS);
+        await loadPreferencePointsForLocation(
+          location,
+          INITIAL_PREFERENCE_RADIUS_METERS,
+          false
+        );
       },
       () => {
         setIsPreferenceLoading(false);
@@ -1004,6 +1041,25 @@ export default function HomePage() {
         timeout: 8_000
       }
     );
+  }
+
+  function loadMorePreferencePoints() {
+    if (!currentLocation) {
+      loadNearbyPreferencePoints();
+      return;
+    }
+
+    const nextRadius = Math.min(
+      MAX_PREFERENCE_RADIUS_METERS,
+      preferenceRadiusMeters + PREFERENCE_RADIUS_STEP_METERS
+    );
+    if (nextRadius <= preferenceRadiusMeters) {
+      setPreferenceStatus("최대 범위까지 확인했어요");
+      return;
+    }
+
+    setPreferenceRadiusMeters(nextRadius);
+    void loadPreferencePointsForLocation(currentLocation, nextRadius, true);
   }
 
   function handleQuickSavedPlaceSelect(place: SavedPlaceEntry) {
@@ -1424,7 +1480,9 @@ export default function HomePage() {
             points={preferencePoints}
             status={preferenceStatus}
             votes={poiVotes}
+            canLoadMore={preferenceRadiusMeters < MAX_PREFERENCE_RADIUS_METERS}
             onLoadNearby={loadNearbyPreferencePoints}
+            onLoadMore={loadMorePreferencePoints}
             onReset={handlePoiReset}
             onSkip={handlePoiSkip}
             onVote={handlePoiVote}
@@ -1729,21 +1787,25 @@ function ServiceTopBar({
 
 function TastePage({
   activeIndex,
+  canLoadMore,
   isLoading,
   points,
   status,
   votes,
   onLoadNearby,
+  onLoadMore,
   onReset,
   onSkip,
   onVote
 }: {
   activeIndex: number;
+  canLoadMore: boolean;
   isLoading: boolean;
   points: PreferencePoint[];
   status: string;
   votes: Record<string, PreferenceVote>;
   onLoadNearby: () => void;
+  onLoadMore: () => void;
   onReset: () => void;
   onSkip: () => void;
   onVote: (id: string, vote: PreferenceVote) => void;
@@ -1784,8 +1846,10 @@ function TastePage({
         ) : (
           <PreferenceDeck
             activeIndex={activeIndex}
+            canLoadMore={canLoadMore}
             points={points}
             votes={votes}
+            onLoadMore={onLoadMore}
             onReset={onReset}
             onSkip={onSkip}
             onVote={onVote}
@@ -1886,7 +1950,15 @@ function PreferenceEmptyDeck() {
   );
 }
 
-function PreferenceCompleteDeck({ judgedCount }: { judgedCount: number }) {
+function PreferenceCompleteDeck({
+  canLoadMore,
+  judgedCount,
+  onLoadMore
+}: {
+  canLoadMore: boolean;
+  judgedCount: number;
+  onLoadMore: () => void;
+}) {
   return (
     <article className="order-1 rounded-[24px] border border-ink/8 bg-white p-5 text-center shadow-[0_18px_48px_rgba(23,26,24,0.07)]">
       <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fde2ef] text-tide">
@@ -1896,6 +1968,15 @@ function PreferenceCompleteDeck({ judgedCount }: { judgedCount: number }) {
       <p className="mt-2 text-sm leading-6 text-ink/54 [word-break:keep-all]">
         {judgedCount}개의 선택이 저장됐고, 지도와 경로 후보에 취향으로 반영됩니다.
       </p>
+      <button
+        className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#ddf3eb] px-4 text-sm font-semibold text-moss transition active:scale-[0.98] disabled:bg-[#fff9ed] disabled:text-ink/36"
+        type="button"
+        onClick={onLoadMore}
+        disabled={!canLoadMore}
+      >
+        <Plus size={17} aria-hidden />
+        {canLoadMore ? "범위 넓혀 더 보기" : "최대 범위까지 확인"}
+      </button>
     </article>
   );
 }
@@ -3683,15 +3764,19 @@ function PreferenceMap({
 
 function PreferenceDeck({
   activeIndex,
+  canLoadMore,
   points,
   votes,
+  onLoadMore,
   onReset,
   onSkip,
   onVote
 }: {
   activeIndex: number;
+  canLoadMore: boolean;
   points: PreferencePoint[];
   votes: Record<string, PreferenceVote>;
+  onLoadMore: () => void;
   onReset: () => void;
   onSkip: () => void;
   onVote: (id: string, vote: PreferenceVote) => void;
@@ -3721,7 +3806,13 @@ function PreferenceDeck({
   }
 
   if (!active) {
-    return <PreferenceCompleteDeck judgedCount={judgedPoints.length} />;
+    return (
+      <PreferenceCompleteDeck
+        canLoadMore={canLoadMore}
+        judgedCount={judgedPoints.length}
+        onLoadMore={onLoadMore}
+      />
+    );
   }
 
   const Icon = active.icon;
@@ -4150,6 +4241,24 @@ function preferencePointFromCandidate(candidate: PoiCandidate): PreferencePoint 
   };
 }
 
+function mergePreferencePoints(
+  current: PreferencePoint[],
+  next: PreferencePoint[]
+) {
+  const pointsById = new Map(current.map((point) => [point.id, point]));
+  for (const point of next) {
+    pointsById.set(point.id, point);
+  }
+  return Array.from(pointsById.values());
+}
+
+function formatDistanceMeters(distanceMeters: number) {
+  if (distanceMeters >= 1000) {
+    return `${(distanceMeters / 1000).toFixed(1)}km`;
+  }
+  return `${distanceMeters}m`;
+}
+
 function createPointId(candidate: PoiCandidate) {
   return candidate.provider_id
     ? `poi-${candidate.provider_id}`
@@ -4158,10 +4267,18 @@ function createPointId(candidate: PoiCandidate) {
 
 function iconForLandmark(landmarkType: string, category: string): LucideIcon {
   const normalized = `${landmarkType} ${category}`.toLowerCase();
-  if (normalized.includes("cafe") || normalized.includes("coffee")) {
+  if (
+    normalized.includes("cafe") ||
+    normalized.includes("coffee") ||
+    normalized.includes("bakery")
+  ) {
     return Coffee;
   }
-  if (normalized.includes("park") || normalized.includes("green")) {
+  if (
+    normalized.includes("park") ||
+    normalized.includes("green") ||
+    normalized.includes("walk")
+  ) {
     return Leaf;
   }
   if (
@@ -4195,8 +4312,17 @@ function landmarkLabel(candidate: PoiCandidate) {
   if (normalized.includes("library")) {
     return "도서관";
   }
+  if (normalized.includes("bakery")) {
+    return "빵집";
+  }
+  if (normalized.includes("culture")) {
+    return "문화";
+  }
   if (normalized.includes("food") || normalized.includes("restaurant")) {
     return "음식점";
+  }
+  if (normalized.includes("walk")) {
+    return "산책";
   }
   if (normalized.includes("park") || normalized.includes("green")) {
     return "공원";
@@ -4238,9 +4364,12 @@ function userFacingCategoryLabel(value: string | null | undefined) {
     commercial: "상점",
     medical: "의료",
     cafe: "카페",
+    bakery: "빵집",
     bookstore: "서점",
+    culture: "문화",
     library: "도서관",
     park: "공원",
+    walk: "산책",
     transit_hub: "교통",
     university: "학교",
     school: "학교",
