@@ -1638,7 +1638,7 @@ function AuthLoading() {
       <section className="w-full max-w-sm rounded-[28px] bg-white p-6 shadow-[0_18px_50px_rgba(23,26,24,0.07)] ring-1 ring-ink/8">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#fde2ef] text-tide">
-            <Sparkles size={20} aria-hidden />
+            <LogoMark className="h-7 w-7" />
           </span>
           <div>
             <p className="text-xs font-semibold text-tide">How's Your Day</p>
@@ -1688,7 +1688,7 @@ function AuthPage({
                 </p>
               </div>
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-moss shadow-sm ring-1 ring-ink/8">
-                <UserRound size={23} aria-hidden />
+                <LogoMark className="h-8 w-8" />
               </span>
             </div>
           </div>
@@ -1850,6 +1850,17 @@ function buildSignupNickname(email: string) {
   return name || "사용자";
 }
 
+function LogoMark({ className = "h-6 w-6" }: { className?: string }) {
+  return (
+    <img
+      alt=""
+      className={`${className} object-contain`}
+      draggable={false}
+      src="/logo.svg"
+    />
+  );
+}
+
 function ServiceTopBar({
   activeView,
   onChange
@@ -1872,7 +1883,7 @@ function ServiceTopBar({
           onClick={() => onChange("planner")}
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white text-tide shadow-sm ring-1 ring-ink/8 sm:h-10 sm:w-10">
-            <MapPinned size={18} aria-hidden />
+            <LogoMark className="h-6 w-6" />
           </span>
           <span className="min-w-0">
             <span className="block text-sm font-semibold leading-4">How's Your Day</span>
