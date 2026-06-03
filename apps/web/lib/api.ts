@@ -105,6 +105,7 @@ export type PoiCandidate = {
   lng: number;
   distance_meters: number | null;
   source_confidence: string;
+  required?: boolean | null;
 };
 
 export type RouteSegment = {
@@ -163,6 +164,7 @@ export type TimelineItem = {
   time: string;
   label: string;
   type: string;
+  required?: boolean | null;
 };
 
 export type OrderedStop = {

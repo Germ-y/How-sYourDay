@@ -211,6 +211,7 @@ class PoiCandidate(BaseModel):
     lng: float
     distance_meters: int | None = None
     source_confidence: str = "mock"
+    required: bool | None = None
 
 
 class PreferencePointsRequest(BaseModel):

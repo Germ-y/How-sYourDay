@@ -592,6 +592,22 @@ def test_manual_waypoint_required_prefix_is_stripped_for_search(monkeypatch) -> 
     ]
 
 
+def test_manual_waypoint_cleans_activity_hint_to_searchable_place(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    tasks = normalize_manual_waypoints(
+        ["필수 경유: 카페에서 작업", "필수 경유: 약국"],
+        "연세대학교에서 서울역까지 가는데 카페에서 작업하다가 약국도 들러야해",
+        Location(label="연세대학교", lat=37.5658, lng=126.9386),
+        Location(label="서울역", lat=37.5547, lng=126.9706),
+    )
+
+    assert [(task.kind, task.poi_query, task.required) for task in tasks] == [
+        ("recovery", "카페", True),
+        ("errand", "약국", True),
+    ]
+
+
 def test_manual_waypoint_optional_prefix_keeps_weak_candidate_optional(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
@@ -628,6 +644,59 @@ def test_plan_request_waypoint_hints_feed_poi_search(monkeypatch) -> None:
     )
 
     assert "스타벅스" in searched_queries
+
+
+def test_plan_keeps_multiple_required_waypoints_in_selected_route(monkeypatch) -> None:
+    def fake_search(tasks, origin, destination=None, user_text=""):
+        candidates = []
+        for task in tasks:
+            if task.poi_query == "카페":
+                candidates.append(
+                    PoiCandidate(
+                        id="poi-cafe-required-agent",
+                        provider_id="cafe-required-agent",
+                        name="작업하기 좋은 카페",
+                        category="recovery",
+                        landmark_type="cafe",
+                        emotion_tags=["calm", "recovery"],
+                        lat=37.562,
+                        lng=126.951,
+                        required=task.required,
+                    )
+                )
+            if task.poi_query == "약국":
+                candidates.append(
+                    PoiCandidate(
+                        id="poi-pharmacy-required-agent",
+                        provider_id="pharmacy-required-agent",
+                        name="멜로우약국",
+                        category="errand",
+                        landmark_type="commercial",
+                        emotion_tags=["practical", "errand"],
+                        lat=37.56,
+                        lng=126.96,
+                        required=task.required,
+                    )
+                )
+        return candidates
+
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+    monkeypatch.setattr("agent.daily_planning_agent.search_poi_candidates", fake_search)
+
+    plan = DailyPlanningAgent().run(
+        PlanRequest(
+            user_text="연세대학교에서 서울역까지 가는데 카페에서 작업하다가 약국도 들러야해",
+            origin=Location(label="연세대학교", lat=37.5658, lng=126.9386),
+            destination=Location(label="서울역", lat=37.5547, lng=126.9706),
+            waypoint_hints=["필수 경유: 카페에서 작업", "필수 경유: 약국"],
+        )
+    )
+
+    assert {stop.name for stop in plan.selected_route.stops} == {
+        "작업하기 좋은 카페",
+        "멜로우약국",
+    }
+    assert all(stop.required is True for stop in plan.selected_route.stops)
 
 
 def test_geocode_uses_known_location_without_api_key(monkeypatch) -> None:

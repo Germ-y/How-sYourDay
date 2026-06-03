@@ -72,13 +72,28 @@ def search_poi_candidates(
     for task in tasks:
         kakao_candidates = _search_task_candidates(task, origin, destination, user_text)
         if kakao_candidates:
-            candidates.extend(kakao_candidates)
+            candidates.extend(_with_task_metadata(kakao_candidates, task))
             continue
         if destination is not None:
             continue
-        candidates.extend(MOCK_POIS.get(task.kind, MOCK_POIS["recovery"]))
+        candidates.extend(_with_task_metadata(MOCK_POIS.get(task.kind, MOCK_POIS["recovery"]), task))
 
     return candidates
+
+
+def _with_task_metadata(
+    candidates: list[PoiCandidate],
+    task: Task,
+) -> list[PoiCandidate]:
+    return [
+        candidate.model_copy(
+            update={
+                "category": task.kind,
+                "required": task.required,
+            }
+        )
+        for candidate in candidates
+    ]
 
 
 def _search_task_candidates(

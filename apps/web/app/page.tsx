@@ -3258,7 +3258,8 @@ function buildRouteTimeline(route: RouteCandidate): TimelineItem[] {
     timeline.push({
       time: formatTimelineMinutes(currentMinutes),
       label: stopTimelineLabel(stop),
-      type: "task"
+      type: "task",
+      required: stop.required
     });
     currentMinutes += 10;
   });
@@ -3309,8 +3310,21 @@ function TimelineList({ route }: { route: RouteCandidate }) {
             {item.time}
           </span>
           <span className="min-w-0 text-sm leading-6 text-ink/72">
-            <span className="block text-xs font-semibold uppercase tracking-[0.1em] text-ink/38">
-              {timelineTypeLabel(item.type)}
+            <span className="mb-1 flex flex-wrap items-center gap-1.5">
+              <span className="block text-xs font-semibold uppercase tracking-[0.1em] text-ink/38">
+                {timelineTypeLabel(item.type)}
+              </span>
+              {item.type === "task" ? (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    item.required === true
+                      ? "bg-[#fde2ef] text-tide"
+                      : "bg-[#ddf3eb] text-moss"
+                  }`}
+                >
+                  {item.required === true ? "필수" : "참고"}
+                </span>
+              ) : null}
             </span>
             {item.label}
           </span>

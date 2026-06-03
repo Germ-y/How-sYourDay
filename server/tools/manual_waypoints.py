@@ -141,15 +141,9 @@ def _normalize_with_llm(
     try:
         data = json.loads(text)
         tasks = [
-            Task(
-                kind=item["kind"],
-                label=_clean_text(item["label"]) or item["poi_query"],
-                poi_query=_clean_text(item["poi_query"]) or item["label"],
-                priority=int(item["priority"]),
-                required=bool(item["required"]),
-            )
+            _task_from_llm_item(item)
             for item in data.get("waypoints", [])
-            if _clean_text(item.get("poi_query"))
+            if _clean_text(item.get("poi_query")) or _clean_text(item.get("label"))
         ]
     except (KeyError, TypeError, ValueError):
         return None
@@ -186,6 +180,23 @@ def _normalize_with_rules(hints: list[str], user_text: str) -> list[Task]:
             )
         )
     return tasks
+
+
+def _task_from_llm_item(item: dict) -> Task:
+    raw_label = _strip_hint_metadata(_clean_text(item.get("label")))
+    raw_query = _strip_hint_metadata(
+        _clean_text(item.get("poi_query")) or raw_label
+    )
+    kind = _clean_text(item.get("kind")) or _infer_kind(raw_query.lower(), "")
+    query = _query_for_hint(raw_query, kind)
+    label = raw_label or query
+    return Task(
+        kind=kind,
+        label=label,
+        poi_query=query,
+        priority=int(item["priority"]),
+        required=bool(item["required"]),
+    )
 
 
 def _infer_kind(hint: str, context: str) -> str:
@@ -244,7 +255,13 @@ def _query_for_hint(hint: str, kind: str) -> str:
     if "조용" in compact and any(marker in compact for marker in ["카페", "커피"]):
         return "조용한 카페"
     if any(marker in compact for marker in ["카페", "커피"]):
-        return hint
+        return "카페"
+    if "약국" in compact:
+        return "약국"
+    if "편의점" in compact:
+        return "편의점"
+    if "마트" in compact:
+        return "마트"
     return hint
 
 

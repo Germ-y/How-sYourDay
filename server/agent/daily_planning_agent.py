@@ -106,5 +106,9 @@ def _merge_optional_stops(*groups):
             if key in seen:
                 continue
             seen.add(key)
-            merged.append(stop)
+            merged.append(
+                stop.model_copy(
+                    update={"required": False if stop.required is None else stop.required}
+                )
+            )
     return merged
