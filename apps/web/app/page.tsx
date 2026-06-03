@@ -4948,7 +4948,7 @@ async function resolveLocationInput(
   selectedLocation: Location | null = null
 ) {
   const normalized = normalizeLocationText(rawText);
-  if (selectedLocation && normalized === normalizeLocationText(selectedLocation.label)) {
+  if (selectedLocation) {
     return {
       location: selectedLocation,
       source: "selected-search"
