@@ -3804,6 +3804,11 @@ function RouteList({
   routes: RouteCandidate[];
   selectedRouteId: string;
 }) {
+  const visibleRoutes = useMemo(
+    () => visibleRouteOptions(plan, routes, selectedRouteId),
+    [plan, routes, selectedRouteId]
+  );
+
   return (
     <section className="rounded-2xl bg-white p-3 shadow-[0_12px_34px_rgba(23,26,24,0.04)] ring-1 ring-ink/8">
       <div className="mb-2 flex items-center gap-2 px-1">
@@ -3811,7 +3816,7 @@ function RouteList({
         <h2 className="text-sm font-semibold text-ink/68">경로 선택</h2>
       </div>
       <div className="grid gap-2">
-        {routes.map((route, index) => {
+        {visibleRoutes.map((route, index) => {
           const selected = route.id === selectedRouteId;
           const title = routeOptionTitle(route, index);
           const score = scoreForRoute(plan, route);
@@ -3847,6 +3852,66 @@ function RouteList({
       </div>
     </section>
   );
+}
+
+const ROUTE_OPTION_LIMIT = 3;
+
+function visibleRouteOptions(
+  plan: DailyPlan,
+  routes: RouteCandidate[],
+  selectedRouteId: string
+) {
+  const selectedRoute = routes.find((route) => route.id === selectedRouteId) ?? null;
+  const rankedRoutes = [...routes].sort((left, right) => {
+    const leftScore = scoreForRoute(plan, left);
+    const rightScore = scoreForRoute(plan, right);
+    return (
+      rightScore.comfort_score - leftScore.comfort_score ||
+      routeDurationMinutes(left) - routeDurationMinutes(right) ||
+      (left.distance_meters ?? 999_999) - (right.distance_meters ?? 999_999)
+    );
+  });
+  const visible: RouteCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const route of rankedRoutes) {
+    const key = routeOptionDedupeKey(route);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    visible.push(route);
+    if (visible.length >= ROUTE_OPTION_LIMIT) {
+      break;
+    }
+  }
+
+  if (selectedRoute && !visible.some((route) => route.id === selectedRoute.id)) {
+    const selectedKey = routeOptionDedupeKey(selectedRoute);
+    const duplicateIndex = visible.findIndex(
+      (route) => routeOptionDedupeKey(route) === selectedKey
+    );
+
+    if (duplicateIndex >= 0) {
+      visible[duplicateIndex] = selectedRoute;
+    } else if (visible.length < ROUTE_OPTION_LIMIT) {
+      visible.push(selectedRoute);
+    } else {
+      visible[ROUTE_OPTION_LIMIT - 1] = selectedRoute;
+    }
+  }
+
+  return visible;
+}
+
+function routeOptionDedupeKey(route: RouteCandidate) {
+  if (!route.stops.length) {
+    return `direct:${route.provider}`;
+  }
+
+  return route.stops
+    .map((stop) => `${stop.category}:${stop.name}`.replace(/\s+/g, ""))
+    .join("|");
 }
 
 function PlannerCue({

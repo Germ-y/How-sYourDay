@@ -20,7 +20,7 @@ reason must be a short Korean phrase.
 Task Kinds
 print: printing, copying, scanning, document output, binding, print shop.
 clinic: hospital, clinic, medical visit, pharmacy-like health visit.
-recovery: rest, quiet cafe, coffee, comfortable work/study place, comic cafe/manhwabang/book cafe, park-like recovery stop.
+recovery: rest, quiet cafe, coffee, comfortable work/study place, park-like recovery stop. Comic cafe/manhwabang/book cafe/board-game cafe are recovery only when the user explicitly asked for that special cafe type.
 errand: shopping, pickup, Daiso, mart, convenience store, pharmacy, everyday errands.
 
 Core Rule
@@ -32,18 +32,28 @@ Kakao category_group_name and category_name together are stronger than place_nam
 Use address only for regional plausibility, not for place function.
 The original user sentence is a strong signal.
 
+Cafe Meaning Policy
+When the task is recovery and the user says only "카페", "커피", "조용한 카페", "카페에서 작업", "카페에서 과제", or similar generic cafe wording, treat it as a normal coffee cafe unless the sentence clearly requests a special cafe type.
+For generic cafe intent, accept coffee shops and ordinary cafe categories such as "음식점 > 카페", "커피전문점", "디저트카페", or named coffee chains.
+For generic cafe intent, reject special-purpose cafes: 보드게임카페, 만화카페, 만화방, 북카페, 스터디카페, 룸카페, 키즈카페, 애견카페, 고양이카페, 타로카페, 낚시카페, VR카페, 멀티방, 파티룸.
+If the user explicitly says a special cafe type, accept that type. Examples: "보드게임 카페 가고 싶어", "만화카페 들를래", "북카페에서 책 읽고 싶어".
+If the user names a specific brand or place, preserve that named intent. Example: "스타벅스" should match Starbucks, not any generic cafe.
+
 Accept Examples
 Task recovery + candidate "조용한 카페" category "음식점 > 카페": accepted true.
 Task recovery + candidate "커피빈 성수점" category "음식점 > 카페": accepted true.
-Task recovery + candidate "콩툰 대학로점" category "문화,예술 > 만화방": accepted true.
-Task recovery + candidate "놀숲 홍대점" category "문화,예술 > 만화방": accepted true.
-Task recovery + candidate "북카페 오후" category "음식점 > 카페": accepted true.
+Task recovery + user_text "만화카페 들르고 싶어" + candidate "콩툰 대학로점" category "문화,예술 > 만화방": accepted true.
+Task recovery + user_text "보드게임 카페 가고 싶어" + candidate "레드버튼 홍대점" category "오락 > 보드게임카페": accepted true.
+Task recovery + user_text "북카페에서 책 읽고 싶어" + candidate "북카페 오후" category "음식점 > 카페": accepted true.
 Task print + candidate "혜화 인쇄소" category "서비스,산업 > 전문대행 > 인쇄": accepted true.
 Task print + candidate "프린트카페 대학로점" category "인쇄": accepted true.
 Task errand + candidate "다이소 성수점" category "가정,생활 > 생활용품": accepted true.
 Task clinic + candidate "연세내과" category "의료,건강 > 병원": accepted true.
 
 Reject Examples
+Task recovery + user_text "카페에서 과제하고 싶어" + candidate "레드버튼 홍대점" category "오락 > 보드게임카페": accepted false.
+Task recovery + user_text "조용한 카페 들르고 싶어" + candidate "콩툰 대학로점" category "문화,예술 > 만화방": accepted false.
+Task recovery + user_text "커피 한잔하고 싶어" + candidate "키즈카페 점핑파크" category "문화,예술 > 키즈카페": accepted false.
 Task recovery + candidate "프린터카페 대학로점" category "서비스,산업 > 인쇄": accepted false.
 Task recovery + candidate "프린트카페" category "전문대행 > 인쇄": accepted false.
 Task print + candidate "카페온" category "음식점 > 카페": accepted false.
@@ -54,7 +64,7 @@ Ambiguity Policy
 If the candidate category directly conflicts with the task, reject.
 If the candidate name contains both a task word and a conflicting place type, trust the category first.
 If the user sentence clearly asks for rest/coffee/work in a cafe, prefer real cafe candidates.
-If the user asks to rest, work quietly, read, or stay for a while, comic cafe/manhwabang/book cafe candidates can be valid recovery stops even when category is not 음식점 > 카페.
+If the user asks to rest, work quietly, read, or stay for a while, comic cafe/manhwabang/book cafe/board-game cafe candidates are valid only when that special type is explicit in the user sentence or task query.
 If the user sentence clearly asks for printing/output/copying, prefer print candidates.
 If the candidate is merely near the desired place but not the desired function, reject.
 When unsure and the candidate has a high chance of causing the wrong waypoint, reject.

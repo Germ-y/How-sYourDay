@@ -475,6 +475,68 @@ def test_recovery_poi_rejects_print_cafe_candidate(monkeypatch) -> None:
     assert [candidate.name for candidate in candidates] == ["조용한 작업 카페"]
 
 
+def test_generic_cafe_poi_rejects_special_cafe_unless_explicit(monkeypatch) -> None:
+    from tools import kakao_local
+
+    documents = [
+        {
+            "id": "board-game-cafe",
+            "place_name": "빌보드게임카페",
+            "category_name": "오락 > 보드게임카페",
+            "x": "126.9250",
+            "y": "37.5574",
+            "distance": "70",
+        },
+        {
+            "id": "coffee-cafe",
+            "place_name": "조용한 커피집",
+            "category_name": "음식점 > 카페 > 커피전문점",
+            "x": "126.9260",
+            "y": "37.5580",
+            "distance": "140",
+        },
+    ]
+
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+    monkeypatch.setattr(
+        kakao_local,
+        "_fetch_kakao_documents",
+        lambda api_key, task, origin: documents,
+    )
+
+    generic_candidates = search_poi_candidates(
+        [
+            Task(
+                kind="recovery",
+                label="작업할 카페",
+                poi_query="카페",
+                priority=1,
+                required=True,
+            )
+        ],
+        Location(label="홍대입구역", lat=37.5572, lng=126.9245),
+        user_text="홍대 가서 카페에서 과제를 하고 싶어",
+    )
+
+    assert [candidate.name for candidate in generic_candidates] == ["조용한 커피집"]
+
+    explicit_candidates = search_poi_candidates(
+        [
+            Task(
+                kind="recovery",
+                label="보드게임 카페",
+                poi_query="보드게임 카페",
+                priority=1,
+                required=True,
+            )
+        ],
+        Location(label="홍대입구역", lat=37.5572, lng=126.9245),
+        user_text="홍대에서 보드게임 카페 가고 싶어",
+    )
+
+    assert [candidate.name for candidate in explicit_candidates] == ["빌보드게임카페"]
+
+
 def test_named_scenic_waypoint_prefers_actual_place_over_event(monkeypatch) -> None:
     from tools import kakao_local
 

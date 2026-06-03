@@ -23,6 +23,37 @@ POI_VALIDATION_SCHEMA = {
 PRINT_MARKERS = ["인쇄", "출력", "프린트", "프린터", "복사", "제본", "스캔"]
 CAFE_MARKERS = ["카페", "커피", "coffee", "cafe"]
 RESTFUL_PLACE_MARKERS = ["만화카페", "만화방", "북카페", "서점", "도서"]
+SPECIAL_CAFE_MARKERS = [
+    "보드게임",
+    "보드게임카페",
+    "만화카페",
+    "만화방",
+    "북카페",
+    "스터디카페",
+    "룸카페",
+    "키즈카페",
+    "애견카페",
+    "고양이카페",
+    "타로카페",
+    "낚시카페",
+    "멀티방",
+    "파티룸",
+    "vr",
+]
+GENERIC_CAFE_REQUEST_MARKERS = [
+    "카페",
+    "커피",
+    "커피숍",
+    "coffee",
+    "cafe",
+    "카공",
+    "노트북",
+    "과제",
+    "공부",
+    "작업",
+    "조용",
+    "커피한잔",
+]
 SCENIC_PLACE_MARKERS = ["공원", "숲", "산책", "호수", "관광명소", "명소", "여행"]
 EVENT_MARKERS = ["축제", "이벤트", "행사"]
 CLINIC_MARKERS = ["병원", "의료", "의원", "내과", "외과", "약국"]
@@ -76,7 +107,20 @@ def _rule_match(document: dict, task: Task, user_text: str) -> bool | None:
             return False
         if _has_any(candidate_combined, ["다이소", "마트", "편의점", "생활용품"]):
             return False
-        if _has_any(candidate_combined, CAFE_MARKERS + RESTFUL_PLACE_MARKERS):
+        if _is_special_cafe_request(task, user_text):
+            if _has_any(candidate_combined, SPECIAL_CAFE_MARKERS):
+                return True
+            if _has_any(candidate_combined, CAFE_MARKERS):
+                return False
+        if _is_generic_cafe_request(task, user_text):
+            if _has_any(candidate_combined, SPECIAL_CAFE_MARKERS):
+                return False
+            if _has_any(candidate_combined, CAFE_MARKERS):
+                return True
+        if _has_any(
+            candidate_combined,
+            CAFE_MARKERS + RESTFUL_PLACE_MARKERS + SPECIAL_CAFE_MARKERS,
+        ):
             return True
         if _has_any(candidate_combined, SCENIC_PLACE_MARKERS) and (
             _has_any(_normalize(user_text), ["산책", "걷", "예쁜길", "지나서", "거쳐"])
@@ -124,6 +168,18 @@ def _rule_match(document: dict, task: Task, user_text: str) -> bool | None:
         return None
 
     return None
+
+
+def _is_special_cafe_request(task: Task, user_text: str) -> bool:
+    text = _normalize(" ".join([task.label, task.poi_query, user_text]))
+    return _has_any(text, SPECIAL_CAFE_MARKERS)
+
+
+def _is_generic_cafe_request(task: Task, user_text: str) -> bool:
+    text = _normalize(" ".join([task.label, task.poi_query, user_text]))
+    if not _has_any(text, GENERIC_CAFE_REQUEST_MARKERS):
+        return False
+    return not _has_any(text, SPECIAL_CAFE_MARKERS + PRINT_MARKERS)
 
 
 def _llm_match(document: dict, task: Task, user_text: str) -> bool | None:
