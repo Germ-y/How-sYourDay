@@ -10,6 +10,7 @@ import {
   Clock3,
   Coffee,
   Building2,
+  ExternalLink,
   Home,
   HeartPulse,
   Leaf,
@@ -3819,7 +3820,7 @@ function PreferenceDeck({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
+          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2">
             {preferenceDisplayTags(active, visiblePoints, votes).map((tag) => (
               <span
                 className="rounded-lg bg-[#fff9ed] px-2.5 py-1 text-xs font-semibold text-ink/50"
@@ -3828,9 +3829,11 @@ function PreferenceDeck({
                 {tag}
               </span>
             ))}
-            {active.placeUrl ? (
+          </div>
+          {active.placeUrl ? (
+            <div className="px-4 pb-3">
               <a
-                className="rounded-lg bg-[#fde2ef] px-2.5 py-1 text-xs font-semibold text-tide"
+                className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-tide ring-1 ring-tide/24 transition hover:bg-[#fff7fb] active:scale-[0.98]"
                 href={active.placeUrl}
                 rel="noreferrer"
                 target="_blank"
@@ -3838,9 +3841,10 @@ function PreferenceDeck({
                 onPointerDown={(event) => event.stopPropagation()}
               >
                 자세히 보기
+                <ExternalLink size={13} aria-hidden />
               </a>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
