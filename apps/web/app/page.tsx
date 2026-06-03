@@ -3067,7 +3067,7 @@ function MobilePlanResult({
             onClick={() => handleFeedback(false)}
           >
             {feedbackChoice === "disliked" ? <CheckCircle2 size={16} aria-hidden /> : null}
-            {feedbackChoice === "disliked" ? "저장됨" : "별로였어요"}
+            {feedbackChoice === "disliked" ? "반영됨" : "별로였어요"}
           </button>
         </div>
       </section>
@@ -3599,8 +3599,7 @@ function selectRouteInPlan(plan: DailyPlan, routeId: string): DailyPlan {
   };
 }
 
-function buildRouteTimeline(route: RouteCandidate): TimelineItem[] {
-  const startMinutes = 14 * 60;
+function buildRouteTimeline(route: RouteCandidate, startMinutes = currentKstMinutes()): TimelineItem[] {
   const routeMinutes = routeDurationMinutes(route);
   const travelStep = Math.max(8, Math.floor(routeMinutes / Math.max(1, route.stops.length + 1)));
   let currentMinutes = startMinutes;
@@ -3690,7 +3689,11 @@ function formatTimelineMinutes(totalMinutes: number) {
 }
 
 function TimelineList({ route }: { route: RouteCandidate }) {
-  const timeline = buildRouteTimeline(route);
+  const [startMinutes] = useState(() => currentKstMinutes());
+  const timeline = useMemo(
+    () => buildRouteTimeline(route, startMinutes),
+    [route, startMinutes]
+  );
 
   return (
     <ol className="grid gap-2">
@@ -3730,6 +3733,18 @@ function TimelineList({ route }: { route: RouteCandidate }) {
       ))}
     </ol>
   );
+}
+
+function currentKstMinutes() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    hourCycle: "h23",
+    minute: "2-digit",
+    timeZone: "Asia/Seoul"
+  }).formatToParts(new Date());
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  return hour * 60 + minute;
 }
 
 function timelineTypeLabel(type: string) {

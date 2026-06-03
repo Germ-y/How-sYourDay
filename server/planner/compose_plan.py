@@ -1,3 +1,6 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from api.schemas import (
     Coordinate,
     EmotionCost,
@@ -18,6 +21,9 @@ from planner.evaluate_tradeoffs import TradeoffEvaluation
 from tools.extract_intent import ExtractedIntent
 
 
+KST = ZoneInfo("Asia/Seoul")
+
+
 def compose_plan(
     intent: ExtractedIntent,
     routes: list[RouteCandidate],
@@ -25,8 +31,9 @@ def compose_plan(
 ) -> PlanResponse:
     selected_route = evaluation.selected_route
     selected_score = evaluation.selected_score
-    ordered_stops = _ordered_stops(selected_route)
-    timeline = _timeline(selected_route)
+    start_minutes = _current_kst_minutes()
+    ordered_stops = _ordered_stops(selected_route, start_minutes)
+    timeline = _timeline(selected_route, start_minutes)
     recommendations = _recommendations(intent, selected_route)
     map_overlays = _map_view_model(routes, selected_route, evaluation)
     explanation = _explanation(evaluation, selected_score)
@@ -59,14 +66,14 @@ def compose_plan(
     )
 
 
-def _ordered_stops(route: RouteCandidate) -> list[OrderedStop]:
-    ordered_stops, _ = _route_timing(route)
+def _ordered_stops(route: RouteCandidate, start_minutes: int) -> list[OrderedStop]:
+    ordered_stops, _ = _route_timing(route, start_minutes)
     return ordered_stops
 
 
-def _route_timing(route: RouteCandidate) -> tuple[list[OrderedStop], int]:
+def _route_timing(route: RouteCandidate, start_minutes: int) -> tuple[list[OrderedStop], int]:
     stops = []
-    current_minutes = 14 * 60
+    current_minutes = start_minutes
     travel_step = max(8, _route_duration(route) // max(1, len(route.stops) + 1))
 
     for stop in route.stops:
@@ -88,11 +95,11 @@ def _route_timing(route: RouteCandidate) -> tuple[list[OrderedStop], int]:
     return stops, current_minutes
 
 
-def _timeline(route: RouteCandidate) -> list[TimelineItem]:
-    ordered_stops, final_arrival_minutes = _route_timing(route)
+def _timeline(route: RouteCandidate, start_minutes: int) -> list[TimelineItem]:
+    ordered_stops, final_arrival_minutes = _route_timing(route, start_minutes)
     items = [
         TimelineItem(
-            time="14:00",
+            time=_format_minutes(start_minutes),
             label=f"출발지에서 {_route_provider_label(route)} 경로로 이동을 시작해요.",
             type="depart",
         )
@@ -113,6 +120,11 @@ def _timeline(route: RouteCandidate) -> list[TimelineItem]:
         )
     )
     return items
+
+
+def _current_kst_minutes() -> int:
+    now = datetime.now(KST)
+    return now.hour * 60 + now.minute
 
 
 def _recommendations(
