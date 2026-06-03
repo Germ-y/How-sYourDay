@@ -1096,13 +1096,17 @@ export default function HomePage() {
 
   function handlePoiVote(id: string, vote: PreferenceVote) {
     const point = preferencePoints.find((item) => item.id === id);
+    const pendingBeforeVote = preferencePoints.filter(
+      (item) => !poiVotes[item.id]
+    ).length;
     setPoiVotes((current) => ({
       ...current,
       [id]: vote
     }));
-    setPoiPreferenceIndex(
-      (current) => (current + 1) % Math.max(1, preferencePoints.length)
-    );
+    setPoiPreferenceIndex((current) => {
+      const remaining = Math.max(0, pendingBeforeVote - 1);
+      return remaining === 0 ? 0 : Math.min(current, remaining - 1);
+    });
     if (point) {
       void savePlacePreference({
         poi_provider_id: point.id,
@@ -1118,8 +1122,9 @@ export default function HomePage() {
   }
 
   function handlePoiSkip() {
+    const pendingCount = preferencePoints.filter((item) => !poiVotes[item.id]).length;
     setPoiPreferenceIndex(
-      (current) => (current + 1) % Math.max(1, preferencePoints.length)
+      (current) => (current + 1) % Math.max(1, pendingCount)
     );
   }
 
@@ -1136,10 +1141,11 @@ export default function HomePage() {
     [nearbyPreferencePoints]
   );
   useEffect(() => {
-    if (poiPreferenceIndex >= preferencePoints.length) {
+    const pendingCount = preferencePoints.filter((item) => !poiVotes[item.id]).length;
+    if (poiPreferenceIndex >= pendingCount) {
       setPoiPreferenceIndex(0);
     }
-  }, [poiPreferenceIndex, preferencePoints.length]);
+  }, [poiPreferenceIndex, preferencePoints, poiVotes]);
   const primaryLabel = isLoading ? "경로 계산 중" : "경로 추천";
 
   if (!authChecked) {
@@ -1875,6 +1881,20 @@ function PreferenceEmptyDeck() {
       <h2 className="mt-4 text-xl font-semibold">가져온 장소가 없어요</h2>
       <p className="mt-2 text-sm leading-6 text-ink/54 [word-break:keep-all]">
         내 주변 실제 장소를 불러오면 바로 스와이프를 시작할 수 있어요.
+      </p>
+    </article>
+  );
+}
+
+function PreferenceCompleteDeck({ judgedCount }: { judgedCount: number }) {
+  return (
+    <article className="order-1 rounded-[24px] border border-ink/8 bg-white p-5 text-center shadow-[0_18px_48px_rgba(23,26,24,0.07)]">
+      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fde2ef] text-tide">
+        <CheckCircle2 size={22} aria-hidden />
+      </span>
+      <h2 className="mt-4 text-xl font-semibold">이번 장소는 다 골랐어요</h2>
+      <p className="mt-2 text-sm leading-6 text-ink/54 [word-break:keep-all]">
+        {judgedCount}개의 선택이 저장됐고, 지도와 경로 후보에 취향으로 반영됩니다.
       </p>
     </article>
   );
@@ -3676,17 +3696,15 @@ function PreferenceDeck({
   onSkip: () => void;
   onVote: (id: string, vote: PreferenceVote) => void;
 }) {
-  if (points.length === 0) {
-    return <PreferenceEmptyDeck />;
-  }
-
-  const visiblePoints = points;
-  const active = visiblePoints[activeIndex % visiblePoints.length];
-  const Icon = active.icon;
-  const liked = visiblePoints.filter((item) => votes[item.id] === "like");
-  const disliked = visiblePoints.filter((item) => votes[item.id] === "dislike");
-  const affected = visiblePoints.filter(
-    (item) => resolvePreferenceSignal(item, visiblePoints, votes) !== null
+  const visiblePoints = points.filter((point) => !votes[point.id]);
+  const active = visiblePoints[activeIndex % Math.max(1, visiblePoints.length)];
+  const judgedPoints = points.filter(
+    (item) => votes[item.id] === "like" || votes[item.id] === "dislike"
+  );
+  const liked = points.filter((item) => votes[item.id] === "like");
+  const disliked = points.filter((item) => votes[item.id] === "dislike");
+  const affected = points.filter(
+    (item) => resolvePreferenceSignal(item, points, votes) !== null
   );
   const [dragStartX, setDragStartX] = useState<number | null>(null);
   const [dragX, setDragX] = useState(0);
@@ -3696,7 +3714,17 @@ function PreferenceDeck({
     setDragStartX(null);
     setDragX(0);
     setLeavingVote(null);
-  }, [active.id]);
+  }, [active?.id]);
+
+  if (points.length === 0) {
+    return <PreferenceEmptyDeck />;
+  }
+
+  if (!active) {
+    return <PreferenceCompleteDeck judgedCount={judgedPoints.length} />;
+  }
+
+  const Icon = active.icon;
 
   function commitSwipe(vote: PreferenceVote) {
     setLeavingVote(vote);
@@ -3877,7 +3905,7 @@ function PreferenceDeck({
           {visiblePoints.map((item, index) => (
             <span
               className={`h-1.5 rounded-full transition-all ${
-                index === activeIndex ? "w-5 bg-tide" : "w-1.5 bg-ink/14"
+                index === activeIndex % visiblePoints.length ? "w-5 bg-tide" : "w-1.5 bg-ink/14"
               }`}
               key={item.id}
             />
