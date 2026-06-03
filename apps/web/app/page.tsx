@@ -189,6 +189,12 @@ type PreferencePoint = {
   name: string;
   kind: string;
   detail: string;
+  address: string | null;
+  categoryName: string | null;
+  categoryGroupName: string | null;
+  phone: string | null;
+  placeUrl: string | null;
+  distanceMeters: number | null;
   icon: LucideIcon;
   tags: string[];
   lat: number;
@@ -3749,7 +3755,7 @@ function PreferenceDeck({
         </button>
       </div>
 
-      <div className="relative mt-4 h-[430px] rounded-[24px] bg-[#fff9ed] p-3 shadow-[inset_0_0_0_1px_rgba(217,120,166,0.10)]">
+      <div className="relative mt-4 h-[500px] rounded-[24px] bg-[#fff9ed] p-3 shadow-[inset_0_0_0_1px_rgba(217,120,166,0.10)]">
         <div className="absolute inset-x-8 bottom-5 top-7 rotate-[-5deg] rounded-2xl bg-white/60 ring-1 ring-ink/5" />
         <div className="absolute inset-x-5 bottom-4 top-5 rotate-[4deg] rounded-2xl bg-white/75 ring-1 ring-ink/6" />
         <div
@@ -3780,7 +3786,7 @@ function PreferenceDeck({
             선호
           </div>
           <PreferenceVisual icon={Icon} point={active} />
-          <div className="flex items-start gap-3 p-4">
+          <div className="flex items-start gap-3 p-4 pb-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#fde2ef] text-tide">
               <Icon size={24} aria-hidden />
             </span>
@@ -3795,6 +3801,24 @@ function PreferenceDeck({
             </div>
           </div>
 
+          <div className="space-y-2 px-4 pb-3">
+            {preferenceInfoRows(active).map((row) => (
+              <div
+                className="flex items-start justify-between gap-3 rounded-xl bg-[#fffdf8] px-3 py-2 text-xs leading-5 text-ink/58 ring-1 ring-ink/6"
+                key={row.label}
+              >
+                <span className="shrink-0 font-semibold text-ink/42">{row.label}</span>
+                <span className="min-w-0 text-right [word-break:keep-all]">{row.value}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="px-4 pb-3">
+            <p className="rounded-xl bg-[#eef8f4] px-3 py-2 text-xs font-medium leading-5 text-moss [word-break:keep-all]">
+              {preferenceLearningHint(active)}
+            </p>
+          </div>
+
           <div className="flex flex-wrap gap-1.5 px-4 pb-4">
             {preferenceDisplayTags(active, visiblePoints, votes).map((tag) => (
               <span
@@ -3804,6 +3828,18 @@ function PreferenceDeck({
                 {tag}
               </span>
             ))}
+            {active.placeUrl ? (
+              <a
+                className="rounded-lg bg-[#fde2ef] px-2.5 py-1 text-xs font-semibold text-tide"
+                href={active.placeUrl}
+                rel="noreferrer"
+                target="_blank"
+                onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                카카오에서 보기
+              </a>
+            ) : null}
           </div>
         </div>
       </div>
@@ -4064,6 +4100,12 @@ function preferencePointFromCandidate(candidate: PoiCandidate): PreferencePoint 
     name: candidate.name,
     kind: landmarkLabel(candidate),
     detail: pointDetail(candidate),
+    address: candidate.address ?? null,
+    categoryName: candidate.category_name ?? null,
+    categoryGroupName: candidate.category_group_name ?? null,
+    phone: candidate.phone ?? null,
+    placeUrl: candidate.place_url ?? null,
+    distanceMeters: candidate.distance_meters,
     icon: iconForLandmark(candidate.landmark_type, candidate.category),
     tags: pointTags(candidate),
     lat: candidate.lat,
@@ -4182,6 +4224,40 @@ function pointDetail(candidate: PoiCandidate) {
       : `약 ${Math.round(candidate.distance_meters)}m`;
 
   return `${source} · ${distance}`;
+}
+
+function preferenceInfoRows(point: PreferencePoint) {
+  return [
+    { label: "분류", value: compactCategoryPath(point) },
+    { label: "위치", value: compactAddress(point.address) },
+    point.phone ? { label: "전화", value: point.phone } : null
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+}
+
+function compactCategoryPath(point: PreferencePoint) {
+  const category = point.categoryName || point.categoryGroupName || point.kind;
+  const parts = category
+    .split(">")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    return parts.slice(-2).join(" · ");
+  }
+  return parts[0] || point.kind;
+}
+
+function compactAddress(address: string | null) {
+  if (!address) {
+    return "주소 정보 없음";
+  }
+  const parts = address.split(/\s+/).filter(Boolean);
+  return parts.length > 4 ? parts.slice(0, 4).join(" ") : address;
+}
+
+function preferenceLearningHint(point: PreferencePoint) {
+  const distance =
+    point.distanceMeters === null ? "내 주변 후보" : `현재 위치에서 약 ${Math.round(point.distanceMeters)}m`;
+  return `${distance}. 선택하면 비슷한 ${point.kind} 장소를 경로 후보에 더 잘 반영해요.`;
 }
 
 function pointTags(candidate: PoiCandidate) {
