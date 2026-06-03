@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -19,6 +20,8 @@ PREFERENCE_QUERIES = [
     ("culture", "문화시설", "commercial"),
     ("transit", "지하철역", "transit_hub"),
 ]
+_PREFERENCE_DOCUMENT_CACHE: dict[str, list[dict]] = {}
+_PREFERENCE_DOCUMENT_CACHE_LIMIT = 180
 
 
 def search_preference_points(
@@ -30,24 +33,49 @@ def search_preference_points(
         return []
 
     points_by_id: dict[str, PoiCandidate] = {}
-    for category, query, fallback_landmark_type in PREFERENCE_QUERIES:
-        for document in _fetch_preference_documents(
-            api_key,
-            query,
-            origin,
-            radius_meters,
-        ):
-            provider_id = str(document.get("id") or "")
-            if not provider_id or provider_id in points_by_id:
-                continue
+    with ThreadPoolExecutor(max_workers=min(6, len(PREFERENCE_QUERIES))) as executor:
+        results = executor.map(
+            lambda item: (
+                item[0],
+                item[2],
+                _fetch_preference_documents(api_key, item[1], origin, radius_meters),
+            ),
+            PREFERENCE_QUERIES,
+        )
 
-            points_by_id[provider_id] = _normalize_preference_document(
-                document,
-                category,
-                fallback_landmark_type,
-            )
+        for category, fallback_landmark_type, documents in results:
+            for document in documents:
+                provider_id = str(document.get("id") or "")
+                if not provider_id or provider_id in points_by_id:
+                    continue
+
+                points_by_id[provider_id] = _normalize_preference_document(
+                    document,
+                    category,
+                    fallback_landmark_type,
+                )
 
     return list(points_by_id.values())[:_result_limit(radius_meters)]
+
+
+def _remember_preference_documents(cache_key: str, documents: list[dict]) -> None:
+    if len(_PREFERENCE_DOCUMENT_CACHE) >= _PREFERENCE_DOCUMENT_CACHE_LIMIT:
+        _PREFERENCE_DOCUMENT_CACHE.pop(next(iter(_PREFERENCE_DOCUMENT_CACHE)))
+    _PREFERENCE_DOCUMENT_CACHE[cache_key] = documents
+
+
+def _preference_cache_key(query: str, origin: Location, radius_meters: int) -> str:
+    return json.dumps(
+        {
+            "query": query,
+            "lat": round(origin.lat, 4),
+            "lng": round(origin.lng, 4),
+            "radius": radius_meters,
+            "size": _query_size(radius_meters),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
 
 
 def _fetch_preference_documents(
@@ -56,6 +84,10 @@ def _fetch_preference_documents(
     origin: Location,
     radius_meters: int,
 ) -> list[dict]:
+    cache_key = _preference_cache_key(query, origin, radius_meters)
+    if cache_key in _PREFERENCE_DOCUMENT_CACHE:
+        return _PREFERENCE_DOCUMENT_CACHE[cache_key]
+
     params = {
         "query": query,
         "x": origin.lng,
@@ -74,7 +106,11 @@ def _fetch_preference_documents(
         return []
 
     documents = payload.get("documents", [])
-    return documents if isinstance(documents, list) else []
+    if not isinstance(documents, list):
+        return []
+
+    _remember_preference_documents(cache_key, documents)
+    return documents
 
 
 def _query_size(radius_meters: int) -> int:
