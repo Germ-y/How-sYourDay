@@ -1882,8 +1882,8 @@ function ServiceTopBar({
           type="button"
           onClick={() => onChange("planner")}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white text-tide shadow-sm ring-1 ring-ink/8 sm:h-10 sm:w-10">
-            <LogoMark className="h-6 w-6" />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-tide shadow-sm ring-1 ring-ink/8 sm:h-10 sm:w-10">
+            <LogoMark className="h-8 w-8 sm:h-9 sm:w-9" />
           </span>
           <span className="min-w-0">
             <span className="block text-sm font-semibold leading-4">How's Your Day</span>
