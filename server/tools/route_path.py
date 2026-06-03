@@ -80,35 +80,103 @@ def _stop_variants(
     emotion: EmotionState | None,
     optional_stops: list[PoiCandidate],
 ) -> list[tuple[str, list[PoiCandidate]]]:
-    base_required_stops = [
-        stop for stop in required_stops if stop.category != "recovery"
+    required_groups = _stop_groups(required_stops)
+    required_combinations = _group_combinations(required_groups, max_variants=12)
+    if not required_combinations:
+        required_combinations = [[]]
+
+    variants = [
+        (
+            _required_variant_suffix(required_groups, required_combinations, index),
+            combination,
+        )
+        for index, combination in enumerate(required_combinations, start=1)
     ]
 
-    required_recovery_candidates = _unique_stops(
-        stop for stop in required_stops if stop.category == "recovery"
-    )[:3]
-
-    if required_recovery_candidates:
-        if len(required_recovery_candidates) == 1:
-            return [("base", [*base_required_stops, required_recovery_candidates[0]])]
-        return [
-            (f"recovery-{index}", [*base_required_stops, recovery_stop])
-            for index, recovery_stop in enumerate(required_recovery_candidates, start=1)
-        ]
-
-    variants = [("base", base_required_stops)]
     if emotion and emotion.time_pressure_tolerance == "high":
         return variants
 
     if not emotion:
         return variants
 
-    optional_recovery_candidates = _unique_stops(
-        stop for stop in optional_stops if stop.category == "recovery"
-    )[:2]
-    for index, recovery_stop in enumerate(optional_recovery_candidates, start=1):
-        variants.append((f"recovery-{index}", [*base_required_stops, recovery_stop]))
+    optional_groups = _stop_groups(optional_stops)
+    optional_combinations = _group_combinations(optional_groups, max_variants=4)
+    if not optional_combinations:
+        return variants
+
+    base_variants = list(variants)
+    for base_index, (_, base_stops) in enumerate(base_variants, start=1):
+        for optional_index, optional_combo in enumerate(optional_combinations, start=1):
+            if not optional_combo:
+                continue
+            variants.append(
+                (
+                    f"optional-{base_index}-{optional_index}",
+                    [*base_stops, *optional_combo],
+                )
+            )
+            if len(variants) >= 12:
+                return variants
+
     return variants
+
+
+def _stop_groups(stops: list[PoiCandidate]) -> list[list[PoiCandidate]]:
+    groups: dict[str, list[PoiCandidate]] = {}
+    order: dict[str, int] = {}
+
+    for index, stop in enumerate(stops):
+        key = _stop_task_key(stop, index)
+        groups.setdefault(key, []).append(stop)
+        priority = stop.task_priority if stop.task_priority is not None else index + 1000
+        order[key] = min(order.get(key, priority), priority)
+
+    return [
+        _unique_stops(groups[key])[:3]
+        for key in sorted(groups, key=lambda value: order[value])
+    ]
+
+
+def _required_variant_suffix(
+    groups: list[list[PoiCandidate]],
+    combinations: list[list[PoiCandidate]],
+    index: int,
+) -> str:
+    if len(combinations) == 1:
+        return "base"
+    if len(groups) == 1 and groups[0] and groups[0][0].category == "recovery":
+        return f"recovery-{index}"
+    return f"required-{index}"
+
+
+def _stop_task_key(stop: PoiCandidate, index: int) -> str:
+    if stop.task_key:
+        return stop.task_key
+    return f"legacy:{stop.category}"
+
+
+def _group_combinations(
+    groups: list[list[PoiCandidate]],
+    max_variants: int,
+) -> list[list[PoiCandidate]]:
+    if not groups:
+        return []
+
+    combinations: list[list[PoiCandidate]] = [[]]
+    for group in groups:
+        if not group:
+            continue
+        next_combinations: list[list[PoiCandidate]] = []
+        for prefix in combinations:
+            for stop in group:
+                next_combinations.append([*prefix, stop])
+                if len(next_combinations) >= max_variants:
+                    break
+            if len(next_combinations) >= max_variants:
+                break
+        combinations = next_combinations
+
+    return combinations[:max_variants]
 
 
 def _unique_stops(stops) -> list[PoiCandidate]:

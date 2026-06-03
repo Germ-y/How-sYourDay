@@ -114,11 +114,14 @@ def _with_task_metadata(
     candidates: list[PoiCandidate],
     task: Task,
 ) -> list[PoiCandidate]:
+    task_key = _task_key(task)
     return [
         candidate.model_copy(
             update={
                 "category": task.kind,
                 "required": task.required,
+                "task_key": task_key,
+                "task_priority": task.priority,
             }
         )
         for candidate in candidates
@@ -336,6 +339,8 @@ def _location_candidate_to_poi(location, task: Task) -> PoiCandidate:
         distance_meters=location.distance_meters,
         source_confidence=location.source,
         required=task.required,
+        task_key=_task_key(task),
+        task_priority=task.priority,
     )
 
 
@@ -382,7 +387,12 @@ def _normalize_text(value: str) -> str:
 
 
 def _task_candidate_limit(task: Task) -> int:
-    return 3 if task.kind == "recovery" else 1
+    return 3
+
+
+def _task_key(task: Task) -> str:
+    query = _normalize_text(task.poi_query or task.label)
+    return f"{task.priority}:{task.kind}:{query}"
 
 
 def _dedupe_poi_candidates(candidates: list[PoiCandidate]) -> list[PoiCandidate]:
@@ -417,6 +427,10 @@ def _task_search_anchors(
             return [destination, midpoint, origin]
         return [midpoint, origin, destination]
 
+    if destination is not None:
+        midpoint = _route_midpoint(origin, destination)
+        return [midpoint, origin, destination]
+
     return [origin]
 
 
@@ -426,7 +440,7 @@ def _route_relevant_candidates(
     origin: Location,
     destination: Location | None,
 ) -> list[PoiCandidate]:
-    if destination is None or task.kind not in {"recovery", "place"}:
+    if destination is None:
         return candidates
 
     filtered = [
@@ -434,7 +448,7 @@ def _route_relevant_candidates(
         for candidate in candidates
         if _is_near_route_corridor(candidate, origin, destination)
     ]
-    return filtered
+    return filtered or candidates
 
 
 def _place_query_matches_candidate(query: str, candidate_combined: str) -> bool:

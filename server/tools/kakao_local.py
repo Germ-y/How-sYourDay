@@ -51,7 +51,7 @@ def search_kakao_poi_candidates(
 
 
 def _candidate_limit(task: Task) -> int:
-    return 3 if task.kind == "recovery" else 1
+    return 3
 
 
 def _fetch_kakao_documents(

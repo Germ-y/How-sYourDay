@@ -68,7 +68,7 @@ import {
 
 const starterText = "";
 
-type WaypointCategoryValue = "cafe" | "walk" | "rest" | "errand" | "meal" | "photo";
+type WaypointCategoryValue = "cafe" | "rest" | "errand" | "meal" | "photo";
 
 const WAYPOINT_CATEGORY_OPTIONS: Array<{
   label: string;
@@ -78,7 +78,6 @@ const WAYPOINT_CATEGORY_OPTIONS: Array<{
   icon: LucideIcon;
 }> = [
   { label: "카페", value: "cafe", hint: "작업/휴식 카페", placeholder: "예: 스타벅스, 조용한 카페", icon: Coffee },
-  { label: "산책", value: "walk", hint: "산책할 곳", placeholder: "예: 공원, 산책로", icon: Leaf },
   { label: "쉼", value: "rest", hint: "잠깐 쉴 곳", placeholder: "예: 벤치 있는 공원, 조용한 곳", icon: HeartPulse },
   { label: "볼일", value: "errand", hint: "볼일 장소", placeholder: "예: 약국, 다이소, 올리브영", icon: MapPin },
   { label: "사진", value: "photo", hint: "사진 찍기", placeholder: "예: 인생네컷, 포토이즘", icon: Camera },
@@ -295,12 +294,11 @@ export default function HomePage() {
           editedWaypoints,
           deletedWaypoints
         ),
-        ...collectTextWaypointHints(text),
         ...customWaypoints
           .map(customWaypointToHint)
           .filter(Boolean)
       ]),
-    [customWaypoints, deletedWaypoints, editedWaypoints, previewInsights, text]
+    [customWaypoints, deletedWaypoints, editedWaypoints, previewInsights]
   );
   const quickSavedPlaces = useMemo(
     () => buildQuickSavedPlaces(savedPlaces),
@@ -429,11 +427,18 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    setPreviewInsights(
-      buildLocalPreviewInsights(text, originText, destinationText, activeMood)
-    );
-    setSuggestedMoodLabels(buildLocalMoodLabels(text));
-    setPreviewSource("local");
+
+    if (!text.trim()) {
+      setPreviewInsights(defaultPreviewInsights());
+      setSuggestedMoodLabels([]);
+      setPreviewSource("rules");
+      setIsPreviewLoading(false);
+      return;
+    }
+
+    setPreviewInsights(defaultPreviewInsights());
+    setSuggestedMoodLabels([]);
+    setPreviewSource("rules");
     setIsPreviewLoading(true);
     const timer = window.setTimeout(async () => {
       try {
@@ -454,11 +459,9 @@ export default function HomePage() {
         }
       } catch {
         if (!cancelled) {
-          setPreviewInsights(
-            buildLocalPreviewInsights(text, originText, destinationText, activeMood)
-          );
-          setSuggestedMoodLabels(buildLocalMoodLabels(text));
-          setPreviewSource("local");
+          setPreviewInsights(defaultPreviewInsights());
+          setSuggestedMoodLabels([]);
+          setPreviewSource("rules");
         }
       } finally {
         if (!cancelled) {
@@ -4781,40 +4784,22 @@ function shouldSearchLocationInput(query: string) {
   return query.length >= 2 || ["집", "학교", "회사"].includes(query);
 }
 
-function buildMoodCandidates(input: string, suggestedLabels: string[] = []) {
-  const normalized = input.toLowerCase();
+function buildMoodCandidates(_input: string, suggestedLabels: string[] = []) {
   const suggestedSet = new Set(
     suggestedLabels.filter((label) => MOOD_PRESETS.some((mood) => mood.label === label))
   );
   const suggestedIsOnlyDefault =
     suggestedSet.size > 0 &&
     Array.from(suggestedSet).every((label) => DEFAULT_MOOD_LABELS.includes(label));
-  const scored = MOOD_PRESETS.map((mood, index) => {
-    const keywordScore = mood.keywords.reduce(
-      (score, keyword) => score + (normalized.includes(keyword.toLowerCase()) ? 4 : 0),
-      0
-    );
-    const suggestedIndex = suggestedLabels.indexOf(mood.label);
-    const suggestedScore = suggestedIndex >= 0 ? 40 - suggestedIndex : 0;
-    return {
-      mood,
-      score: suggestedScore + keywordScore,
-      keywordScore,
-      index
-    };
-  });
-  const hasKeywordSignal = scored.some((item) => item.keywordScore > 0);
-  const hasLlmSignal = suggestedSet.size > 0 && !suggestedIsOnlyDefault;
 
-  if (!hasKeywordSignal && !hasLlmSignal) {
+  if (!suggestedSet.size || suggestedIsOnlyDefault) {
     return [];
   }
 
-  const selected = scored
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, 4)
-    .map((item) => item.mood);
+  const selected = suggestedLabels
+    .map((label) => MOOD_PRESETS.find((mood) => mood.label === label))
+    .filter((mood): mood is (typeof MOOD_PRESETS)[number] => Boolean(mood))
+    .slice(0, 4);
   const labels = selected.map((mood) => mood.label);
 
   DEFAULT_MOOD_LABELS.forEach((label) => {

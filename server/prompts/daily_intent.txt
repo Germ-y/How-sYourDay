@@ -181,6 +181,10 @@ Use null for deadline when the time is vague.
 "3시에 친구 보기로" means deadline may be "15:00".
 "18시 전 도착" means deadline is "18:00".
 "5시까지" means deadline is "17:00".
+"약속까지 1시간 반 남았어" means current KST time plus 90 minutes.
+"2시간 남았어" means current KST time plus 120 minutes when it clearly refers to an appointment/deadline.
+"30분 남았어" means current KST time plus 30 minutes.
+Never infer a deadline from unrelated numbers in addresses, building numbers, exits, bus numbers, or apartment units such as "106동", "3번 출구", or "1번 버스".
 "2시간 안에" is a time constraint but not an exact clock deadline.
 "늦지 않게" indicates time pressure even if deadline is null.
 destination is usually null here.

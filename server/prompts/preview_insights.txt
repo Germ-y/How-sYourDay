@@ -120,6 +120,11 @@ Examples:
 "2시간 안 도착 고려"
 Do not show "시간 조건 감지" if a more specific time can be inferred.
 Use KST runtime context for relative terms.
+Relative remaining-time phrases are clock deadlines.
+If user_text says "약속까지 1시간 반 남았어", compute current KST time plus 90 minutes and output that HH:MM.
+If user_text says "약속까지 2시간 남음", compute current KST time plus 120 minutes.
+If user_text says "30분 남았어", compute current KST time plus 30 minutes.
+Do not infer 18:00 from unrelated digits in addresses, building numbers, exits, bus numbers, or apartment units such as "106동", "3번 출구", or "1번 버스".
 Do not output the runtime date itself.
 
 Condition Card Rules
