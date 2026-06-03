@@ -227,7 +227,7 @@ def _repair_preview_insights(
     if not insights:
         return None
 
-    repaired = list(insights)
+    repaired = [_clean_preview_insight(insight) for insight in insights]
     route_value = f"{origin or '출발지'} → {destination or '도착지'}"
     if repaired[0].kind != "route":
         repaired.insert(
@@ -290,11 +290,12 @@ def _repair_preview_insights(
     )
     _ensure_mood_insight(repaired, mood_label)
 
-    existing_values = {_normalize(insight.value) for insight in repaired}
+    existing_keys = {_insight_identity(insight) for insight in repaired}
     for stop_insight in _stop_insights(text, destination):
-        if _normalize(stop_insight.value) in existing_values:
+        key = _insight_identity(stop_insight)
+        if key in existing_keys:
             continue
-        existing_values.add(_normalize(stop_insight.value))
+        existing_keys.add(key)
         repaired.append(stop_insight)
 
     unique: list[PreviewInsight] = []
@@ -496,12 +497,39 @@ def _limit_insights(insights: list[PreviewInsight]) -> list[PreviewInsight]:
     return insights[:12]
 
 
+def _clean_preview_insight(insight: PreviewInsight) -> PreviewInsight:
+    if insight.kind not in {"stop", "task"}:
+        return insight
+    return PreviewInsight(
+        label=insight.label,
+        value=_clean_waypoint_display_value(insight.value),
+        kind=insight.kind,
+        strength=insight.strength or "none",
+    )
+
+
 def _insight_identity(insight: PreviewInsight) -> str:
     if insight.kind in {"stop", "task"}:
-        value = re.sub(r"\s*주변(?:\s*산책)?$", "", insight.value)
-        value = re.sub(r"\s*들르기$", "", value)
-        return f"waypoint:{_normalize(value)}"
+        return f"waypoint:{_normalize(_waypoint_identity_value(insight.value))}"
     return f"{insight.kind}:{_normalize(insight.label)}:{_normalize(insight.value)}"
+
+
+def _waypoint_identity_value(value: str) -> str:
+    cleaned = _clean_waypoint_display_value(value)
+    cleaned = re.sub(r"\s*주변(?:\s*산책)?$", "", cleaned)
+    cleaned = re.sub(r"\s*(?:들르기|들를 곳|가기|방문|후보|확인)$", "", cleaned)
+    return cleaned.strip()
+
+
+def _clean_waypoint_display_value(value: str) -> str:
+    cleaned = value.strip()
+    cleaned = re.sub(
+        r"^(?:아\s*)?(?:친구\s*)?(?:가기\s*전에|전에|만나서|만난\s*뒤|만나고)\s*",
+        "",
+        cleaned,
+    )
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
 
 
 def _default_mood_candidates() -> list[str]:

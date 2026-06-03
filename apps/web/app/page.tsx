@@ -4879,17 +4879,36 @@ function buildFormRouteLabel(originText: string, destinationText: string) {
 }
 
 function previewCueInsights(insights: PreviewInsight[]) {
-  const cues = ensurePreviewMoodCue(insights).filter((insight) => insight.kind !== "route");
+  const cues = ensurePreviewMoodCue(insights)
+    .filter((insight) => insight.kind !== "route")
+    .map(cleanPreviewInsight);
   const seen = new Set<string>();
 
   return cues.filter((insight) => {
-    const key = `${insight.label}:${insight.value}`;
+    const key = previewCueIdentity(insight);
     if (seen.has(key)) {
       return false;
     }
     seen.add(key);
     return true;
   });
+}
+
+function cleanPreviewInsight(insight: PreviewInsight): PreviewInsight {
+  if (!["stop", "task"].includes(insight.kind)) {
+    return insight;
+  }
+  return {
+    ...insight,
+    value: cleanWaypointDisplayValue(insight.value)
+  };
+}
+
+function previewCueIdentity(insight: PreviewInsight) {
+  if (["stop", "task"].includes(insight.kind)) {
+    return `waypoint:${waypointValueIdentity(insight.value)}`;
+  }
+  return `${insight.kind}:${insight.label}:${insight.value}`;
 }
 
 function previewWaypointKey(insight: PreviewInsight, index: number) {
@@ -5223,13 +5242,26 @@ function uniqueWaypointHints(hints: string[]) {
 }
 
 function waypointHintIdentity(hint: string) {
-  return hint
+  return waypointValueIdentity(
+    hint
     .replace(/^(필수|참고)\s*경유:\s*/, "")
     .replace(/^\[[^\]]+\]\s*/, "")
-    .replace(/\s*주변$/, "")
-    .replace(/\s*들르기$/, "")
+  );
+}
+
+function waypointValueIdentity(value: string) {
+  return cleanWaypointDisplayValue(value)
+    .replace(/\s*주변(?:\s*산책)?$/, "")
+    .replace(/\s*(들르기|들를 곳|가기|방문|후보|확인)$/, "")
     .replace(/\s+/g, "")
     .toLowerCase();
+}
+
+function cleanWaypointDisplayValue(value: string) {
+  return value
+    .replace(/^(아\s*)?(친구\s*)?(가기\s*전에|전에|만나서|만난\s*뒤|만나고)\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractLocalWaypointHint(text: string) {

@@ -1203,6 +1203,48 @@ def test_preview_insights_repairs_missing_condition_card_from_llm(monkeypatch) -
     assert any("조용" in insight.value for insight in insights)
 
 
+def test_preview_insights_uses_rules_as_llm_backfill_without_duplicates(
+    monkeypatch,
+) -> None:
+    from tools import preview_insights
+
+    monkeypatch.delenv("HYS_DISABLE_LLM", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(preview_insights, "_post_openai", lambda api_key, payload: {})
+    monkeypatch.setattr(
+        preview_insights,
+        "_response_text",
+        lambda raw: (
+            '{"insights":['
+            '{"label":"경로","value":"성균관대 → 홍대입구역","kind":"route"},'
+            '{"label":"시간","value":"18:00 전 도착 우선","kind":"time"},'
+            '{"label":"거쳐 갈 곳","value":"가기 전에 상도 건영 106동 주변","kind":"stop","strength":"strong"},'
+            '{"label":"들를 곳","value":"다이소 들르기","kind":"task","strength":"weak"},'
+            '{"label":"사진 찍기","value":"인생네컷","kind":"task","strength":"strong"}'
+            "]} "
+        ),
+    )
+
+    insights, source, _ = build_preview_insights(
+        "지금 성균관대야. 홍대입구역 3번 출구 앞에서 친구 만나야 하는데 약속까지 1시간 반 남았어. "
+        "가기 전에 상도 건영 106동에 들러야 해. 늦을까 봐 정신없고, 걷는 건 최대한 줄이고 싶어. "
+        "시간 되면 다이소에서 내일 필요한 공책도 사고 싶어. 아 친구 만나서 인생네컷도 갈거야",
+        None,
+        None,
+        None,
+    )
+
+    waypoint_values = [
+        insight.value for insight in insights if insight.kind in {"stop", "task"}
+    ]
+
+    assert source == "llm"
+    assert waypoint_values.count("상도 건영 106동 주변") == 1
+    assert not any(value.startswith("가기 전에") for value in waypoint_values)
+    assert any("다이소" in value for value in waypoint_values)
+    assert any("인생네컷" in value for value in waypoint_values)
+
+
 def test_preview_insights_detects_named_store_errand(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
