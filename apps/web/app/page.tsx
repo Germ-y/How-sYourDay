@@ -3768,6 +3768,19 @@ function PreferenceDeck({
           onPointerCancel={handlePointerUp}
           style={cardStyle}
         >
+          {active.placeUrl ? (
+            <a
+              className="absolute right-4 top-[124px] z-20 flex h-9 w-9 items-center justify-center rounded-xl bg-white/95 text-tide shadow-[0_8px_20px_rgba(23,26,24,0.10)] ring-1 ring-tide/20 transition hover:bg-[#fff7fb] active:scale-95"
+              href={active.placeUrl}
+              rel="noreferrer"
+              target="_blank"
+              aria-label={`${active.name} 자세히 보기`}
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <ExternalLink size={16} aria-hidden />
+            </a>
+          ) : null}
           <div
             className={`pointer-events-none absolute left-4 top-4 rounded-xl border px-3 py-1 text-sm font-bold transition ${
               dragVote === "dislike" || leavingVote === "dislike"
@@ -3820,7 +3833,7 @@ function PreferenceDeck({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2">
+          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
             {preferenceDisplayTags(active, visiblePoints, votes).map((tag) => (
               <span
                 className="rounded-lg bg-[#fff9ed] px-2.5 py-1 text-xs font-semibold text-ink/50"
@@ -3830,21 +3843,6 @@ function PreferenceDeck({
               </span>
             ))}
           </div>
-          {active.placeUrl ? (
-            <div className="px-4 pb-3">
-              <a
-                className="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-tide ring-1 ring-tide/24 transition hover:bg-[#fff7fb] active:scale-[0.98]"
-                href={active.placeUrl}
-                rel="noreferrer"
-                target="_blank"
-                onClick={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                자세히 보기
-                <ExternalLink size={13} aria-hidden />
-              </a>
-            </div>
-          ) : null}
         </div>
       </div>
 
