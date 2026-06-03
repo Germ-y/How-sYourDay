@@ -410,6 +410,114 @@ def test_recovery_poi_rejects_print_cafe_candidate(monkeypatch) -> None:
     assert [candidate.name for candidate in candidates] == ["조용한 작업 카페"]
 
 
+def test_named_scenic_waypoint_prefers_actual_place_over_event(monkeypatch) -> None:
+    from tools import kakao_local
+
+    monkeypatch.setenv("KAKAO_REST_API_KEY", "test-key")
+    monkeypatch.setattr(
+        kakao_local,
+        "_fetch_kakao_documents",
+        lambda api_key, task, origin: [
+            {
+                "id": "festival",
+                "place_name": "석촌호수벚꽃축제",
+                "category_name": "이슈 > 이벤트 > 페스티벌",
+                "x": "127.09987121843",
+                "y": "37.5098316860962",
+                "distance": "458",
+            },
+            {
+                "id": "lake",
+                "place_name": "석촌호수",
+                "category_name": "여행 > 관광,명소 > 호수",
+                "x": "127.105924",
+                "y": "37.509775",
+                "distance": "620",
+            },
+        ],
+    )
+
+    candidates = search_poi_candidates(
+        [
+            Task(
+                kind="recovery",
+                label="석촌호수 주변",
+                poi_query="석촌호수",
+                priority=1,
+                required=True,
+            )
+        ],
+        Location(label="잠실역", lat=37.5133, lng=127.1001),
+        Location(label="롯데월드몰", lat=37.5137, lng=127.1044),
+        "잠실역에서 석촌호수 지나서 롯데월드몰까지 가고 싶어",
+    )
+
+    assert [candidate.name for candidate in candidates] == ["석촌호수"]
+    assert candidates[0].required is True
+
+
+def test_named_waypoint_location_search_filters_non_place_matches(monkeypatch) -> None:
+    from tools import search_poi
+
+    monkeypatch.setattr(
+        search_poi,
+        "search_location_candidates",
+        lambda query, size=5, current_location=None: [
+            LocationCandidate(
+                label="석촌호수벚꽃축제",
+                address="서울 송파구 삼학사로 136",
+                lat=37.509831,
+                lng=127.099871,
+                source="kakao-keyword",
+                category="이슈 > 이벤트 > 페스티벌",
+                category_name="이슈 > 이벤트 > 페스티벌",
+                provider_id="festival",
+                distance_meters=385,
+            ),
+            LocationCandidate(
+                label="석촌호수수변무대",
+                address="서울 송파구 신천동 32",
+                lat=37.512228,
+                lng=127.105078,
+                source="kakao-keyword",
+                category="문화시설",
+                category_name="문화,예술 > 문화시설 > 공연장,연극극장",
+                provider_id="stage",
+                distance_meters=455,
+            ),
+            LocationCandidate(
+                label="석촌호수 동호",
+                address="서울 송파구 신천동 32",
+                lat=37.5103,
+                lng=127.1048,
+                source="kakao-keyword",
+                category="관광명소",
+                category_name="여행 > 관광,명소 > 호수",
+                provider_id="east-lake",
+                distance_meters=545,
+            ),
+        ],
+    )
+
+    candidates = search_poi.search_poi_candidates(
+        [
+            Task(
+                kind="recovery",
+                label="석촌호수 주변",
+                poi_query="석촌호수",
+                priority=1,
+                required=True,
+            )
+        ],
+        Location(label="잠실역", lat=37.5133, lng=127.1001),
+        Location(label="롯데월드몰", lat=37.5137, lng=127.1044),
+        "잠실역에서 석촌호수 지나서 롯데월드몰까지 가고 싶어",
+    )
+
+    assert [candidate.name for candidate in candidates] == ["석촌호수 동호"]
+    assert candidates[0].required is True
+
+
 def test_recovery_candidates_become_alternative_route_variants() -> None:
     recovery_a = PoiCandidate(
         id="poi-cafe-a",

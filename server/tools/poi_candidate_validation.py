@@ -23,6 +23,8 @@ POI_VALIDATION_SCHEMA = {
 PRINT_MARKERS = ["인쇄", "출력", "프린트", "프린터", "복사", "제본", "스캔"]
 CAFE_MARKERS = ["카페", "커피", "coffee", "cafe"]
 RESTFUL_PLACE_MARKERS = ["만화카페", "만화방", "북카페", "서점", "도서"]
+SCENIC_PLACE_MARKERS = ["공원", "숲", "산책", "호수", "관광명소", "명소", "여행"]
+EVENT_MARKERS = ["축제", "이벤트", "행사"]
 CLINIC_MARKERS = ["병원", "의료", "의원", "내과", "외과", "약국"]
 ERRAND_MARKERS = [
     "다이소",
@@ -62,6 +64,11 @@ def _rule_match(document: dict, task: Task, user_text: str) -> bool | None:
     candidate_combined = _normalize(f"{name} {category_group} {category} {address}")
 
     if task.kind == "recovery":
+        query = _normalize(task.poi_query)
+        if _has_any(candidate_combined, EVENT_MARKERS) and not _has_any(
+            query, EVENT_MARKERS
+        ):
+            return False
         if _has_any(candidate_combined, PRINT_MARKERS):
             return False
         if _has_any(candidate_combined, ["병원", "약국", "의료"]):
@@ -70,8 +77,9 @@ def _rule_match(document: dict, task: Task, user_text: str) -> bool | None:
             return False
         if _has_any(candidate_combined, CAFE_MARKERS + RESTFUL_PLACE_MARKERS):
             return True
-        if _has_any(_normalize(user_text), ["산책", "걷", "공원"]) and _has_any(
-            candidate_combined, ["공원", "숲", "산책"]
+        if _has_any(candidate_combined, SCENIC_PLACE_MARKERS) and (
+            _has_any(_normalize(user_text), ["산책", "걷", "예쁜길", "지나서", "거쳐"])
+            or (query and query in candidate_combined)
         ):
             return True
         return None

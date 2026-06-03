@@ -33,6 +33,7 @@ def search_kakao_poi_candidates(
         documents = _fetch_kakao_documents(api_key, task, origin)
         if not documents:
             continue
+        documents = _rank_documents_for_task(documents, task)
         documents = [
             document
             for document in documents
@@ -40,6 +41,7 @@ def search_kakao_poi_candidates(
         ]
         if not documents:
             continue
+        documents = _rank_documents_for_task(documents, task)
         candidates.extend(
             _normalize_document(document, task)
             for document in documents[: _candidate_limit(task)]
@@ -63,7 +65,7 @@ def _fetch_kakao_documents(
         "y": origin.lat,
         "radius": 2000,
         "sort": "distance",
-        "size": 3,
+        "size": 10,
     }
     cache_key = json.dumps(params, sort_keys=True, ensure_ascii=False)
     if cache_key in _KAKAO_DOCUMENT_CACHE:
@@ -90,6 +92,38 @@ def _remember_kakao_documents(cache_key: str, documents: list[dict]) -> None:
     if len(_KAKAO_DOCUMENT_CACHE) >= _KAKAO_DOCUMENT_CACHE_LIMIT:
         _KAKAO_DOCUMENT_CACHE.pop(next(iter(_KAKAO_DOCUMENT_CACHE)))
     _KAKAO_DOCUMENT_CACHE[cache_key] = documents
+
+
+def _rank_documents_for_task(documents: list[dict], task: Task) -> list[dict]:
+    query = _normalize(task.poi_query)
+
+    def sort_key(document: dict) -> tuple[int, int]:
+        name = str(document.get("place_name") or "")
+        category = str(document.get("category_name") or "")
+        combined = _normalize(f"{name} {category}")
+        normalized_name = _normalize(name)
+        points = 0
+
+        if query and normalized_name == query:
+            points += 120
+        elif query and normalized_name.startswith(query):
+            points += 70
+        elif query and query in normalized_name:
+            points += 40
+
+        if task.kind == "recovery" and any(
+            marker in combined
+            for marker in ["호수", "공원", "산책", "관광명소", "명소", "여행"]
+        ):
+            points += 25
+
+        if any(marker in combined for marker in ["축제", "이벤트", "행사"]):
+            points -= 80
+
+        distance = _to_int_or_none(document.get("distance")) or 999_999
+        return (-points, distance)
+
+    return sorted(documents, key=sort_key)
 
 
 def _normalize_document(document: dict, task: Task) -> PoiCandidate:
@@ -169,6 +203,10 @@ def _to_int_or_none(value) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _normalize(value: str) -> str:
+    return value.lower().replace(" ", "")
 
 
 def _get_env_value(name: str) -> str | None:

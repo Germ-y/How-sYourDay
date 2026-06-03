@@ -1,4 +1,5 @@
 from api.schemas import EmotionState, Location, PoiCandidate, Task
+from tools.geocode import search_location_candidates
 from tools.kakao_local import search_kakao_poi_candidates
 
 
@@ -102,6 +103,15 @@ def _search_task_candidates(
     destination: Location | None,
     user_text: str,
 ) -> list[PoiCandidate]:
+    if _should_search_as_named_place(task):
+        named_place_candidates = _search_named_place_candidates(
+            task,
+            origin,
+            destination,
+        )
+        if named_place_candidates:
+            return named_place_candidates
+
     anchors = _task_search_anchors(task, origin, destination, user_text)
     seen: set[str] = set()
 
@@ -122,6 +132,206 @@ def _search_task_candidates(
                 return _dedupe_poi_candidates(route_candidates)[: _task_candidate_limit(task)]
 
     return []
+
+
+def _should_search_as_named_place(task: Task) -> bool:
+    if task.kind != "recovery":
+        return False
+
+    query = task.poi_query.strip()
+    if not query:
+        return False
+
+    compact = query.replace(" ", "")
+    generic_exact_terms = {"카페", "커피", "공원", "산책", "식당"}
+    generic_contained_terms = ["조용", "쉴", "휴식"]
+    if compact in generic_exact_terms or any(
+        term in compact for term in generic_contained_terms
+    ):
+        return False
+
+    named_place_markers = [
+        "호수",
+        "숲",
+        "공원",
+        "역",
+        "몰",
+        "학교",
+        "대학교",
+        "캠퍼스",
+        "도서관",
+        "시장",
+        "광장",
+    ]
+    return any(marker in compact for marker in named_place_markers) or len(compact) >= 4
+
+
+def _search_named_place_candidates(
+    task: Task,
+    origin: Location,
+    destination: Location | None,
+) -> list[PoiCandidate]:
+    anchors = _task_search_anchors(task, origin, destination, "")
+    seen: set[str] = set()
+    candidates: list[PoiCandidate] = []
+
+    for anchor in anchors:
+        for location in search_location_candidates(
+            task.poi_query,
+            size=5,
+            current_location=anchor,
+        ):
+            if not _is_relevant_named_place(location, task):
+                continue
+            key = location.provider_id or f"{location.label}:{location.lat:.6f}:{location.lng:.6f}"
+            if key in seen:
+                continue
+            seen.add(key)
+            if destination is not None and not _is_near_route_corridor(
+                location,
+                origin,
+                destination,
+            ):
+                continue
+            candidates.append(_location_candidate_to_poi(location, task))
+
+    return sorted(
+        candidates,
+        key=lambda candidate: _named_place_score(candidate, task),
+        reverse=True,
+    )[: _task_candidate_limit(task)]
+
+
+def _is_relevant_named_place(location, task: Task) -> bool:
+    query = _normalize_text(task.poi_query)
+    label = _normalize_text(location.label)
+    category = _normalize_text(
+        " ".join(
+            value
+            for value in [
+                location.category or "",
+                location.category_group_name or "",
+                location.category_name or "",
+            ]
+            if value
+        )
+    )
+    combined = f"{label} {category}"
+
+    if query and query not in combined:
+        return False
+
+    if any(marker in combined for marker in ["축제", "이벤트", "행사"]):
+        return False
+
+    if any(
+        marker in combined
+        for marker in [
+            "음식점",
+            "카페",
+            "도넛",
+            "치킨",
+            "레스토랑",
+            "공연장",
+            "연극극장",
+            "교차로",
+            "도로시설",
+        ]
+    ):
+        return False
+
+    if "호수" in query:
+        return any(marker in combined for marker in ["호수", "관광명소", "도보여행"])
+
+    return True
+
+
+def _named_place_score(candidate: PoiCandidate, task: Task) -> int:
+    query = _normalize_text(task.poi_query)
+    name = _normalize_text(candidate.name)
+    combined = _normalize_text(
+        " ".join(
+            value
+            for value in [
+                candidate.name,
+                candidate.category_name or "",
+                candidate.category_group_name or "",
+            ]
+            if value
+        )
+    )
+    score = 0
+
+    if query and name == query:
+        score += 120
+    elif query and name.startswith(query):
+        score += 70
+    elif query and query in name:
+        score += 35
+
+    if any(marker in combined for marker in ["호수", "공원", "숲", "관광명소", "도보여행"]):
+        score += 50
+
+    distance = candidate.distance_meters or 999_999
+    score -= min(30, distance // 100)
+    return score
+
+
+def _location_candidate_to_poi(location, task: Task) -> PoiCandidate:
+    landmark_type = _landmark_type_for_location(location)
+    return PoiCandidate(
+        id=f"poi-location-{task.kind}-{location.provider_id or location.label}",
+        provider_id=location.provider_id,
+        name=location.label,
+        category=task.kind,
+        address=location.address,
+        category_group_code=location.category_group_code,
+        category_group_name=location.category_group_name,
+        category_name=location.category_name,
+        phone=location.phone,
+        place_url=location.place_url,
+        landmark_type=landmark_type,
+        emotion_tags=_emotion_tags_for_landmark(landmark_type),
+        lat=location.lat,
+        lng=location.lng,
+        distance_meters=location.distance_meters,
+        source_confidence=location.source,
+        required=task.required,
+    )
+
+
+def _landmark_type_for_location(location) -> str:
+    combined = " ".join(
+        value
+        for value in [
+            location.label,
+            location.category or "",
+            location.category_group_name or "",
+            location.category_name or "",
+        ]
+        if value
+    )
+    if any(marker in combined for marker in ["공원", "숲"]):
+        return "park"
+    if any(marker in combined for marker in ["호수", "강", "하천"]):
+        return "river"
+    if any(marker in combined for marker in ["역", "지하철", "교통"]):
+        return "transit_hub"
+    if any(marker in combined for marker in ["학교", "대학", "교육"]):
+        return "university"
+    return "side_street"
+
+
+def _emotion_tags_for_landmark(landmark_type: str) -> list[str]:
+    if landmark_type in {"park", "river"}:
+        return ["calm", "recovery", "walkable"]
+    if landmark_type == "transit_hub":
+        return ["crowded", "walkable"]
+    return ["walkable"]
+
+
+def _normalize_text(value: str) -> str:
+    return value.lower().replace(" ", "")
 
 
 def _task_candidate_limit(task: Task) -> int:

@@ -273,7 +273,8 @@ export default function HomePage() {
   );
   const routeWaypointHints = useMemo(
     () =>
-      [
+      uniqueWaypointHints([
+        ...collectTextWaypointHints(text),
         ...collectPreviewWaypointHints(
           previewInsights,
           editedWaypoints,
@@ -282,8 +283,8 @@ export default function HomePage() {
         ...customWaypoints
           .map(customWaypointToHint)
           .filter(Boolean)
-      ].slice(0, 5),
-    [customWaypoints, deletedWaypoints, editedWaypoints, previewInsights]
+      ]).slice(0, 5),
+    [customWaypoints, deletedWaypoints, editedWaypoints, previewInsights, text]
   );
   const quickSavedPlaces = useMemo(
     () => buildQuickSavedPlaces(savedPlaces),
@@ -4736,6 +4737,16 @@ function hasLocalTimeHint(normalized: string) {
 function buildLocalStopInsights(text: string): PreviewInsight[] {
   const area = extractLocalAreaHint(text);
   const insights: PreviewInsight[] = [];
+  const explicitWaypoint = extractLocalWaypointHint(text);
+
+  if (explicitWaypoint) {
+    insights.push({
+      label: "거쳐 갈 곳",
+      value: `${explicitWaypoint} 주변`,
+      kind: "stop",
+      strength: "strong"
+    });
+  }
 
   if (/(걷|걸을|산책|돌아다니|주변|근처|선선)/.test(text)) {
     insights.push({
@@ -4807,6 +4818,42 @@ function extractLocalAreaHint(text: string) {
     /([가-힣A-Za-z0-9]+)\s*(?:까지|으로|로)\s*(?:갈|가고|가야|도착|이동)/
   );
   return destination?.[1] ?? "";
+}
+
+function collectTextWaypointHints(text: string) {
+  const waypoint = extractLocalWaypointHint(text);
+  return waypoint ? [`필수 경유: ${waypoint} 주변`] : [];
+}
+
+function uniqueWaypointHints(hints: string[]) {
+  const seen = new Set<string>();
+  return hints.filter((hint) => {
+    const key = hint.replace(/\s+/g, "").toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function extractLocalWaypointHint(text: string) {
+  const patterns = [
+    /(?:에서|부터)\s*([가-힣A-Za-z0-9\s]+?)\s*(?:지나서|지나|거쳐서|거쳐|들러서|들러|경유)\s*[가-힣A-Za-z0-9\s]+?(?:까지|으로|로|에)/,
+    /([가-힣A-Za-z0-9\s]+?)\s*(?:지나서|지나|거쳐서|거쳐|들러서|들러|경유)\s*[가-힣A-Za-z0-9\s]+?(?:까지|으로|로|에)/,
+    /(?:에서|부터)\s*([가-힣A-Za-z0-9\s]+?)(?:까지|으로|로|에)\s*(?:가서|간\s*뒤|갔다가|들러|들렀다가|경유)/,
+    /([가-힣A-Za-z0-9\s]+?)(?:까지|으로|로|에)\s*(?:가서|간\s*뒤|갔다가|들러|들렀다가|경유)/
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const waypoint = cleanLocalLocationHint(match?.[1] ?? "");
+    if (waypoint) {
+      return waypoint;
+    }
+  }
+
+  return "";
 }
 
 function extractLocalPreviewRoute(
