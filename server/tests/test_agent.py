@@ -592,6 +592,22 @@ def test_manual_waypoint_required_prefix_is_stripped_for_search(monkeypatch) -> 
     ]
 
 
+def test_manual_waypoint_optional_prefix_keeps_weak_candidate_optional(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    tasks = normalize_manual_waypoints(
+        ["참고 경유: 공원 산책"],
+        "신촌역에서 연세대학교까지 가는데 공원 있으면 들러도 돼",
+        Location(label="신촌역", lat=37.5598, lng=126.9423),
+        Location(label="연세대학교", lat=37.5658, lng=126.9386),
+    )
+
+    assert len(tasks) == 1
+    assert tasks[0].kind == "recovery"
+    assert tasks[0].poi_query == "공원"
+    assert tasks[0].required is False
+
+
 def test_plan_request_waypoint_hints_feed_poi_search(monkeypatch) -> None:
     searched_queries = []
 

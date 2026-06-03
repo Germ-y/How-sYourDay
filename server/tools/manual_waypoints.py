@@ -46,6 +46,7 @@ MANUAL_WAYPOINT_SCHEMA = {
 _NORMALIZATION_CACHE: dict[str, list[Task]] = {}
 _NORMALIZATION_CACHE_LIMIT = 80
 REQUIRED_HINT_PREFIX = "필수 경유:"
+OPTIONAL_HINT_PREFIX = "참고 경유:"
 WAYPOINT_CATEGORY_KINDS = {
     "카페": "recovery",
     "산책": "recovery",
@@ -177,7 +178,11 @@ def _normalize_with_rules(hints: list[str], user_text: str) -> list[Task]:
                 label=_label_for_hint(clean_hint, kind),
                 poi_query=query,
                 priority=len(tasks) + 1,
-                required=_is_strong_hint(hint) or _is_required_hint(lowered, context),
+                required=(
+                    False
+                    if _is_weak_hint(hint)
+                    else _is_strong_hint(hint) or _is_required_hint(lowered, context)
+                ),
             )
         )
     return tasks
@@ -308,10 +313,16 @@ def _is_strong_hint(value: str) -> bool:
     return value.strip().startswith(REQUIRED_HINT_PREFIX)
 
 
+def _is_weak_hint(value: str) -> bool:
+    return value.strip().startswith(OPTIONAL_HINT_PREFIX)
+
+
 def _strip_hint_strength(value: str) -> str:
     text = value.strip()
     if text.startswith(REQUIRED_HINT_PREFIX):
         text = text[len(REQUIRED_HINT_PREFIX) :].strip()
+    if text.startswith(OPTIONAL_HINT_PREFIX):
+        text = text[len(OPTIONAL_HINT_PREFIX) :].strip()
     return text
 
 

@@ -50,6 +50,7 @@ export type PreviewInsight = {
   label: string;
   value: string;
   kind: "route" | "time" | "stop" | "task" | "mood" | string;
+  strength?: "strong" | "weak" | "none" | string | null;
 };
 
 export type PreviewInsightsResult = {

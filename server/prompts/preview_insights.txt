@@ -24,13 +24,22 @@ No explanation.
 No extra fields.
 The JSON must contain an `insights` array.
 The array must contain at least one object and at most eight objects.
-Each object must have `label`, `value`, and `kind`.
+Each object must have `label`, `value`, `kind`, and `strength`.
 Allowed kind values:
 route
 time
 stop
 task
 mood
+Allowed strength values:
+strong
+weak
+none
+Use `strength` only to describe waypoint/task commitment:
+- `strong`: the user clearly wants or must visit it. Examples: "들러야 해", "사야 해", "찾아야 해", "약속", "예약", "출력해야 해", "카페에서 과제하다가 가고 싶어" when it is phrased as an actual plan.
+- `weak`: optional or opportunistic. Examples: "있으면", "괜찮으면", "들러도 돼", "후보", "추천", "가능하면".
+- `none`: route, time, mood, and any non-waypoint/non-task card.
+Never omit `strength`.
 
 Card Order
 Card 1 must be route.
@@ -59,6 +68,8 @@ Do not end the route at an intermediate area when a later final appointment plac
 
 Waypoint Card Rules
 Waypoint cards should use kind `stop`.
+Set strength to `strong` only when the user sounds committed to the stop.
+Set strength to `weak` when the stop is merely "if available" or exploratory.
 Use a human-readable label, not a technical label.
 Waypoint values should be concrete and short.
 Prefer place or area candidates from the sentence.
@@ -122,6 +133,8 @@ Do not use condition cards as filler if there are better waypoint cards.
 
 Task Card Rules
 Task cards should use kind `task`.
+Required errands should use strength `strong`.
+Optional errands or vague possible stops should use strength `weak`.
 Use task when the user mentions required errands such as print, clinic, hospital, pickup, buying something, pharmacy, convenience store, mart, 다이소, or similar.
 If the task is only an optional comfort stop, use kind `stop` instead.
 If the sentence contains "다이소도 들러야해", "살거 있어", "약국 들러야 해", "편의점 택배 찾아야 해", or another required errand, create a task card such as label "들를 곳" and a concrete value like "다이소 들르기", "약국 들르기", or "물건 픽업".
@@ -153,15 +166,15 @@ Input sentence:
 Expected preview logic:
 route: "오목교 → 수림식당"
 time: "17:00 약속 반영"
-waypoint: label "거쳐 갈 곳", value "홍대입구역 주변"
-waypoint: label "작업할 카페", value "홍대입구역 근처"
+waypoint: label "거쳐 갈 곳", value "홍대입구역 주변", strength weak
+waypoint: label "작업할 카페", value "홍대입구역 근처", strength strong
 
 Another Example
 Input sentence:
 "학교에서 집 가기 전에 조용한 카페 잠깐 들르고 싶어"
 Expected preview logic:
 route: "학교 → 집"
-waypoint: "조용한 카페 후보"
+waypoint: "조용한 카페 후보", strength strong
 condition: "휴식 필요 반영"
 
 Another Example
@@ -180,6 +193,7 @@ route: "서울숲 → 성수역"
 time: "감지된 시간 조건 없음"
 waypoint: label "작업할 카페", value "성수역 근처" or "서울숲-성수역 주변"
 task: label "들를 곳", value "다이소 들르기"
+task strength: strong
 condition: label "컨디션", value "조용한 작업 환경 반영" or "조용 기준 반영"
 
 Another Example
@@ -190,6 +204,7 @@ route: "회사 → 집"
 time: "감지된 시간 조건 없음"
 task: label "들를 곳", value "약국 들르기"
 task: label "들를 곳", value "물건 픽업" or "편의점 들르기"
+task strengths: strong
 
 Bad Outputs
 Do not output "쉴 만한 장소 후보 확인" when the user specifically mentions cafe work.

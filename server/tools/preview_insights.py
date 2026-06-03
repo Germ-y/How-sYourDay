@@ -24,13 +24,17 @@ PREVIEW_INSIGHTS_SCHEMA = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["label", "value", "kind"],
+                "required": ["label", "value", "kind", "strength"],
                 "properties": {
                     "label": {"type": "string"},
                     "value": {"type": "string"},
                     "kind": {
                         "type": "string",
                         "enum": ["route", "time", "stop", "task", "mood"],
+                    },
+                    "strength": {
+                        "type": "string",
+                        "enum": ["strong", "weak", "none"],
                     },
                 },
             },
@@ -73,6 +77,7 @@ def build_preview_insights(
                 label="이동",
                 value=f"{origin or '출발지'} → {destination or '도착지'}",
                 kind="route",
+                strength="none",
             )
         )
 
@@ -82,15 +87,21 @@ def build_preview_insights(
                 label="시간",
                 value=f"{intent.constraints.deadline} 전 도착 우선",
                 kind="time",
+                strength="none",
             )
         )
     elif _has_time_hint(text):
         insights.append(
-            PreviewInsight(label="시간", value="시간 조건 감지", kind="time")
+            PreviewInsight(label="시간", value="시간 조건 감지", kind="time", strength="none")
         )
     else:
         insights.append(
-            PreviewInsight(label="시간", value="감지된 시간 조건 없음", kind="time")
+            PreviewInsight(
+                label="시간",
+                value="감지된 시간 조건 없음",
+                kind="time",
+                strength="none",
+            )
         )
 
     stop_points = _stop_insights(text, destination)
@@ -218,9 +229,22 @@ def _repair_preview_insights(
     repaired = list(insights)
     route_value = f"{origin or '출발지'} → {destination or '도착지'}"
     if repaired[0].kind != "route":
-        repaired.insert(0, PreviewInsight(label="경로", value=route_value, kind="route"))
+        repaired.insert(
+            0,
+            PreviewInsight(
+                label="경로",
+                value=route_value,
+                kind="route",
+                strength="none",
+            ),
+        )
     elif origin or destination:
-        repaired[0] = PreviewInsight(label=repaired[0].label, value=route_value, kind="route")
+        repaired[0] = PreviewInsight(
+            label=repaired[0].label,
+            value=route_value,
+            kind="route",
+            strength=repaired[0].strength or "none",
+        )
 
     if not any(insight.kind == "time" for insight in repaired):
         time_value = (
@@ -228,7 +252,15 @@ def _repair_preview_insights(
             if intent and intent.constraints.deadline
             else "감지된 시간 조건 없음"
         )
-        repaired.insert(1, PreviewInsight(label="시간", value=time_value, kind="time"))
+        repaired.insert(
+            1,
+            PreviewInsight(
+                label="시간",
+                value=time_value,
+                kind="time",
+                strength="none",
+            ),
+        )
 
     mood_label = (
         _first_mood_label(active_mood, intent.mood_candidates if intent else [])
@@ -259,14 +291,39 @@ def _task_insight(tasks) -> PreviewInsight | None:
 
     primary = tasks[0]
     if primary.kind == "recovery":
-        return PreviewInsight(label="쉴 곳", value="잠깐 쉬어갈 장소", kind="stop")
+        return PreviewInsight(
+            label="쉴 곳",
+            value="잠깐 쉬어갈 장소",
+            kind="stop",
+            strength="weak" if not primary.required else "strong",
+        )
     if primary.kind == "print":
-        return PreviewInsight(label="할 일", value="인쇄 가능한 지점 반영", kind="task")
+        return PreviewInsight(
+            label="할 일",
+            value="인쇄 가능한 지점 반영",
+            kind="task",
+            strength="strong" if primary.required else "weak",
+        )
     if primary.kind == "clinic":
-        return PreviewInsight(label="할 일", value="병원 방문 동선 반영", kind="task")
+        return PreviewInsight(
+            label="할 일",
+            value="병원 방문 동선 반영",
+            kind="task",
+            strength="strong" if primary.required else "weak",
+        )
     if primary.kind == "errand":
-        return PreviewInsight(label="들를 곳", value=primary.label, kind="task")
-    return PreviewInsight(label="할 일", value=primary.label, kind="task")
+        return PreviewInsight(
+            label="들를 곳",
+            value=primary.label,
+            kind="task",
+            strength="strong" if primary.required else "weak",
+        )
+    return PreviewInsight(
+        label="할 일",
+        value=primary.label,
+        kind="task",
+        strength="strong" if primary.required else "weak",
+    )
 
 
 def _stop_insights(text: str, destination: str | None = None) -> list[PreviewInsight]:
@@ -280,20 +337,37 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
                 label="거쳐 갈 곳",
                 value=f"{waypoint} 주변",
                 kind="stop",
+                strength="weak",
             )
         )
 
     if any(marker in text for marker in ["걷", "산책", "돌아다니", "주변", "근처", "선선"]):
         value = f"{area} 주변 산책" if area else "가볍게 걸을 곳"
-        insights.append(PreviewInsight(label="산책 후보", value=value, kind="stop"))
+        insights.append(
+            PreviewInsight(label="산책 후보", value=value, kind="stop", strength="weak")
+        )
 
     if any(marker in text for marker in ["카페", "커피", "과제", "공부", "작업"]):
         value = f"{area} 근처" if area else "카페에서 과제"
-        insights.append(PreviewInsight(label="작업할 카페", value=value, kind="stop"))
+        insights.append(
+            PreviewInsight(
+                label="작업할 카페",
+                value=value,
+                kind="stop",
+                strength="weak" if _has_optional_signal(text) else "strong",
+            )
+        )
 
     if any(marker in text for marker in ["쉬", "휴식", "조용"]):
         value = f"{area} 근처 조용한 곳" if area else "잠깐 쉬어갈 곳"
-        insights.append(PreviewInsight(label="쉴 곳", value=value, kind="stop"))
+        insights.append(
+            PreviewInsight(
+                label="쉴 곳",
+                value=value,
+                kind="stop",
+                strength="weak" if _has_optional_signal(text) else "strong",
+            )
+        )
 
     if any(
         marker in text
@@ -313,7 +387,14 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
         ]
     ):
         value = _errand_value(text)
-        insights.append(PreviewInsight(label="들를 곳", value=value, kind="task"))
+        insights.append(
+            PreviewInsight(
+                label="들를 곳",
+                value=value,
+                kind="task",
+                strength="weak" if _has_optional_signal(text) else "strong",
+            )
+        )
 
     unique: list[PreviewInsight] = []
     seen: set[str] = set()
@@ -338,19 +419,19 @@ def _errand_value(text: str) -> str:
 
 def _emotion_insight(primary: str) -> PreviewInsight | None:
     if primary == "tired":
-        return PreviewInsight(label="상태", value="피로 낮은 길 우선", kind="mood")
+        return PreviewInsight(label="상태", value="피로 낮은 길 우선", kind="mood", strength="none")
     if primary == "hurried":
-        return PreviewInsight(label="상태", value="우회보다 도착 시간 우선", kind="time")
+        return PreviewInsight(label="상태", value="우회보다 도착 시간 우선", kind="time", strength="none")
     if primary == "anxious":
-        return PreviewInsight(label="상태", value="혼잡 낮은 길 우선", kind="mood")
+        return PreviewInsight(label="상태", value="혼잡 낮은 길 우선", kind="mood", strength="none")
     return None
 
 
 def _empty_insight(index: int) -> PreviewInsight:
     defaults = [
-        PreviewInsight(label="이동", value="출발지와 도착지 확인", kind="route"),
-        PreviewInsight(label="시간", value="감지된 시간 조건 없음", kind="time"),
-        PreviewInsight(label="컨디션", value="컨디션 조건 없음", kind="mood"),
+        PreviewInsight(label="이동", value="출발지와 도착지 확인", kind="route", strength="none"),
+        PreviewInsight(label="시간", value="감지된 시간 조건 없음", kind="time", strength="none"),
+        PreviewInsight(label="컨디션", value="컨디션 조건 없음", kind="mood", strength="none"),
     ]
     return defaults[index % len(defaults)]
 
@@ -403,6 +484,7 @@ def _ensure_mood_insight(insights: list[PreviewInsight], mood_label: str | None)
                 label="컨디션",
                 value=value,
                 kind="mood",
+                strength="none",
             )
         )
 
@@ -420,6 +502,23 @@ def _has_time_hint(text: str) -> bool:
         or re.search(r"(?:오전|오후)\s*\d+", text)
         or re.search(r"\d+\s*시간\s*안", text)
         or any(marker in text for marker in ["deadline", "마감", "늦지", "촉박"])
+    )
+
+
+def _has_optional_signal(text: str) -> bool:
+    compact = text.replace(" ", "")
+    return any(
+        marker in compact
+        for marker in [
+            "있으면",
+            "괜찮으면",
+            "들러도돼",
+            "들러도괜찮",
+            "후보",
+            "추천",
+            "가능하면",
+            "되면",
+        ]
     )
 
 

@@ -398,9 +398,15 @@ export default function HomePage() {
     }
 
     if (!moodEdited) {
-      setActiveMood((current) =>
-        current && moodCandidates.some((mood) => mood.label === current) ? current : ""
-      );
+      setActiveMood((current) => {
+        if (!moodCandidates.length) {
+          return "";
+        }
+        if (current && moodCandidates.some((mood) => mood.label === current)) {
+          return current;
+        }
+        return moodCandidates[0]?.label ?? "";
+      });
     }
   }, [moodCandidates, moodEdited, text]);
 
@@ -419,11 +425,14 @@ export default function HomePage() {
           user_text: text,
           origin_text: hasRouteRequestText ? undefined : originText,
           destination_text: hasRouteRequestText ? undefined : destinationText,
-          active_mood: activeMood
+          active_mood: moodEdited ? activeMood : undefined
         });
         if (!cancelled) {
           setPreviewInsights(result.insights);
           setSuggestedMoodLabels(result.mood_candidates ?? []);
+          if (!moodEdited && text.trim() && result.mood_candidates?.[0]) {
+            setActiveMood(result.mood_candidates[0]);
+          }
           setPreviewSource(result.source);
         }
       } catch {
@@ -445,7 +454,7 @@ export default function HomePage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [text, originText, destinationText, activeMood]);
+  }, [text, originText, destinationText, activeMood, moodEdited]);
 
   useEffect(() => {
     const query = originText.trim();
@@ -2554,6 +2563,7 @@ function PlanPreview({
               onDelete={() => onWaypointDelete(waypointKey)}
               onEditToggle={() => onWaypointEditToggle(waypointKey, insight.value)}
               onValueChange={(nextValue) => onWaypointChange(waypointKey, nextValue)}
+              strength={previewWaypointStrength(insight)}
               value={value}
             />
           );
@@ -2580,6 +2590,7 @@ function PlanPreview({
                 onCustomWaypointChange(waypoint.id, nextValue)
               }
               placeholder={category.placeholder}
+              strength="strong"
               value={waypoint.value}
             />
           );
@@ -3390,6 +3401,7 @@ function PlannerCue({
   onEditToggle,
   onValueChange,
   placeholder = "예: 스타벅스, 조용한 카페",
+  strength = "none",
   value
 }: {
   categoryOptions?: typeof WAYPOINT_CATEGORY_OPTIONS;
@@ -3403,15 +3415,26 @@ function PlannerCue({
   onEditToggle?: () => void;
   onValueChange?: (value: string) => void;
   placeholder?: string;
+  strength?: "strong" | "weak" | "none";
   value?: string;
 }) {
+  const strengthMeta = waypointStrengthMeta(strength);
   return (
-    <div className="flex min-h-12 items-center gap-2 rounded-xl bg-[#fffdf8] px-3 py-2 text-sm font-semibold text-ink/64 ring-1 ring-ink/7">
+    <div
+      className={`flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-ink/64 ring-1 ${strengthMeta.containerClass}`}
+    >
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#fde2ef] text-tide/80">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-semibold text-ink/38">{label}</span>
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="block text-[11px] font-semibold text-ink/38">{label}</span>
+          {strengthMeta.label ? (
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${strengthMeta.badgeClass}`}>
+              {strengthMeta.label}
+            </span>
+          ) : null}
+        </span>
         {isEditing ? (
           <span className="mt-2 grid gap-2">
             {categoryOptions && categoryValue && onCategoryChange ? (
@@ -4458,9 +4481,9 @@ function ensureActiveMoodCandidate(
 
 function defaultPreviewInsights(): PreviewInsight[] {
   return [
-    { label: "이동", value: "출발지와 도착지 확인", kind: "route" },
-    { label: "시간", value: "감지된 시간 조건 없음", kind: "time" },
-    { label: "컨디션", value: "컨디션 조건 없음", kind: "mood" }
+    { label: "이동", value: "출발지와 도착지 확인", kind: "route", strength: "none" },
+    { label: "시간", value: "감지된 시간 조건 없음", kind: "time", strength: "none" },
+    { label: "컨디션", value: "컨디션 조건 없음", kind: "mood", strength: "none" }
   ];
 }
 
@@ -4532,7 +4555,7 @@ function collectPreviewWaypointHints(
       if (!value || isWaypointPlaceholder(value)) {
         return [];
       }
-      return [value];
+      return [previewWaypointHint(value, insight)];
     })
     .slice(0, 5);
 }
@@ -4558,6 +4581,52 @@ function customWaypointToHint(waypoint: CustomWaypoint) {
   return `필수 경유: [${category.label}] ${value}`;
 }
 
+function previewWaypointHint(value: string, insight: PreviewInsight) {
+  const strength = previewWaypointStrength(insight);
+  if (strength === "strong") {
+    return `필수 경유: ${value}`;
+  }
+  if (strength === "weak") {
+    return `참고 경유: ${value}`;
+  }
+  return value;
+}
+
+function previewWaypointStrength(insight: PreviewInsight): "strong" | "weak" | "none" {
+  if (insight.strength === "strong" || insight.strength === "weak") {
+    return insight.strength;
+  }
+  if (insight.kind === "task") {
+    return "strong";
+  }
+  if (insight.kind === "stop") {
+    return "weak";
+  }
+  return "none";
+}
+
+function waypointStrengthMeta(strength: "strong" | "weak" | "none") {
+  if (strength === "strong") {
+    return {
+      label: "필수",
+      containerClass: "bg-[#fff7fb] ring-tide/18",
+      badgeClass: "bg-[#fde2ef] text-tide"
+    };
+  }
+  if (strength === "weak") {
+    return {
+      label: "참고",
+      containerClass: "bg-[#fffdf8] ring-moss/14",
+      badgeClass: "bg-[#ddf3eb] text-moss"
+    };
+  }
+  return {
+    label: "",
+    containerClass: "bg-[#fffdf8] ring-ink/7",
+    badgeClass: ""
+  };
+}
+
 function isWaypointPlaceholder(value: string) {
   return [
     "선호 장소 후보 확인",
@@ -4575,7 +4644,7 @@ function ensurePreviewMoodCue(insights: PreviewInsight[]) {
   if (!fallbackMood) {
     return [
       ...insights,
-      { label: "컨디션", value: "컨디션 조건 없음", kind: "mood" as const }
+      { label: "컨디션", value: "컨디션 조건 없음", kind: "mood" as const, strength: "none" }
     ];
   }
 
@@ -4584,13 +4653,13 @@ function ensurePreviewMoodCue(insights: PreviewInsight[]) {
 
 function previewMoodFallback(insights: PreviewInsight[]): PreviewInsight | null {
   if (insights.some((insight) => insight.kind === "time" && insight.value.includes("도착"))) {
-    return { label: "컨디션", value: "시간 압박 기준으로 경로 비교", kind: "mood" };
+    return { label: "컨디션", value: "시간 압박 기준으로 경로 비교", kind: "mood", strength: "none" };
   }
   if (insights.some((insight) => insight.value.includes("조용"))) {
-    return { label: "컨디션", value: "조용 기준으로 경로 비교", kind: "mood" };
+    return { label: "컨디션", value: "조용 기준으로 경로 비교", kind: "mood", strength: "none" };
   }
   if (insights.some((insight) => insight.value.includes("카페") || insight.value.includes("쉬"))) {
-    return { label: "컨디션", value: "휴식 기준으로 경로 비교", kind: "mood" };
+    return { label: "컨디션", value: "휴식 기준으로 경로 비교", kind: "mood", strength: "none" };
   }
   return null;
 }
@@ -4607,31 +4676,34 @@ function buildLocalPreviewInsights(
     {
       label: "이동",
       value: `${route.origin || "출발지"} → ${route.destination || "도착지"}`,
-      kind: "route"
+      kind: "route",
+      strength: "none"
     }
   ];
 
   if (hasLocalTimeHint(normalized)) {
-    insights.push({ label: "시간", value: "도착 시간 조건 반영", kind: "time" });
+    insights.push({ label: "시간", value: "도착 시간 조건 반영", kind: "time", strength: "none" });
   } else {
-    insights.push({ label: "시간", value: "감지된 시간 조건 없음", kind: "time" });
+    insights.push({ label: "시간", value: "감지된 시간 조건 없음", kind: "time", strength: "none" });
   }
   insights.push(...buildLocalStopInsights(text));
   if (/(피곤|지쳐|tired|exhausted)/.test(normalized)) {
-    insights.push({ label: "상태", value: "피로 낮은 길 우선", kind: "mood" });
+    insights.push({ label: "상태", value: "피로 낮은 길 우선", kind: "mood", strength: "none" });
   }
 
   if (activeMood) {
     insights.push({
       label: "컨디션",
       value: `${activeMood} 기준으로 경로 비교`,
-      kind: "mood"
+      kind: "mood",
+      strength: "none"
     });
   } else {
     insights.push({
       label: "컨디션",
       value: "컨디션 조건 없음",
-      kind: "mood"
+      kind: "mood",
+      strength: "none"
     });
   }
 
@@ -4655,28 +4727,32 @@ function buildLocalStopInsights(text: string): PreviewInsight[] {
     insights.push({
       label: "경유 후보",
       value: area ? `${area} 주변 산책` : "주변 산책 후보",
-      kind: "stop"
+      kind: "stop",
+      strength: "weak"
     });
   }
   if (/(카페|커피|과제|공부|작업|cafe|coffee|study|work)/i.test(text)) {
     insights.push({
       label: "경유 후보",
       value: area ? `${area} 카페 작업` : "카페 작업 후보",
-      kind: "stop"
+      kind: "stop",
+      strength: /있으면|괜찮으면|들러도|가능하면/.test(text) ? "weak" : "strong"
     });
   }
   if (/(쉬|휴식|조용|rest|quiet)/i.test(text)) {
     insights.push({
       label: "경유 후보",
       value: area ? `${area} 휴식 장소` : "쉴 만한 장소 후보",
-      kind: "stop"
+      kind: "stop",
+      strength: /있으면|괜찮으면|들러도|가능하면/.test(text) ? "weak" : "strong"
     });
   }
   if (/(다이소|살거|살 것|사야|구매|장보기|마트|편의점|약국|올리브영|픽업|찾으러)/.test(text)) {
     insights.push({
       label: "들를 곳",
       value: localErrandValue(text),
-      kind: "task"
+      kind: "task",
+      strength: /있으면|괜찮으면|들러도|가능하면/.test(text) ? "weak" : "strong"
     });
   }
 

@@ -87,6 +87,7 @@ class PreviewInsight(BaseModel):
     label: str
     value: str
     kind: str
+    strength: str | None = None
 
 
 class PreviewInsightsResponse(BaseModel):
