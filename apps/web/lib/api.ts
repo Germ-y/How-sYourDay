@@ -165,6 +165,7 @@ export type TimelineItem = {
   label: string;
   type: string;
   required?: boolean | null;
+  address?: string | null;
 };
 
 export type OrderedStop = {
@@ -242,6 +243,30 @@ export type FeedbackPayload = {
   emotion_primary: string;
   provider: string;
   reason?: string;
+  origin?: Location;
+  destination?: Location;
+  selected_route?: RouteCandidate;
+  emotion?: EmotionState;
+  plan_snapshot?: DailyPlan;
+};
+
+export type RouteRecommendationRecord = {
+  id: string;
+  origin: Location;
+  destination: Location | null;
+  selected_route: RouteCandidate | null;
+  emotion: EmotionState | null;
+  plan_snapshot: DailyPlan | null;
+  created_at: string;
+};
+
+export type FeedbackResult = {
+  status: string;
+  walking_sensitivity: number;
+  crowd_sensitivity: number;
+  transfer_sensitivity: number;
+  recovery_affinity: number;
+  route_recommendation: RouteRecommendationRecord | null;
 };
 
 export type SavedPlacePayload = {
@@ -260,6 +285,10 @@ export type SavedPlaceRecord = SavedPlacePayload & {
 
 export type SavedPlacesResult = {
   places: SavedPlaceRecord[];
+};
+
+export type RouteRecommendationsResult = {
+  recommendations: RouteRecommendationRecord[];
 };
 
 export type PlacePreferencePayload = {
@@ -456,7 +485,9 @@ export async function fetchPreferencePoints(
   return response.json();
 }
 
-export async function sendRouteFeedback(payload: FeedbackPayload): Promise<void> {
+export async function sendRouteFeedback(
+  payload: FeedbackPayload
+): Promise<FeedbackResult> {
   const response = await fetch(`${API_BASE_URL}/feedback`, {
     method: "POST",
     headers: {
@@ -469,6 +500,20 @@ export async function sendRouteFeedback(payload: FeedbackPayload): Promise<void>
   if (!response.ok) {
     throw new Error(`Feedback request failed with ${response.status}`);
   }
+
+  return response.json();
+}
+
+export async function fetchRouteRecommendations(): Promise<RouteRecommendationsResult> {
+  const response = await fetch(`${API_BASE_URL}/me/route-recommendations`, {
+    headers: userHeaders()
+  });
+
+  if (!response.ok) {
+    throw new Error(`Route recommendations request failed with ${response.status}`);
+  }
+
+  return response.json();
 }
 
 export async function fetchSavedPlaces(): Promise<SavedPlacesResult> {

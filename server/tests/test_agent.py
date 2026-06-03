@@ -1031,7 +1031,7 @@ def test_route_feedback_updates_user_scoped_weights() -> None:
 
     with SessionLocal() as db:
         before_a = load_user_preference_weights(db, "user-a")
-        after_a = record_user_route_feedback(
+        after_a, recommendation_a = record_user_route_feedback(
             db,
             "user-a",
             FeedbackRequest(
@@ -1042,7 +1042,7 @@ def test_route_feedback_updates_user_scoped_weights() -> None:
                 reason="Too much walking",
             ),
         )
-        after_b = record_user_route_feedback(
+        after_b, recommendation_b = record_user_route_feedback(
             db,
             "user-b",
             FeedbackRequest(
@@ -1065,6 +1065,8 @@ def test_route_feedback_updates_user_scoped_weights() -> None:
     assert reloaded_a.walking_sensitivity != reloaded_b.walking_sensitivity
     assert [feedback.route_id for feedback in user_a_feedback] == ["route-a"]
     assert [feedback.route_id for feedback in user_b_feedback] == ["route-b"]
+    assert recommendation_a is None
+    assert recommendation_b is None
 
 
 def test_auth_security_hashes_password_and_decodes_token() -> None:

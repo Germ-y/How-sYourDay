@@ -102,6 +102,25 @@ class FeedbackRequest(BaseModel):
     emotion_primary: str
     provider: str
     reason: str | None = None
+    origin: Location | None = None
+    destination: Location | None = None
+    selected_route: dict | None = None
+    emotion: dict | None = None
+    plan_snapshot: dict | None = None
+
+
+class RouteRecommendationResponse(BaseModel):
+    id: str
+    origin: Location
+    destination: Location | None = None
+    selected_route: dict | None = None
+    emotion: dict | None = None
+    plan_snapshot: dict | None = None
+    created_at: str
+
+
+class RouteRecommendationsResponse(BaseModel):
+    recommendations: list[RouteRecommendationResponse]
 
 
 class FeedbackResponse(BaseModel):
@@ -110,6 +129,7 @@ class FeedbackResponse(BaseModel):
     crowd_sensitivity: float
     transfer_sensitivity: float
     recovery_affinity: float
+    route_recommendation: RouteRecommendationResponse | None = None
 
 
 class SavedPlaceCreate(BaseModel):

@@ -25,6 +25,8 @@ from api.schemas import (
     PreviewInsightsResponse,
     RouteExtractionRequest,
     RouteExtractionResponse,
+    RouteRecommendationResponse,
+    RouteRecommendationsResponse,
     RouteLocationResolutionResponse,
     SavedPlaceCreate,
     SavedPlaceResponse,
@@ -35,6 +37,7 @@ from auth.security import decode_access_token
 from db.session import get_db, init_db
 from repositories.place_preferences import list_place_preferences, upsert_place_preference
 from repositories.route_feedback import (
+    list_route_recommendations,
     load_user_preference_weights,
     record_user_route_feedback,
 )
@@ -121,6 +124,37 @@ def place_preference_response(preference) -> PlacePreferenceResponse:
         preference=preference.preference,
         created_at=preference.created_at.isoformat(),
         updated_at=preference.updated_at.isoformat(),
+    )
+
+
+def route_recommendation_response(recommendation) -> RouteRecommendationResponse:
+    snapshot = recommendation.selected_route_json or {}
+    selected_route = snapshot.get("selected_route") if isinstance(snapshot, dict) else snapshot
+    plan_snapshot = snapshot.get("plan_snapshot") if isinstance(snapshot, dict) else None
+    destination = None
+    if (
+        recommendation.destination_label is not None
+        and recommendation.destination_lat is not None
+        and recommendation.destination_lng is not None
+    ):
+        destination = {
+            "label": recommendation.destination_label,
+            "lat": recommendation.destination_lat,
+            "lng": recommendation.destination_lng,
+        }
+
+    return RouteRecommendationResponse(
+        id=recommendation.id,
+        origin={
+            "label": recommendation.origin_label,
+            "lat": recommendation.origin_lat,
+            "lng": recommendation.origin_lng,
+        },
+        destination=destination,
+        selected_route=selected_route,
+        emotion=recommendation.emotion_json,
+        plan_snapshot=plan_snapshot,
+        created_at=recommendation.created_at.isoformat(),
     )
 
 
@@ -242,13 +276,30 @@ def submit_feedback(
     user_id: str = Depends(current_user_id),
     db: Session = Depends(database),
 ) -> FeedbackResponse:
-    weights = record_user_route_feedback(db, user_id, request)
+    weights, recommendation = record_user_route_feedback(db, user_id, request)
     return FeedbackResponse(
         status="ok",
         walking_sensitivity=weights.walking_sensitivity,
         crowd_sensitivity=weights.crowd_sensitivity,
         transfer_sensitivity=weights.transfer_sensitivity,
         recovery_affinity=weights.recovery_affinity,
+        route_recommendation=(
+            route_recommendation_response(recommendation) if recommendation else None
+        ),
+    )
+
+
+@app.get("/me/route-recommendations", response_model=RouteRecommendationsResponse)
+def get_my_route_recommendations(
+    user_id: str = Depends(current_user_id),
+    db: Session = Depends(database),
+) -> RouteRecommendationsResponse:
+    recommendations = list_route_recommendations(db, user_id)
+    return RouteRecommendationsResponse(
+        recommendations=[
+            route_recommendation_response(recommendation)
+            for recommendation in recommendations
+        ]
     )
 
 

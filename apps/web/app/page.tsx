@@ -40,6 +40,7 @@ import {
   fetchPreviewInsights,
   fetchPlacePreferences,
   fetchPreferencePoints,
+  fetchRouteRecommendations,
   fetchSavedPlaces,
   geocodeLocation,
   login as loginUser,
@@ -59,6 +60,7 @@ import {
   type MapViewModel,
   type PoiCandidate,
   type PreviewInsight,
+  type RouteRecommendationRecord,
   type RouteCandidate,
   type TimelineItem,
   type Tradeoff,
@@ -181,6 +183,10 @@ type SavedPlaceEntry = {
   lng?: number | null;
   updatedAt: string;
 };
+type RouteContext = {
+  origin: Location;
+  destination: Location;
+};
 type CustomWaypoint = {
   id: string;
   category: WaypointCategoryValue;
@@ -211,6 +217,8 @@ const PREFERENCE_RADIUS_STEP_METERS = 1200;
 export default function HomePage() {
   const [text, setText] = useState(starterText);
   const [plan, setPlan] = useState<DailyPlan | null>(null);
+  const [routeContext, setRouteContext] = useState<RouteContext | null>(null);
+  const [recentRoutes, setRecentRoutes] = useState<RouteRecommendationRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [originText, setOriginText] = useState("");
@@ -367,6 +375,30 @@ export default function HomePage() {
       .catch(() => {
         if (!cancelled) {
           setSavedPlaceNotice("");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  useEffect(() => {
+    if (!authUser) {
+      setRecentRoutes([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchRouteRecommendations()
+      .then((result) => {
+        if (!cancelled) {
+          setRecentRoutes(result.recommendations);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRecentRoutes([]);
         }
       });
 
@@ -927,6 +959,10 @@ export default function HomePage() {
       setLocationStatus(
         `${originResult.location.label} → ${destinationResult.location.label}`
       );
+      setRouteContext({
+        origin: originResult.location,
+        destination: destinationResult.location
+      });
       setPlan(result);
       setActiveView("result");
     } catch (caught) {
@@ -1218,12 +1254,33 @@ export default function HomePage() {
     setPoiPreferenceIndex(0);
   }
 
-  function handleRecentRouteOpen() {
+  function handleRecentRouteOpen(recommendation?: RouteRecommendationRecord | null) {
+    if (recommendation?.plan_snapshot) {
+      setPlan(recommendation.plan_snapshot);
+      if (recommendation.destination) {
+        setRouteContext({
+          origin: recommendation.origin,
+          destination: recommendation.destination
+        });
+      }
+      setActiveView("result");
+      return;
+    }
+
     setActiveView(plan ? "result" : "planner");
   }
 
-  function handleRouteFeedbackSave(routeId: string) {
+  function handleRouteFeedbackSave(
+    routeId: string,
+    recommendation?: RouteRecommendationRecord | null
+  ) {
     setPlan((current) => (current ? selectRouteInPlan(current, routeId) : current));
+    if (recommendation) {
+      setRecentRoutes((current) => [
+        recommendation,
+        ...current.filter((item) => item.id !== recommendation.id)
+      ]);
+    }
   }
 
   const likedCount = Object.values(poiVotes).filter((vote) => vote === "like").length;
@@ -1242,7 +1299,12 @@ export default function HomePage() {
       setPoiPreferenceIndex(0);
     }
   }, [isPreferenceReviewing, poiPreferenceIndex, preferencePoints, poiVotes]);
-  const primaryLabel = isLoading ? "경로 계산 중" : "경로 추천";
+  const isPlannerBusy = isLoading || isPreviewLoading || isRouteConfirming;
+  const primaryLabel = isLoading
+    ? "경로 계산 중"
+    : isRouteConfirming || isPreviewLoading
+      ? "내용 확인 중"
+      : "경로 추천";
 
   if (!authChecked) {
     return <AuthLoading />;
@@ -1488,7 +1550,7 @@ export default function HomePage() {
             <button
               className="hidden min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 font-semibold text-white shadow-[0_12px_30px_rgba(23,26,24,0.14)] transition hover:bg-tide disabled:cursor-not-allowed disabled:bg-ink/45 lg:flex"
               type="submit"
-              disabled={isLoading}
+              disabled={isPlannerBusy}
             >
               {primaryLabel}
               <ArrowRight size={18} aria-hidden />
@@ -1500,7 +1562,7 @@ export default function HomePage() {
           <button
             className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-ink/45"
             type="submit"
-            disabled={isLoading}
+            disabled={isPlannerBusy}
           >
             {primaryLabel}
             <ArrowRight size={18} aria-hidden />
@@ -1511,6 +1573,7 @@ export default function HomePage() {
         ) : activeView === "result" && plan ? (
           <RouteResultPage
             plan={plan}
+            routeContext={routeContext}
             onBackToPlanner={() => setActiveView("planner")}
             onRouteFeedbackSave={handleRouteFeedbackSave}
           />
@@ -1534,6 +1597,7 @@ export default function HomePage() {
           <ProfilePage
             authUser={authUser}
             plan={plan}
+            recentRoutes={recentRoutes}
             savedPlaceDraft={savedPlaceDraft}
             savedPlaceNotice={savedPlaceNotice}
             savedPlaces={savedPlaces}
@@ -2088,19 +2152,21 @@ function ProfilePage({
   onSavedPlaceDraftChange,
   onUseSavedPlace,
   plan,
+  recentRoutes,
   savedPlaceDraft,
   savedPlaceNotice,
   savedPlaces
 }: {
   authUser: AuthUser;
   plan: DailyPlan | null;
+  recentRoutes: RouteRecommendationRecord[];
   savedPlaceDraft: { name: string; address: string; kind: SavedPlaceKind };
   savedPlaceNotice: string;
   savedPlaces: SavedPlaceEntry[];
   onAddSavedPlace: () => void;
   onLogout: () => void;
   onOpenPlanner: () => void;
-  onOpenRecentRoute: () => void;
+  onOpenRecentRoute: (recommendation?: RouteRecommendationRecord | null) => void;
   onRemoveSavedPlace: (id: string) => void;
   onSavedPlaceDraftChange: (
     field: "name" | "address" | "kind",
@@ -2111,6 +2177,9 @@ function ProfilePage({
     target: "origin" | "destination"
   ) => void;
 }) {
+  const latestRecommendation = recentRoutes[0] ?? null;
+  const recentPlan = plan ?? latestRecommendation?.plan_snapshot ?? null;
+
   return (
     <section className="grid gap-4 px-5 py-5 lg:grid-cols-[360px_1fr] lg:px-0">
       <div className="grid gap-4 lg:self-start lg:sticky lg:top-20">
@@ -2133,22 +2202,33 @@ function ProfilePage({
             <div>
               <p className="text-sm font-semibold text-tide">최근 추천</p>
               <h2 className="mt-1 text-xl font-semibold [word-break:keep-all]">
-                {plan ? routeDisplayName(plan.selected_route) : "최근 추천 기록 없음"}
+                {recentPlan
+                  ? routeDisplayName(recentPlan.selected_route)
+                  : "최근 추천 기록 없음"}
               </h2>
+              {latestRecommendation?.destination ? (
+                <p className="mt-1 text-xs leading-5 text-ink/45 [word-break:keep-all]">
+                  {latestRecommendation.origin.label} → {latestRecommendation.destination.label}
+                </p>
+              ) : null}
             </div>
             <button
               className="min-h-10 shrink-0 rounded-xl bg-ink px-3 text-sm font-semibold text-white transition active:scale-[0.98]"
               type="button"
-              onClick={plan ? onOpenRecentRoute : onOpenPlanner}
+              onClick={
+                recentPlan
+                  ? () => onOpenRecentRoute(latestRecommendation)
+                  : onOpenPlanner
+              }
             >
-              {plan ? "다시 보기" : "경로 만들기"}
+              {recentPlan ? "다시 보기" : "경로 만들기"}
             </button>
           </div>
-          {plan ? (
+          {recentPlan ? (
             <div className="mt-4 grid grid-cols-3 gap-2">
-              <MiniStat label="이동" value={durationLabel(plan.selected_route)} />
-              <MiniStat label="걷기" value={`${plan.selected_route.walking_minutes}분`} />
-              <MiniStat label="편안함" value={`${plan.emotional_cost.comfort_score}`} />
+              <MiniStat label="이동" value={durationLabel(recentPlan.selected_route)} />
+              <MiniStat label="걷기" value={`${recentPlan.selected_route.walking_minutes}분`} />
+              <MiniStat label="편안함" value={`${recentPlan.emotional_cost.comfort_score}`} />
             </div>
           ) : (
             <p className="mt-4 rounded-2xl bg-[#fff9ed] p-4 text-sm leading-6 text-ink/58 [word-break:keep-all]">
@@ -2552,12 +2632,17 @@ function ComposerTitle({
 
 function RouteResultPage({
   plan,
+  routeContext,
   onBackToPlanner,
   onRouteFeedbackSave
 }: {
   plan: DailyPlan;
+  routeContext: RouteContext | null;
   onBackToPlanner: () => void;
-  onRouteFeedbackSave: (routeId: string) => void;
+  onRouteFeedbackSave: (
+    routeId: string,
+    recommendation?: RouteRecommendationRecord | null
+  ) => void;
 }) {
   const [selectedRouteId, setSelectedRouteId] = useState(plan.selected_route.id);
 
@@ -2624,6 +2709,7 @@ function RouteResultPage({
           onRouteFeedbackSave={onRouteFeedbackSave}
           onSelectRoute={setSelectedRouteId}
           plan={plan}
+          routeContext={routeContext}
           selectedMap={selectedMap}
           selectedRoute={selectedRoute}
           selectedScore={selectedScore}
@@ -2700,84 +2786,108 @@ function PlanPreview({
         </span>
       </div>
 
-      <div className="mt-4 rounded-2xl bg-[#fffdf8] p-3 ring-1 ring-ink/8">
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fde2ef] text-tide">
-            <Navigation size={18} aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-ink/40">경로</p>
-            <p className="mt-0.5 text-base font-semibold leading-6 [overflow-wrap:anywhere] [word-break:keep-all]">
-              {routeLabel}
-            </p>
+      {isLoading ? (
+        <div className="mt-4 grid gap-2 rounded-2xl bg-[#fffdf8] p-3 ring-1 ring-ink/8">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fde2ef] text-tide">
+              <Sparkles size={17} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-ink/40">분석 중</p>
+              <p className="mt-0.5 text-sm font-semibold leading-6 text-ink/62 [word-break:keep-all]">
+                경유 후보와 컨디션을 함께 확인하고 있어요.
+              </p>
+            </div>
           </div>
+          {[0, 1, 2].map((item) => (
+            <div
+              className="h-12 animate-pulse rounded-xl bg-white ring-1 ring-ink/6"
+              key={item}
+            />
+          ))}
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="mt-4 rounded-2xl bg-[#fffdf8] p-3 ring-1 ring-ink/8">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fde2ef] text-tide">
+                <Navigation size={18} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-ink/40">경로</p>
+                <p className="mt-0.5 text-base font-semibold leading-6 [overflow-wrap:anywhere] [word-break:keep-all]">
+                  {routeLabel}
+                </p>
+              </div>
+            </div>
+          </div>
 
-      <div className="mt-4 grid gap-2">
-        {contextCueInsights.map(({ insight, index }) => (
-          <PlannerCue
-            icon={previewInsightIcon(insight)}
-            key={`${insight.label}-${insight.value}-${index}`}
-            label={insight.label}
-            value={insight.value}
-          />
-        ))}
-        {waypointCueInsights.map(({ insight, index }) => {
-          const waypointKey = previewWaypointKey(insight, index);
-          const value = editedWaypoints[waypointKey] ?? insight.value;
+          <div className="mt-4 grid gap-2">
+            {contextCueInsights.map(({ insight, index }) => (
+              <PlannerCue
+                icon={previewInsightIcon(insight)}
+                key={`${insight.label}-${insight.value}-${index}`}
+                label={insight.label}
+                value={insight.value}
+              />
+            ))}
+            {waypointCueInsights.map(({ insight, index }) => {
+              const waypointKey = previewWaypointKey(insight, index);
+              const value = editedWaypoints[waypointKey] ?? insight.value;
 
-          return (
-            <PlannerCue
-              editable
-              icon={previewInsightIcon(insight)}
-              isEditing={editingWaypointKey === waypointKey}
-              key={`${insight.label}-${insight.value}-${index}`}
-              label={insight.label}
-              onDelete={() => onWaypointDelete(waypointKey)}
-              onEditToggle={() => onWaypointEditToggle(waypointKey, insight.value)}
-              onValueChange={(nextValue) => onWaypointChange(waypointKey, nextValue)}
-              strength={previewWaypointStrength(insight)}
-              value={value}
-            />
-          );
-        })}
-        {customWaypoints.map((waypoint) => {
-          const waypointKey = customWaypointKey(waypoint.id);
-          const category = waypointCategoryOption(waypoint.category);
-          const CategoryIcon = category.icon;
-          return (
-            <PlannerCue
-              categoryOptions={WAYPOINT_CATEGORY_OPTIONS}
-              categoryValue={waypoint.category}
-              editable
-              icon={<CategoryIcon size={15} aria-hidden />}
-              isEditing={editingWaypointKey === waypointKey}
-              key={waypointKey}
-              label={category.label}
-              onCategoryChange={(nextCategory) =>
-                onCustomWaypointCategoryChange(waypoint.id, nextCategory)
-              }
-              onDelete={() => onCustomWaypointDelete(waypoint.id)}
-              onEditToggle={() => onWaypointEditToggle(waypointKey, waypoint.value)}
-              onValueChange={(nextValue) =>
-                onCustomWaypointChange(waypoint.id, nextValue)
-              }
-              placeholder={category.placeholder}
-              strength="strong"
-              value={waypoint.value}
-            />
-          );
-        })}
-        <button
-          className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#ddf3eb] px-3 text-sm font-semibold text-moss transition hover:bg-[#d2eee4] active:scale-[0.98]"
-          type="button"
-          onClick={onCustomWaypointAdd}
-        >
-          <Plus size={16} aria-hidden />
-          경유 추가
-        </button>
-      </div>
+              return (
+                <PlannerCue
+                  editable
+                  icon={previewInsightIcon(insight)}
+                  isEditing={editingWaypointKey === waypointKey}
+                  key={`${insight.label}-${insight.value}-${index}`}
+                  label={insight.label}
+                  onDelete={() => onWaypointDelete(waypointKey)}
+                  onEditToggle={() => onWaypointEditToggle(waypointKey, insight.value)}
+                  onValueChange={(nextValue) => onWaypointChange(waypointKey, nextValue)}
+                  strength={previewWaypointStrength(insight)}
+                  value={value}
+                />
+              );
+            })}
+            {customWaypoints.map((waypoint) => {
+              const waypointKey = customWaypointKey(waypoint.id);
+              const category = waypointCategoryOption(waypoint.category);
+              const CategoryIcon = category.icon;
+              return (
+                <PlannerCue
+                  categoryOptions={WAYPOINT_CATEGORY_OPTIONS}
+                  categoryValue={waypoint.category}
+                  editable
+                  icon={<CategoryIcon size={15} aria-hidden />}
+                  isEditing={editingWaypointKey === waypointKey}
+                  key={waypointKey}
+                  label={category.label}
+                  onCategoryChange={(nextCategory) =>
+                    onCustomWaypointCategoryChange(waypoint.id, nextCategory)
+                  }
+                  onDelete={() => onCustomWaypointDelete(waypoint.id)}
+                  onEditToggle={() => onWaypointEditToggle(waypointKey, waypoint.value)}
+                  onValueChange={(nextValue) =>
+                    onCustomWaypointChange(waypoint.id, nextValue)
+                  }
+                  placeholder={category.placeholder}
+                  strength="strong"
+                  value={waypoint.value}
+                />
+              );
+            })}
+            <button
+              className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#ddf3eb] px-3 text-sm font-semibold text-moss transition hover:bg-[#d2eee4] active:scale-[0.98]"
+              type="button"
+              onClick={onCustomWaypointAdd}
+            >
+              <Plus size={16} aria-hidden />
+              경유 추가
+            </button>
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -2786,13 +2896,18 @@ function MobilePlanResult({
   onRouteFeedbackSave,
   onSelectRoute,
   plan,
+  routeContext,
   selectedMap,
   selectedRoute,
   selectedScore
 }: {
-  onRouteFeedbackSave: (routeId: string) => void;
+  onRouteFeedbackSave: (
+    routeId: string,
+    recommendation?: RouteRecommendationRecord | null
+  ) => void;
   onSelectRoute: (routeId: string) => void;
   plan: DailyPlan;
+  routeContext: RouteContext | null;
   selectedMap: MapViewModel;
   selectedRoute: RouteCandidate;
   selectedScore: EmotionCost;
@@ -2813,15 +2928,24 @@ function MobilePlanResult({
     setFeedbackChoice(nextChoice);
     setFeedbackPending(true);
     try {
-      await sendRouteFeedback({
+      const selectedPlan = selectRouteInPlan(plan, selectedRoute.id);
+      const feedbackResult = await sendRouteFeedback({
         route_id: selectedRoute.id,
         liked,
         emotion_primary: plan.emotion.primary,
         provider: selectedRoute.provider,
-        reason: firstTradeoff?.reason ?? plan.explanation
+        reason: firstTradeoff?.reason ?? plan.explanation,
+        origin: liked ? routeContext?.origin : undefined,
+        destination: liked ? routeContext?.destination : undefined,
+        selected_route: liked ? selectedRoute : undefined,
+        emotion: liked ? selectedPlan.emotion : undefined,
+        plan_snapshot: liked ? selectedPlan : undefined
       });
       if (liked) {
-        onRouteFeedbackSave(selectedRoute.id);
+        onRouteFeedbackSave(
+          selectedRoute.id,
+          feedbackResult.route_recommendation
+        );
       }
     } catch {
       setFeedbackChoice(null);
@@ -3453,7 +3577,8 @@ function buildRouteTimeline(route: RouteCandidate): TimelineItem[] {
       time: formatTimelineMinutes(currentMinutes),
       label: stopTimelineLabel(stop),
       type: "task",
-      required: stop.required
+      required: stop.required,
+      address: stop.address ?? null
     });
     currentMinutes += 10;
   });
@@ -3553,7 +3678,12 @@ function TimelineList({ route }: { route: RouteCandidate }) {
                 </span>
               ) : null}
             </span>
-            {item.label}
+            <span className="block">{item.label}</span>
+            {item.type === "task" && item.address ? (
+              <span className="mt-1 block text-xs leading-5 text-ink/42 [word-break:keep-all]">
+                {compactAddress(item.address)}
+              </span>
+            ) : null}
           </span>
         </li>
       ))}
