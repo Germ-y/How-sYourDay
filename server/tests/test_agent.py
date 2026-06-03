@@ -1122,6 +1122,35 @@ def test_preview_insights_uses_final_appointment_and_waypoints(monkeypatch) -> N
     assert any(insight.label == "작업할 카페" for insight in insights)
 
 
+def test_preview_insights_friend_scenario_keeps_required_and_optional_waypoints(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    insights, _, mood_candidates = build_preview_insights(
+        "지금 성균관대야. 홍대입구역 3번 출구 앞에서 친구 만나야 하는데 약속까지 1시간 반 남았어. "
+        "가기 전에 상도 건영 106동에 들러야 해. 늦을까 봐 정신없고, 걷는 건 최대한 줄이고 싶어. "
+        "시간 되면 다이소에서 내일 필요한 공책도 사고 싶어. 아 친구 만나서 인생네컷도 갈거야",
+        None,
+        None,
+        None,
+    )
+
+    values = [insight.value for insight in insights]
+    waypoint_values = [
+        insight.value for insight in insights if insight.kind in {"stop", "task"}
+    ]
+
+    assert any("성균관대" in value and "홍대입구역" in value for value in values)
+    assert any("전 도착 우선" in value for value in values)
+    assert not any("18:00" in value for value in values)
+    assert any("상도 건영 106동" in value for value in waypoint_values)
+    assert any("다이소" in value for value in waypoint_values)
+    assert any("인생네컷" in value for value in waypoint_values)
+    assert not any("산책" in value for value in waypoint_values)
+    assert "바쁨" in mood_candidates
+
+
 def test_preview_insights_detects_via_place_before_final_destination(
     monkeypatch,
 ) -> None:

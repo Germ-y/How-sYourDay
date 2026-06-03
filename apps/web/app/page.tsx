@@ -290,16 +290,16 @@ export default function HomePage() {
   const routeWaypointHints = useMemo(
     () =>
       uniqueWaypointHints([
-        ...collectTextWaypointHints(text),
         ...collectPreviewWaypointHints(
           previewInsights,
           editedWaypoints,
           deletedWaypoints
         ),
+        ...collectTextWaypointHints(text),
         ...customWaypoints
           .map(customWaypointToHint)
           .filter(Boolean)
-      ]).slice(0, 5),
+      ]),
     [customWaypoints, deletedWaypoints, editedWaypoints, previewInsights, text]
   );
   const quickSavedPlaces = useMemo(
@@ -4922,8 +4922,7 @@ function collectPreviewWaypointHints(
         return [];
       }
       return [previewWaypointHint(value, insight)];
-    })
-    .slice(0, 5);
+    });
 }
 
 function customWaypointKey(id: string) {
@@ -5081,6 +5080,7 @@ function hasLocalTimeHint(normalized: string) {
     /\d+\s*(시|분)\s*(까지|전|안에)?/.test(normalized) ||
     /(오전|오후)\s*\d+/.test(normalized) ||
     /\d+\s*시간\s*안/.test(normalized) ||
+    /\d+\s*시간\s*(반|\d+\s*분)?\s*남/.test(normalized) ||
     /(deadline|마감|늦지|촉박)/.test(normalized)
   );
 }
@@ -5090,7 +5090,10 @@ function buildLocalStopInsights(text: string): PreviewInsight[] {
   const insights: PreviewInsight[] = [];
   const explicitWaypoints = extractLocalWaypointHints(text);
 
-  explicitWaypoints.slice(0, 3).forEach((explicitWaypoint) => {
+  explicitWaypoints.forEach((explicitWaypoint) => {
+    if (isServiceWaypoint(explicitWaypoint)) {
+      return;
+    }
     insights.push({
       label: "거쳐 갈 곳",
       value: `${explicitWaypoint} 주변`,
@@ -5099,7 +5102,7 @@ function buildLocalStopInsights(text: string): PreviewInsight[] {
     });
   });
 
-  if (/(걷|걸을|산책|돌아다니|주변|근처|선선)/.test(text)) {
+  if (/(걷|걸을|산책|돌아다니|주변|근처|선선)/.test(text) && !hasWalkingAvoidance(text)) {
     insights.push({
       label: "경유 후보",
       value: area ? `${area} 주변 산책` : "주변 산책 후보",
@@ -5148,8 +5151,19 @@ function buildLocalStopInsights(text: string): PreviewInsight[] {
       }
       seen.add(insight.value);
       return true;
-    })
-    .slice(0, 3);
+    });
+}
+
+function hasWalkingAvoidance(text: string) {
+  const compact = text.replace(/\s+/g, "");
+  return /걷기싫|걷는건최대한줄|걷는건줄|걷는것은줄|걷는건최소|걷는거최소|걷고싶지|걷는건싫/.test(compact);
+}
+
+function isServiceWaypoint(value: string) {
+  const normalized = value.replace(/\s+/g, "").toLowerCase();
+  return ["다이소", "올리브영", "약국", "편의점", "마트", "인생네컷", "포토부스", "포토이즘", "사진관"].some((keyword) =>
+    normalized.includes(keyword.replace(/\s+/g, "").toLowerCase())
+  );
 }
 
 function localErrandValue(text: string) {
@@ -5199,13 +5213,23 @@ function collectTextWaypointHints(text: string) {
 function uniqueWaypointHints(hints: string[]) {
   const seen = new Set<string>();
   return hints.filter((hint) => {
-    const key = hint.replace(/\s+/g, "").toLowerCase();
+    const key = waypointHintIdentity(hint);
     if (seen.has(key)) {
       return false;
     }
     seen.add(key);
     return true;
   });
+}
+
+function waypointHintIdentity(hint: string) {
+  return hint
+    .replace(/^(필수|참고)\s*경유:\s*/, "")
+    .replace(/^\[[^\]]+\]\s*/, "")
+    .replace(/\s*주변$/, "")
+    .replace(/\s*들르기$/, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
 }
 
 function extractLocalWaypointHint(text: string) {
@@ -5247,7 +5271,7 @@ function extractLocalWaypointHints(text: string) {
     waypoints.push("인생네컷");
   }
 
-  return waypoints.slice(0, 5);
+  return waypoints;
 }
 
 function extractLocalPreviewRoute(
@@ -5300,7 +5324,7 @@ function cleanLocalLocationHint(value?: string) {
 
   return value
     .replace(/^.*(?:가고\s*싶어|가고싶어|싶어)\s+/, "")
-    .replace(/^(오늘|내일|지금|일단|그리고|나는|나|제가|저는)\s+/, "")
+    .replace(/^(오늘|내일|지금|일단|그리고|나는|나|제가|저는|가기\s*전에|전에|만나서|만난\s*뒤|만나고)\s+/, "")
     .replace(/\s*(에서|부터|으로|로|까지|에)$/, "")
     .trim();
 }

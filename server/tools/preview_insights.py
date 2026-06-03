@@ -213,7 +213,7 @@ def _preview_insights_with_llm(
     except (TypeError, ValueError, ValidationError):
         return None
 
-    return _repair_preview_insights(insights, origin, destination, intent, active_mood)
+    return _repair_preview_insights(insights, origin, destination, intent, active_mood, text)
 
 
 def _repair_preview_insights(
@@ -222,6 +222,7 @@ def _repair_preview_insights(
     destination: str | None,
     intent,
     active_mood: str | None,
+    text: str,
 ) -> list[PreviewInsight] | None:
     if not insights:
         return None
@@ -246,11 +247,27 @@ def _repair_preview_insights(
             strength=repaired[0].strength or "none",
         )
 
+    repaired_time_value = (
+        f"{intent.constraints.deadline} 전 도착 우선"
+        if intent and intent.constraints.deadline
+        else None
+    )
+    if repaired_time_value:
+        repaired = [
+            PreviewInsight(
+                label=insight.label,
+                value=repaired_time_value,
+                kind=insight.kind,
+                strength=insight.strength or "none",
+            )
+            if insight.kind == "time"
+            else insight
+            for insight in repaired
+        ]
+
     if not any(insight.kind == "time" for insight in repaired):
         time_value = (
-            f"{intent.constraints.deadline} 전 도착 우선"
-            if intent and intent.constraints.deadline
-            else "감지된 시간 조건 없음"
+            repaired_time_value if repaired_time_value else "감지된 시간 조건 없음"
         )
         repaired.insert(
             1,
@@ -273,10 +290,17 @@ def _repair_preview_insights(
     )
     _ensure_mood_insight(repaired, mood_label)
 
+    existing_values = {_normalize(insight.value) for insight in repaired}
+    for stop_insight in _stop_insights(text, destination):
+        if _normalize(stop_insight.value) in existing_values:
+            continue
+        existing_values.add(_normalize(stop_insight.value))
+        repaired.append(stop_insight)
+
     unique: list[PreviewInsight] = []
     seen: set[str] = set()
     for insight in repaired:
-        key = f"{insight.kind}:{insight.label}:{insight.value}"
+        key = _insight_identity(insight)
         if key in seen:
             continue
         seen.add(key)
@@ -339,7 +363,9 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
     waypoint = waypoints[0] if waypoints else None
     area = waypoint or _area_hint(text)
 
-    for waypoint in waypoints[:3]:
+    for waypoint in waypoints:
+        if _is_service_waypoint(waypoint):
+            continue
         insights.append(
             PreviewInsight(
                 label="거쳐 갈 곳",
@@ -349,7 +375,10 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
             )
         )
 
-    if any(marker in text for marker in ["걷", "산책", "돌아다니", "주변", "근처", "선선"]):
+    if (
+        any(marker in text for marker in ["걷", "산책", "돌아다니", "주변", "근처", "선선"])
+        and not _has_walking_avoidance(text)
+    ):
         value = f"{area} 주변 산책" if area else "가볍게 걸을 곳"
         insights.append(
             PreviewInsight(label="산책 후보", value=value, kind="stop", strength="weak")
@@ -404,6 +433,16 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
             )
         )
 
+    if any(marker in text for marker in ["인생네컷", "네컷", "포토부스", "포토이즘", "사진관"]):
+        insights.append(
+            PreviewInsight(
+                label="사진 찍기",
+                value=_photo_value(text),
+                kind="task",
+                strength="weak" if _has_optional_signal(text) else "strong",
+            )
+        )
+
     unique: list[PreviewInsight] = []
     seen: set[str] = set()
     for insight in insights:
@@ -411,7 +450,7 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
             continue
         seen.add(insight.value)
         unique.append(insight)
-    return unique[:5]
+    return unique
 
 
 def _errand_value(text: str) -> str:
@@ -423,6 +462,15 @@ def _errand_value(text: str) -> str:
     if "장보기" in text:
         return "장보기"
     return "살 것 사기"
+
+
+def _photo_value(text: str) -> str:
+    for keyword in ["인생네컷", "포토이즘", "포토부스", "사진관"]:
+        if keyword in text:
+            return keyword
+    if "네컷" in text:
+        return "인생네컷"
+    return "사진 찍기"
 
 
 def _emotion_insight(primary: str) -> PreviewInsight | None:
@@ -445,7 +493,15 @@ def _empty_insight(index: int) -> PreviewInsight:
 
 
 def _limit_insights(insights: list[PreviewInsight]) -> list[PreviewInsight]:
-    return insights[:8]
+    return insights[:12]
+
+
+def _insight_identity(insight: PreviewInsight) -> str:
+    if insight.kind in {"stop", "task"}:
+        value = re.sub(r"\s*주변(?:\s*산책)?$", "", insight.value)
+        value = re.sub(r"\s*들르기$", "", value)
+        return f"waypoint:{_normalize(value)}"
+    return f"{insight.kind}:{_normalize(insight.label)}:{_normalize(insight.value)}"
 
 
 def _default_mood_candidates() -> list[str]:
@@ -509,6 +565,7 @@ def _has_time_hint(text: str) -> bool:
         re.search(r"\d+\s*(?:시|분)\s*(?:까지|전|안에)?", text)
         or re.search(r"(?:오전|오후)\s*\d+", text)
         or re.search(r"\d+\s*시간\s*안", text)
+        or re.search(r"\d+\s*시간\s*(?:반|\d+\s*분)?\s*남", text)
         or any(marker in text for marker in ["deadline", "마감", "늦지", "촉박"])
     )
 
@@ -527,6 +584,32 @@ def _has_optional_signal(text: str) -> bool:
             "가능하면",
             "되면",
         ]
+    )
+
+
+def _has_walking_avoidance(text: str) -> bool:
+    compact = text.replace(" ", "")
+    return any(
+        marker in compact
+        for marker in [
+            "걷기싫",
+            "걷는건최대한줄",
+            "걷는건줄",
+            "걷는것은줄",
+            "걷는건최소",
+            "걷는거최소",
+            "걷는건최대한피",
+            "걷고싶지",
+            "걷는건싫",
+        ]
+    )
+
+
+def _is_service_waypoint(value: str) -> bool:
+    normalized = _normalize(value)
+    return any(
+        _normalize(keyword) in normalized
+        for keyword in ["다이소", "올리브영", "약국", "편의점", "마트", "인생네컷", "포토부스", "포토이즘", "사진관"]
     )
 
 
@@ -566,7 +649,7 @@ def _waypoint_hints(text: str, destination: str | None = None) -> list[str]:
         seen.add(_normalize("인생네컷"))
         hints.append("인생네컷")
 
-    return hints[:5]
+    return hints
 
 
 def _area_hint(text: str) -> str | None:
@@ -593,6 +676,7 @@ def _clean_hint(value: str | None) -> str | None:
         "",
         cleaned.strip(),
     )
+    cleaned = re.sub(r"^(?:가기\s*전에|전에|만나서|만난\s*뒤|만나고)\s*", "", cleaned)
     cleaned = re.sub(r"\s*(에서|부터|으로|로|까지|에)$", "", cleaned).strip()
     return cleaned if len(cleaned) >= 2 else None
 

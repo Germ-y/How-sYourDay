@@ -1,5 +1,7 @@
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from api.schemas import Constraints, EmotionState, Task
 
@@ -60,19 +62,32 @@ def extract_intent(user_text: str) -> ExtractedIntent:
     if llm_intent is None:
         return fallback
 
+    constraints = _repair_constraints(user_text, llm_intent.constraints)
     if not llm_intent.tasks:
         return ExtractedIntent(
             tasks=fallback.tasks,
-            constraints=llm_intent.constraints,
+            constraints=constraints,
             emotion=llm_intent.emotion,
             mood_candidates=llm_intent.mood_candidates or fallback.mood_candidates,
         )
 
     return ExtractedIntent(
         tasks=_sanitize_tasks(user_text, llm_intent.tasks),
-        constraints=llm_intent.constraints,
+        constraints=constraints,
         emotion=llm_intent.emotion,
         mood_candidates=llm_intent.mood_candidates,
+    )
+
+
+def _repair_constraints(user_text: str, constraints: Constraints) -> Constraints:
+    rule_deadline = _extract_deadline(user_text)
+    if not rule_deadline:
+        return constraints
+    return Constraints(
+        deadline=rule_deadline,
+        destination=constraints.destination,
+        max_walking_minutes=constraints.max_walking_minutes,
+        must_arrive_before_deadline=True,
     )
 
 
@@ -170,11 +185,65 @@ def _has_recovery_intent_beyond_print_cafe(text: str) -> bool:
 
 
 def _extract_deadline(text: str) -> str | None:
-    if "5" in text or "five" in text:
+    relative = _extract_relative_deadline(text)
+    if relative:
+        return relative
+
+    exact = _extract_explicit_clock_deadline(text)
+    if exact:
+        return exact
+
+    english = text.lower()
+    if re.search(r"\bfive\b", english):
         return "17:00"
-    if "6" in text or "six" in text:
+    if re.search(r"\bsix\b", english):
         return "18:00"
     return None
+
+
+def _extract_relative_deadline(text: str, now: datetime | None = None) -> str | None:
+    base = now or datetime.now(ZoneInfo("Asia/Seoul"))
+    match = re.search(
+        r"(?:약속|도착|만남|예약|회의|수업)?(?:까지|은|는)?\s*"
+        r"(?P<hours>\d+)\s*시간\s*(?P<half>반)?\s*(?P<minutes>\d+\s*분)?\s*남",
+        text,
+    )
+    if not match:
+        return None
+
+    hours = int(match.group("hours"))
+    minutes = 30 if match.group("half") else 0
+    minute_text = match.group("minutes")
+    if minute_text:
+        minute_match = re.search(r"\d+", minute_text)
+        if minute_match:
+            minutes += int(minute_match.group())
+
+    deadline = base + timedelta(hours=hours, minutes=minutes)
+    return deadline.strftime("%H:%M")
+
+
+def _extract_explicit_clock_deadline(text: str) -> str | None:
+    match = re.search(
+        r"(?P<period>오전|오후)?\s*(?P<hour>\d{1,2})\s*시(?:\s*(?P<minute>\d{1,2})\s*분?)?"
+        r"\s*(?:까지|전|안에|도착|약속|예약|만나|보기로)?",
+        text,
+    )
+    if not match:
+        return None
+
+    hour = int(match.group("hour"))
+    minute = int(match.group("minute") or 0)
+    period = match.group("period")
+    if period == "오후" and hour < 12:
+        hour += 12
+    if period == "오전" and hour == 12:
+        hour = 0
+    if hour > 23 or minute > 59:
+        return None
+    if not period and hour <= 7:
+        hour += 12
+    return f"{hour:02d}:{minute:02d}"
 
 
 def _analyze_emotion(text: str) -> EmotionState:
