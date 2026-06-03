@@ -286,6 +286,7 @@ export default function HomePage() {
     () => ensureActiveMoodCandidate(moodCandidates, activeMood),
     [activeMood, moodCandidates]
   );
+  const activeMoodForPreview = moodEdited ? activeMood : "";
   const routeWaypointHints = useMemo(
     () =>
       uniqueWaypointHints([
@@ -436,18 +437,16 @@ export default function HomePage() {
       return;
     }
 
-    setPreviewInsights(defaultPreviewInsights());
-    setSuggestedMoodLabels([]);
-    setPreviewSource("rules");
     setIsPreviewLoading(true);
     const timer = window.setTimeout(async () => {
       try {
-        const hasRouteRequestText = Boolean(text.trim());
+        const trimmedOriginText = originText.trim();
+        const trimmedDestinationText = destinationText.trim();
         const result = await fetchPreviewInsights({
           user_text: text,
-          origin_text: hasRouteRequestText ? undefined : originText,
-          destination_text: hasRouteRequestText ? undefined : destinationText,
-          active_mood: moodEdited ? activeMood : undefined
+          origin_text: trimmedOriginText || undefined,
+          destination_text: trimmedDestinationText || undefined,
+          active_mood: activeMoodForPreview || undefined
         });
         if (!cancelled) {
           setPreviewInsights(result.insights);
@@ -474,7 +473,7 @@ export default function HomePage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [text, originText, destinationText, activeMood, moodEdited]);
+  }, [text, originText, destinationText, activeMoodForPreview, moodEdited]);
 
   useEffect(() => {
     const query = originText.trim();
@@ -4788,11 +4787,8 @@ function buildMoodCandidates(_input: string, suggestedLabels: string[] = []) {
   const suggestedSet = new Set(
     suggestedLabels.filter((label) => MOOD_PRESETS.some((mood) => mood.label === label))
   );
-  const suggestedIsOnlyDefault =
-    suggestedSet.size > 0 &&
-    Array.from(suggestedSet).every((label) => DEFAULT_MOOD_LABELS.includes(label));
 
-  if (!suggestedSet.size || suggestedIsOnlyDefault) {
+  if (!suggestedSet.size) {
     return [];
   }
 

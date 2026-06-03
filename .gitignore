@@ -10,7 +10,7 @@ dist/
 build/
 *.egg-info/
 apps/web/next-dev*.log
-apps/web/web-dev.log
+apps/web/web-dev*.log
 server/api-dev*.log
 server/api-live.log
 logs/
