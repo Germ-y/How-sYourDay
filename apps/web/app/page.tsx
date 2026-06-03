@@ -2030,9 +2030,6 @@ function PreferenceMapSkeleton() {
       </div>
       <div className="relative mx-5 h-[300px] overflow-hidden rounded-2xl bg-[#fff9ed] ring-1 ring-ink/8">
         <div className="absolute inset-0 animate-pulse bg-[linear-gradient(90deg,rgba(23,26,24,0.05)_1px,transparent_1px),linear-gradient(rgba(23,26,24,0.05)_1px,transparent_1px)] bg-[size:36px_36px]" />
-        <div className="absolute left-[22%] top-[28%] h-7 w-7 animate-pulse rounded-full bg-[#ddf3eb]" />
-        <div className="absolute left-[52%] top-[50%] h-8 w-8 animate-pulse rounded-full bg-[#fde2ef]" />
-        <div className="absolute left-[70%] top-[62%] h-7 w-7 animate-pulse rounded-full bg-[#ddf3eb]" />
       </div>
       <div className="p-5">
         <div className="h-16 animate-pulse rounded-2xl bg-[#fffdf8] ring-1 ring-ink/7" />
