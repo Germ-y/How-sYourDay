@@ -242,6 +242,7 @@ export default function HomePage() {
     "내 주변 장소 준비"
   );
   const [activeView, setActiveView] = useState<AppView>("planner");
+  const [isSavedRouteView, setIsSavedRouteView] = useState(false);
   const [locationStatus, setLocationStatus] =
     useState("주소 또는 장소명 입력 필요");
   const [savedPlaces, setSavedPlaces] = useState<SavedPlaceEntry[]>([]);
@@ -672,6 +673,7 @@ export default function HomePage() {
       setSelectedDestinationLocation(null);
     }
     setLocationStatus(`${place.name}을 ${target === "origin" ? "출발지" : "도착지"}로 설정`);
+    setIsSavedRouteView(false);
     setActiveView("planner");
     window.requestAnimationFrame(() => {
       resetPlannerScroll();
@@ -791,6 +793,7 @@ export default function HomePage() {
     setPoiVotes({});
     setIsPreferenceReviewing(false);
     setPoiPreferenceIndex(0);
+    setIsSavedRouteView(false);
     setActiveView("planner");
   }
 
@@ -964,6 +967,7 @@ export default function HomePage() {
         destination: destinationResult.location
       });
       setPlan(result);
+      setIsSavedRouteView(false);
       setActiveView("result");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "경로 생성 실패");
@@ -1010,6 +1014,9 @@ export default function HomePage() {
       return;
     }
 
+    if (view !== "result") {
+      setIsSavedRouteView(false);
+    }
     setActiveView(view);
     if (
       view === "taste" &&
@@ -1263,10 +1270,12 @@ export default function HomePage() {
           destination: recommendation.destination
         });
       }
+      setIsSavedRouteView(true);
       setActiveView("result");
       return;
     }
 
+    setIsSavedRouteView(false);
     setActiveView(plan ? "result" : "planner");
   }
 
@@ -1280,6 +1289,7 @@ export default function HomePage() {
         recommendation,
         ...current.filter((item) => item.id !== recommendation.id)
       ]);
+      setIsSavedRouteView(true);
     }
   }
 
@@ -1572,9 +1582,13 @@ export default function HomePage() {
           </>
         ) : activeView === "result" && plan ? (
           <RouteResultPage
+            isSavedRouteView={isSavedRouteView}
             plan={plan}
             routeContext={routeContext}
-            onBackToPlanner={() => setActiveView("planner")}
+            onBackToPlanner={() => {
+              setIsSavedRouteView(false);
+              setActiveView("planner");
+            }}
             onRouteFeedbackSave={handleRouteFeedbackSave}
           />
         ) : activeView === "taste" ? (
@@ -1605,7 +1619,10 @@ export default function HomePage() {
             onRemoveSavedPlace={handleRemoveSavedPlace}
             onSavedPlaceDraftChange={handleSavedPlaceDraftChange}
             onLogout={handleLogout}
-            onOpenPlanner={() => setActiveView("planner")}
+            onOpenPlanner={() => {
+              setIsSavedRouteView(false);
+              setActiveView("planner");
+            }}
             onOpenRecentRoute={handleRecentRouteOpen}
             onUseSavedPlace={handleUseSavedPlace}
           />
@@ -2672,11 +2689,13 @@ function ComposerTitle({
 }
 
 function RouteResultPage({
+  isSavedRouteView,
   plan,
   routeContext,
   onBackToPlanner,
   onRouteFeedbackSave
 }: {
+  isSavedRouteView: boolean;
   plan: DailyPlan;
   routeContext: RouteContext | null;
   onBackToPlanner: () => void;
@@ -2717,12 +2736,16 @@ function RouteResultPage({
         </button>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-moss">경로 추천</p>
+            <p className="text-sm font-semibold text-moss">
+              {isSavedRouteView ? "저장한 경로" : "경로 추천"}
+            </p>
             <h1 className="mt-1 text-[28px] font-semibold leading-tight [word-break:keep-all]">
-              추천 경로 확인
+              {isSavedRouteView ? "좋았던 길 다시 보기" : "추천 경로 확인"}
             </h1>
             <p className="mt-2 text-sm leading-6 text-ink/55 [word-break:keep-all]">
-              이동 조건과 컨디션을 반영한 결과입니다.
+              {isSavedRouteView
+                ? "저장한 순간의 경로와 판단 근거를 보여줍니다."
+                : "이동 조건과 컨디션을 반영한 결과입니다."}
             </p>
           </div>
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-tide shadow-sm ring-1 ring-ink/8">
@@ -2747,6 +2770,7 @@ function RouteResultPage({
 
       <div className="grid gap-4">
         <MobilePlanResult
+          isSavedRouteView={isSavedRouteView}
           onRouteFeedbackSave={onRouteFeedbackSave}
           onSelectRoute={setSelectedRouteId}
           plan={plan}
@@ -2934,6 +2958,7 @@ function PlanPreview({
 }
 
 function MobilePlanResult({
+  isSavedRouteView,
   onRouteFeedbackSave,
   onSelectRoute,
   plan,
@@ -2942,6 +2967,7 @@ function MobilePlanResult({
   selectedRoute,
   selectedScore
 }: {
+  isSavedRouteView: boolean;
   onRouteFeedbackSave: (
     routeId: string,
     recommendation?: RouteRecommendationRecord | null
@@ -2997,7 +3023,7 @@ function MobilePlanResult({
 
   return (
     <>
-      {plan.routes.length > 1 ? (
+      {!isSavedRouteView && plan.routes.length > 1 ? (
         <RouteList
           onSelect={onSelectRoute}
           plan={plan}
@@ -3042,34 +3068,36 @@ function MobilePlanResult({
           tradeoff={firstTradeoff}
         />
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button
-            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition active:scale-[0.99] ${
-              feedbackChoice === "liked"
-                ? "bg-moss text-white"
-                : "bg-[#ddf3eb] text-moss"
-            }`}
-            disabled={feedbackPending}
-            type="button"
-            onClick={() => handleFeedback(true)}
-          >
-            {feedbackChoice === "liked" ? <CheckCircle2 size={16} aria-hidden /> : null}
-            {feedbackChoice === "liked" ? "저장됨" : "이 길 괜찮았어요"}
-          </button>
-          <button
-            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition active:scale-[0.99] ${
-              feedbackChoice === "disliked"
-                ? "bg-tide text-white"
-                : "bg-[#fde2ef] text-coral"
-            }`}
-            disabled={feedbackPending}
-            type="button"
-            onClick={() => handleFeedback(false)}
-          >
-            {feedbackChoice === "disliked" ? <CheckCircle2 size={16} aria-hidden /> : null}
-            {feedbackChoice === "disliked" ? "반영됨" : "별로였어요"}
-          </button>
-        </div>
+        {!isSavedRouteView ? (
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button
+              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition active:scale-[0.99] ${
+                feedbackChoice === "liked"
+                  ? "bg-moss text-white"
+                  : "bg-[#ddf3eb] text-moss"
+              }`}
+              disabled={feedbackPending}
+              type="button"
+              onClick={() => handleFeedback(true)}
+            >
+              {feedbackChoice === "liked" ? <CheckCircle2 size={16} aria-hidden /> : null}
+              {feedbackChoice === "liked" ? "저장됨" : "이 길 괜찮았어요"}
+            </button>
+            <button
+              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition active:scale-[0.99] ${
+                feedbackChoice === "disliked"
+                  ? "bg-tide text-white"
+                  : "bg-[#fde2ef] text-coral"
+              }`}
+              disabled={feedbackPending}
+              type="button"
+              onClick={() => handleFeedback(false)}
+            >
+              {feedbackChoice === "disliked" ? <CheckCircle2 size={16} aria-hidden /> : null}
+              {feedbackChoice === "disliked" ? "반영됨" : "별로였어요"}
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <KakaoMapPreview map={selectedMap} usesKakaoPoi={usesKakaoPoi} />
