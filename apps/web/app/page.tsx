@@ -66,16 +66,20 @@ import {
 
 const starterText = "";
 
+type WaypointCategoryValue = "cafe" | "walk" | "rest" | "errand" | "meal";
+
 const WAYPOINT_CATEGORY_OPTIONS: Array<{
   label: string;
-  value: string;
+  value: WaypointCategoryValue;
+  hint: string;
+  placeholder: string;
   icon: LucideIcon;
 }> = [
-  { label: "카페", value: "조용한 카페", icon: Coffee },
-  { label: "산책", value: "산책할 곳", icon: Leaf },
-  { label: "쉼", value: "잠깐 쉴 곳", icon: HeartPulse },
-  { label: "볼일", value: "볼일 장소", icon: MapPin },
-  { label: "식사", value: "식사 장소", icon: Building2 }
+  { label: "카페", value: "cafe", hint: "작업/휴식 카페", placeholder: "예: 스타벅스, 조용한 카페", icon: Coffee },
+  { label: "산책", value: "walk", hint: "산책할 곳", placeholder: "예: 공원, 산책로", icon: Leaf },
+  { label: "쉼", value: "rest", hint: "잠깐 쉴 곳", placeholder: "예: 벤치 있는 공원, 조용한 곳", icon: HeartPulse },
+  { label: "볼일", value: "errand", hint: "볼일 장소", placeholder: "예: 약국, 다이소, 올리브영", icon: MapPin },
+  { label: "식사", value: "meal", hint: "식사 장소", placeholder: "예: 김밥집, 수림식당", icon: Building2 }
 ];
 const SAVED_PLACES_KEY = "hows-your-day.saved-places.v1";
 const MOOD_PRESETS = [
@@ -177,6 +181,7 @@ type SavedPlaceEntry = {
 };
 type CustomWaypoint = {
   id: string;
+  category: WaypointCategoryValue;
   value: string;
 };
 type PreferencePoint = {
@@ -275,9 +280,8 @@ export default function HomePage() {
           deletedWaypoints
         ),
         ...customWaypoints
-          .map((waypoint) => waypoint.value.trim())
+          .map(customWaypointToHint)
           .filter(Boolean)
-          .map((value) => `필수 경유: ${value}`)
       ].slice(0, 5),
     [customWaypoints, deletedWaypoints, editedWaypoints, previewInsights]
   );
@@ -1042,7 +1046,7 @@ export default function HomePage() {
   function handleCustomWaypointAdd() {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const key = customWaypointKey(id);
-    setCustomWaypoints((current) => [...current, { id, value: "조용한 카페" }]);
+    setCustomWaypoints((current) => [...current, { id, category: "cafe", value: "" }]);
     setEditingWaypointKey(key);
   }
 
@@ -1050,6 +1054,17 @@ export default function HomePage() {
     setCustomWaypoints((current) =>
       current.map((waypoint) =>
         waypoint.id === id ? { ...waypoint, value } : waypoint
+      )
+    );
+  }
+
+  function handleCustomWaypointCategoryChange(
+    id: string,
+    category: WaypointCategoryValue
+  ) {
+    setCustomWaypoints((current) =>
+      current.map((waypoint) =>
+        waypoint.id === id ? { ...waypoint, category } : waypoint
       )
     );
   }
@@ -1342,6 +1357,7 @@ export default function HomePage() {
               insights={previewInsights}
               isLoading={isPreviewLoading}
               onCustomWaypointAdd={handleCustomWaypointAdd}
+              onCustomWaypointCategoryChange={handleCustomWaypointCategoryChange}
               onCustomWaypointChange={handleCustomWaypointChange}
               onCustomWaypointDelete={handleCustomWaypointDelete}
               onWaypointChange={handleWaypointChange}
@@ -2443,6 +2459,7 @@ function PlanPreview({
   insights,
   isLoading,
   onCustomWaypointAdd,
+  onCustomWaypointCategoryChange,
   onCustomWaypointChange,
   onCustomWaypointDelete,
   onWaypointChange,
@@ -2459,6 +2476,10 @@ function PlanPreview({
   insights: PreviewInsight[];
   isLoading: boolean;
   onCustomWaypointAdd: () => void;
+  onCustomWaypointCategoryChange: (
+    id: string,
+    category: WaypointCategoryValue
+  ) => void;
   onCustomWaypointChange: (id: string, value: string) => void;
   onCustomWaypointDelete: (id: string) => void;
   onWaypointChange: (key: string, value: string) => void;
@@ -2539,18 +2560,26 @@ function PlanPreview({
         })}
         {customWaypoints.map((waypoint) => {
           const waypointKey = customWaypointKey(waypoint.id);
+          const category = waypointCategoryOption(waypoint.category);
+          const CategoryIcon = category.icon;
           return (
             <PlannerCue
+              categoryOptions={WAYPOINT_CATEGORY_OPTIONS}
+              categoryValue={waypoint.category}
               editable
-              icon={<MapPin size={15} aria-hidden />}
+              icon={<CategoryIcon size={15} aria-hidden />}
               isEditing={editingWaypointKey === waypointKey}
               key={waypointKey}
-              label="직접 경유"
+              label={category.label}
+              onCategoryChange={(nextCategory) =>
+                onCustomWaypointCategoryChange(waypoint.id, nextCategory)
+              }
               onDelete={() => onCustomWaypointDelete(waypoint.id)}
               onEditToggle={() => onWaypointEditToggle(waypointKey, waypoint.value)}
               onValueChange={(nextValue) =>
                 onCustomWaypointChange(waypoint.id, nextValue)
               }
+              placeholder={category.placeholder}
               value={waypoint.value}
             />
           );
@@ -3350,22 +3379,30 @@ function RouteList({
 }
 
 function PlannerCue({
+  categoryOptions,
+  categoryValue,
   editable = false,
   icon,
   isEditing = false,
   label,
+  onCategoryChange,
   onDelete,
   onEditToggle,
   onValueChange,
+  placeholder = "예: 스타벅스, 조용한 카페",
   value
 }: {
+  categoryOptions?: typeof WAYPOINT_CATEGORY_OPTIONS;
+  categoryValue?: WaypointCategoryValue;
   editable?: boolean;
   icon: ReactNode;
   isEditing?: boolean;
   label: string;
+  onCategoryChange?: (category: WaypointCategoryValue) => void;
   onDelete?: () => void;
   onEditToggle?: () => void;
   onValueChange?: (value: string) => void;
+  placeholder?: string;
   value?: string;
 }) {
   return (
@@ -3377,32 +3414,34 @@ function PlannerCue({
         <span className="block text-[11px] font-semibold text-ink/38">{label}</span>
         {isEditing ? (
           <span className="mt-2 grid gap-2">
-            <span className="grid grid-cols-5 gap-1.5">
-              {WAYPOINT_CATEGORY_OPTIONS.map((option) => {
-                const selected = value === option.value;
-                const Icon = option.icon;
-                return (
-                  <button
-                    className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition active:scale-95 ${
-                      selected
-                        ? "bg-[#fde2ef] text-tide ring-1 ring-tide/35"
-                        : "bg-white text-ink/52 ring-1 ring-ink/8 hover:bg-[#fff9ed]"
-                    }`}
-                    key={option.value}
-                    type="button"
-                    onClick={() => {
-                      onValueChange?.(option.value);
-                    }}
-                  >
-                    <Icon size={15} aria-hidden />
-                    <span>{option.label}</span>
-                  </button>
-                );
-              })}
-            </span>
+            {categoryOptions && categoryValue && onCategoryChange ? (
+              <span className="grid grid-cols-5 gap-1.5">
+                {categoryOptions.map((option) => {
+                  const selected = categoryValue === option.value;
+                  const Icon = option.icon;
+                  return (
+                    <button
+                      className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition active:scale-95 ${
+                        selected
+                          ? "bg-[#fde2ef] text-tide ring-1 ring-tide/35"
+                          : "bg-white text-ink/52 ring-1 ring-ink/8 hover:bg-[#fff9ed]"
+                      }`}
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        onCategoryChange(option.value);
+                      }}
+                    >
+                      <Icon size={15} aria-hidden />
+                      <span>{option.label}</span>
+                    </button>
+                  );
+                })}
+              </span>
+            ) : null}
             <input
               className="block min-h-9 w-full min-w-0 rounded-xl border border-ink/10 bg-white px-3 text-xs font-semibold text-ink outline-none transition placeholder:text-ink/32 focus:border-tide"
-              placeholder="예: 스타벅스, 조용한 카페"
+              placeholder={placeholder}
               value={value ?? ""}
               onChange={(event) => onValueChange?.(event.target.value)}
             />
@@ -4500,6 +4539,23 @@ function collectPreviewWaypointHints(
 
 function customWaypointKey(id: string) {
   return `custom:${id}`;
+}
+
+function waypointCategoryOption(value: WaypointCategoryValue) {
+  return (
+    WAYPOINT_CATEGORY_OPTIONS.find((option) => option.value === value) ??
+    WAYPOINT_CATEGORY_OPTIONS[0]
+  );
+}
+
+function customWaypointToHint(waypoint: CustomWaypoint) {
+  const value = waypoint.value.trim();
+  if (!value) {
+    return "";
+  }
+
+  const category = waypointCategoryOption(waypoint.category);
+  return `필수 경유: [${category.label}] ${value}`;
 }
 
 function isWaypointPlaceholder(value: string) {

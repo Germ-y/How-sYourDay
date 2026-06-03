@@ -580,16 +580,16 @@ def test_manual_waypoint_required_prefix_is_stripped_for_search(monkeypatch) -> 
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
     tasks = normalize_manual_waypoints(
-        ["필수 경유: 조용한 카페"],
+        ["필수 경유: [볼일] 약국", "필수 경유: [카페] 스타벅스"],
         "서울숲에서 성수역까지 가고 싶어",
         Location(label="서울숲", lat=37.5446, lng=127.0374),
         Location(label="성수역", lat=37.5446, lng=127.0559),
     )
 
-    assert len(tasks) == 1
-    assert tasks[0].kind == "recovery"
-    assert tasks[0].poi_query == "조용한 카페"
-    assert tasks[0].required is True
+    assert [(task.kind, task.poi_query, task.required) for task in tasks] == [
+        ("errand", "약국", True),
+        ("recovery", "스타벅스", True),
+    ]
 
 
 def test_plan_request_waypoint_hints_feed_poi_search(monkeypatch) -> None:

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from api.schemas import Location, Task
 from tools.kakao_local import _get_env_value
@@ -45,6 +46,13 @@ MANUAL_WAYPOINT_SCHEMA = {
 _NORMALIZATION_CACHE: dict[str, list[Task]] = {}
 _NORMALIZATION_CACHE_LIMIT = 80
 REQUIRED_HINT_PREFIX = "필수 경유:"
+WAYPOINT_CATEGORY_KINDS = {
+    "카페": "recovery",
+    "산책": "recovery",
+    "쉼": "recovery",
+    "볼일": "errand",
+    "식사": "recovery",
+}
 
 
 def normalize_manual_waypoints(
@@ -156,9 +164,10 @@ def _normalize_with_rules(hints: list[str], user_text: str) -> list[Task]:
     tasks: list[Task] = []
     context = user_text.lower()
     for hint in hints:
-        clean_hint = _strip_hint_strength(hint)
+        category = _hint_category(hint)
+        clean_hint = _strip_hint_metadata(hint)
         lowered = clean_hint.lower()
-        kind = _infer_kind(lowered, context)
+        kind = WAYPOINT_CATEGORY_KINDS.get(category or "", _infer_kind(lowered, context))
         query = _query_for_hint(clean_hint, kind)
         if not query:
             continue
@@ -302,8 +311,21 @@ def _is_strong_hint(value: str) -> bool:
 def _strip_hint_strength(value: str) -> str:
     text = value.strip()
     if text.startswith(REQUIRED_HINT_PREFIX):
-        return text[len(REQUIRED_HINT_PREFIX) :].strip()
+        text = text[len(REQUIRED_HINT_PREFIX) :].strip()
     return text
+
+
+def _hint_category(value: str) -> str | None:
+    text = _strip_hint_strength(value)
+    match = re.match(r"^\[([^\]]+)\]\s*", text)
+    if not match:
+        return None
+    return match.group(1).strip() or None
+
+
+def _strip_hint_metadata(value: str) -> str:
+    text = _strip_hint_strength(value)
+    return re.sub(r"^\[[^\]]+\]\s*", "", text).strip()
 
 
 def _location_payload(location: Location | None) -> dict | None:

@@ -25,6 +25,8 @@ The user message is JSON containing:
 - `waypoint_hints`: manually edited waypoint hint strings from the UI.
   - A hint may be prefixed with `필수 경유:`. This means the user manually added it in the UI, so treat it as a strong required waypoint unless the text explicitly says it is optional.
   - Strip `필수 경유:` from `label` and `poi_query`; never send that prefix to Kakao search.
+  - A manual hint may include a category marker after the prefix, such as `필수 경유: [볼일] 약국` or `필수 경유: [카페] 스타벅스`.
+  - The marker is UI metadata. Use it to infer `kind`, then strip it from `label` and `poi_query`.
 
 Output Contract
 Return only JSON that matches the provided schema.
@@ -50,12 +52,19 @@ Core Rules
    - `산책하기 좋은 곳` -> `공원` or `산책로`
 5. If the hint contains a concrete brand/place plus a modifier, keep the concrete part in `poi_query` and reflect the modifier in `label`.
    - `조용한 스타벅스` -> poi_query `스타벅스`, label `조용한 스타벅스`
+5-1. If a hint has a UI category marker, use it as a strong prior but still preserve the typed place.
+   - `[볼일] 약국` -> kind `errand`, poi_query `약국`, label `약국 들르기`
+   - `[볼일] 다이소` -> kind `errand`, poi_query `다이소`, label `다이소 들르기`
+   - `[카페] 스타벅스` -> kind `recovery`, poi_query `스타벅스`, label `스타벅스`
+   - `[산책] 공원` -> kind `recovery`, poi_query `공원`, label `공원 산책`
+   - `[식사] 김밥집` -> kind `recovery`, poi_query `김밥집`, label `식사 장소`
 6. Use the original user text to infer why the waypoint exists.
    - “카페에서 과제” -> recovery, required true if explicitly requested.
    - “들러도 돼” -> recovery, required false.
    - “다이소도 들러야해” -> errand, required true.
    - “공원 있으면 들러도 돼” -> recovery, required false.
    - `필수 경유: 조용한 카페` -> recovery, required true, poi_query `조용한 카페`.
+   - `필수 경유: [볼일] 약국` -> errand, required true, poi_query `약국`.
 7. Use route context only as context. Do not output addresses, coordinates, or selected Kakao place IDs.
 8. Do not invent extra stops not present in `waypoint_hints`.
 9. Keep labels short and service-facing, not explanatory.
@@ -69,6 +78,11 @@ Required vs Optional
   - “있으면”, “괜찮으면”, “들러도 돼”, “후보”, “추천”, “잠깐 쉴 곳 있으면”
 
 Good Examples
+Input:
+{"user_text":"서울숲에서 성수역까지 가고 싶어","origin":{"label":"서울숲","lat":37.5446,"lng":127.0374},"destination":{"label":"성수역","lat":37.5446,"lng":127.0559},"waypoint_hints":["필수 경유: [볼일] 약국","필수 경유: [카페] 스타벅스"]}
+Output:
+{"waypoints":[{"kind":"errand","label":"약국 들르기","poi_query":"약국","priority":1,"required":true,"reason":"사용자 직접 추가 볼일"},{"kind":"recovery","label":"스타벅스","poi_query":"스타벅스","priority":2,"required":true,"reason":"사용자 직접 추가 카페"}]}
+
 Input:
 {"user_text":"서울숲에서 성수역까지 가는데 카페에서 노트북 작업 좀 하다가 가고 싶어. 그리고 다이소도 들러야해","origin":{"label":"서울숲","lat":37.5446,"lng":127.0374},"destination":{"label":"성수역","lat":37.5446,"lng":127.0559},"waypoint_hints":["카페에서 과제","다이소"]}
 Output:
@@ -91,6 +105,7 @@ Output:
 
 Bad Examples
 - Do not output `카페` for `스타벅스`.
+- Do not output `볼일 약국`, `[볼일] 약국`, or `필수 경유 약국`; the searchable query is `약국`.
 - Do not output `부산대학교 부산캠퍼스` because the route context has 혜화/대학로.
 - Do not add a direct route waypoint when the user already has origin and destination.
 - Do not turn optional walking/park hints into required errands.
