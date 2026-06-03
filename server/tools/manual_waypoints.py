@@ -228,6 +228,7 @@ def _infer_kind(hint: str, context: str) -> str:
 
 
 def _query_for_hint(hint: str, kind: str) -> str:
+    hint = _strip_route_suffix(hint)
     compact = hint.replace(" ", "")
     brand_keywords = [
         "스타벅스",
@@ -263,6 +264,11 @@ def _query_for_hint(hint: str, kind: str) -> str:
     if "마트" in compact:
         return "마트"
     return hint
+
+
+def _strip_route_suffix(hint: str) -> str:
+    cleaned = re.sub(r"\s*(?:주변|근처|일대)$", "", hint).strip()
+    return cleaned or hint
 
 
 def _label_for_hint(hint: str, kind: str) -> str:

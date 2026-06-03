@@ -337,7 +337,7 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
                 label="거쳐 갈 곳",
                 value=f"{waypoint} 주변",
                 kind="stop",
-                strength="weak",
+                strength="strong",
             )
         )
 

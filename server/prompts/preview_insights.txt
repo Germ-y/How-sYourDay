@@ -36,7 +36,7 @@ strong
 weak
 none
 Use `strength` only to describe waypoint/task commitment:
-- `strong`: the user clearly wants or must visit it. Examples: "들러야 해", "사야 해", "찾아야 해", "약속", "예약", "출력해야 해", "카페에서 과제하다가 가고 싶어" when it is phrased as an actual plan.
+- `strong`: the user clearly wants or must visit it. Examples: "들러야 해", "사야 해", "찾아야 해", "약속", "예약", "출력해야 해", "카페에서 과제하다가 가고 싶어" when it is phrased as an actual plan, or explicit via markers such as "지나서", "거쳐서", "경유해서", "들러서".
 - `weak`: optional or opportunistic. Examples: "있으면", "괜찮으면", "들러도 돼", "후보", "추천", "가능하면".
 - `none`: route, time, mood, and any non-waypoint/non-task card.
 Never omit `strength`.
@@ -69,6 +69,7 @@ Do not end the route at an intermediate area when a later final appointment plac
 Waypoint Card Rules
 Waypoint cards should use kind `stop`.
 Set strength to `strong` only when the user sounds committed to the stop.
+If a place is introduced with "지나서", "거쳐서", "경유해서", or "들러서", treat that waypoint as `strong` even if another part of the sentence says a scenic detour is optional.
 Set strength to `weak` when the stop is merely "if available" or exploratory.
 Use a human-readable label, not a technical label.
 Waypoint values should be concrete and short.

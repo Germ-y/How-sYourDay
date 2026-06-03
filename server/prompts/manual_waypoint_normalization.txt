@@ -54,6 +54,8 @@ Core Rules
    - `산책하기 좋은 곳` -> `공원` or `산책로`
 5. If the hint contains a concrete brand/place plus a modifier, keep the concrete part in `poi_query` and reflect the modifier in `label`.
    - `조용한 스타벅스` -> poi_query `스타벅스`, label `조용한 스타벅스`
+   - `석촌호수 주변` -> poi_query `석촌호수`, label `석촌호수 주변`
+   - `홍대입구역 주변` -> poi_query `홍대입구역`, label `홍대입구역 주변`
 5-1. If a hint has a UI category marker, use it as a strong prior but still preserve the typed place.
    - `[볼일] 약국` -> kind `errand`, poi_query `약국`, label `약국 들르기`
    - `[볼일] 다이소` -> kind `errand`, poi_query `다이소`, label `다이소 들르기`
@@ -67,6 +69,7 @@ Core Rules
    - “공원 있으면 들러도 돼” -> recovery, required false.
    - `필수 경유: 조용한 카페` -> recovery, required true, poi_query `조용한 카페`.
    - `필수 경유: [볼일] 약국` -> errand, required true, poi_query `약국`.
+   - `필수 경유: 석촌호수 주변` -> recovery, required true, poi_query `석촌호수`.
    - `참고 경유: 공원 산책` -> recovery, required false, poi_query `공원`.
 7. Use route context only as context. Do not output addresses, coordinates, or selected Kakao place IDs.
 8. Do not invent extra stops not present in `waypoint_hints`.

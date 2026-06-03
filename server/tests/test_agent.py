@@ -608,6 +608,22 @@ def test_manual_waypoint_cleans_activity_hint_to_searchable_place(monkeypatch) -
     ]
 
 
+def test_manual_waypoint_cleans_via_place_to_place_query(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    tasks = normalize_manual_waypoints(
+        ["필수 경유: 석촌호수 주변"],
+        "잠실역에서 석촌호수 지나서 롯데월드몰까지 가고 싶어",
+        Location(label="잠실역", lat=37.5133, lng=127.1001),
+        Location(label="롯데월드몰", lat=37.5137, lng=127.1044),
+    )
+
+    assert len(tasks) == 1
+    assert tasks[0].kind == "recovery"
+    assert tasks[0].poi_query == "석촌호수"
+    assert tasks[0].required is True
+
+
 def test_manual_waypoint_optional_prefix_keeps_weak_candidate_optional(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 
@@ -992,9 +1008,13 @@ def test_preview_insights_detects_via_place_before_final_destination(
     )
 
     values = [insight.value for insight in insights]
+    via_insight = next(
+        insight for insight in insights if "석촌호수 주변" in insight.value
+    )
 
     assert values[0] == "잠실역 → 롯데월드몰"
     assert any("석촌호수 주변" in value for value in values)
+    assert via_insight.strength == "strong"
 
 
 def test_preview_insights_repairs_missing_condition_card_from_llm(monkeypatch) -> None:
