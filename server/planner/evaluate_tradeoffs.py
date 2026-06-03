@@ -197,15 +197,15 @@ def _route_duration(route: RouteCandidate) -> int:
 
 
 def _route_name(route: RouteCandidate) -> str:
+    photo_stop = next((stop for stop in route.stops if _is_photo_stop(stop)), None)
+    if photo_stop:
+        return f"{photo_stop.name} 사진 경유 경로"
     recovery_stop = next((stop for stop in route.stops if stop.category == "recovery"), None)
     if recovery_stop:
         return f"{recovery_stop.name} 경유 경로"
     errand_stop = next((stop for stop in route.stops if stop.category == "errand"), None)
     if errand_stop:
         return f"{errand_stop.name} 경유 경로"
-    photo_stop = next((stop for stop in route.stops if stop.category == "photo"), None)
-    if photo_stop:
-        return f"{photo_stop.name} 사진 경유 경로"
     place_stop = next((stop for stop in route.stops if stop.category == "place"), None)
     if place_stop:
         return f"{place_stop.name} 경유 경로"
@@ -218,3 +218,12 @@ def _route_name(route: RouteCandidate) -> str:
     if route.provider == "osrm":
         return "직접 이동 경로"
     return "추천 경로"
+
+
+def _is_photo_stop(stop) -> bool:
+    tags = " ".join(getattr(stop, "emotion_tags", []) or [])
+    text = f"{getattr(stop, 'name', '')} {getattr(stop, 'category', '')} {tags}"
+    return any(
+        marker in text.lower()
+        for marker in ["photo", "인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "셀프사진"]
+    )

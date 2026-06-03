@@ -22,6 +22,7 @@ from auth.security import (
 )
 from db.models import Base
 from planner.evaluate_tradeoffs import evaluate_tradeoffs
+from planner.compose_plan import _why_stop
 from repositories.place_preferences import list_place_preferences, upsert_place_preference
 from repositories.route_feedback import (
     list_route_feedback,
@@ -108,6 +109,21 @@ def test_timeline_keeps_final_arrival_after_stops() -> None:
     ]
 
     assert minutes == sorted(minutes)
+
+
+def test_photo_stop_timeline_is_not_described_as_recovery() -> None:
+    stop = PoiCandidate(
+        id="photo-stop",
+        name="인생네컷 서울연남점",
+        category="recovery",
+        landmark_type="photo",
+        emotion_tags=["recovery"],
+        lat=37.56,
+        lng=126.92,
+        required=True,
+    )
+
+    assert _why_stop(stop) == "인생네컷 서울연남점에서 사진을 찍습니다."
 
 
 def test_tired_user_gets_optional_recovery_route_candidate() -> None:

@@ -218,6 +218,8 @@ def _explanation(evaluation: TradeoffEvaluation, score: EmotionCost) -> str:
 
 
 def _why_stop(stop) -> str:
+    if _is_photo_stop(stop):
+        return f"{stop.name}에서 사진을 찍습니다."
     if stop.category == "recovery":
         return f"{stop.name}에서 잠깐 회복할 수 있어요."
     if stop.category == "errand":
@@ -231,6 +233,15 @@ def _why_stop(stop) -> str:
     if stop.category == "clinic":
         return f"{stop.name} 방문을 동선에 반영합니다."
     return f"{stop.name}에 들릅니다."
+
+
+def _is_photo_stop(stop) -> bool:
+    tags = " ".join(getattr(stop, "emotion_tags", []) or [])
+    text = f"{getattr(stop, 'name', '')} {getattr(stop, 'category', '')} {tags}"
+    return any(
+        marker in text.lower()
+        for marker in ["photo", "인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "셀프사진"]
+    )
 
 
 def _format_minutes(total_minutes: int) -> str:

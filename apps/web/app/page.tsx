@@ -3467,6 +3467,9 @@ function buildRouteTimeline(route: RouteCandidate): TimelineItem[] {
 }
 
 function stopTimelineLabel(stop: PoiCandidate) {
+  if (isPhotoStop(stop)) {
+    return `${stop.name}에서 사진을 찍습니다.`;
+  }
   if (stop.category === "recovery") {
     return `${stop.name}에서 잠깐 회복할 수 있어요.`;
   }
@@ -3486,6 +3489,11 @@ function stopTimelineLabel(stop: PoiCandidate) {
     return `${stop.name} 방문을 동선에 반영합니다.`;
   }
   return `${stop.name}에 들릅니다.`;
+}
+
+function isPhotoStop(stop: PoiCandidate) {
+  const text = `${stop.name} ${stop.category} ${stop.emotion_tags.join(" ")}`;
+  return /(photo|인생네컷|네컷|포토부스|포토이즘|사진관|셀프사진)/i.test(text);
 }
 
 function formatTimelineMinutes(totalMinutes: number) {
@@ -5751,6 +5759,10 @@ function routeLabel(routeId: string) {
 }
 
 function routeDisplayName(route: RouteCandidate) {
+  const photoStop = route.stops.find(isPhotoStop);
+  if (photoStop) {
+    return `${photoStop.name} 사진 경유 경로`;
+  }
   const recoveryStop = route.stops.find((stop) => stop.category === "recovery");
   if (recoveryStop) {
     return `${recoveryStop.name} 경유 경로`;
@@ -5758,10 +5770,6 @@ function routeDisplayName(route: RouteCandidate) {
   const errandStop = route.stops.find((stop) => stop.category === "errand");
   if (errandStop) {
     return `${errandStop.name} 경유 경로`;
-  }
-  const photoStop = route.stops.find((stop) => stop.category === "photo");
-  if (photoStop) {
-    return `${photoStop.name} 사진 경유 경로`;
   }
   const placeStop = route.stops.find((stop) => stop.category === "place");
   if (placeStop) {
@@ -5783,6 +5791,10 @@ function routeDisplayName(route: RouteCandidate) {
 }
 
 function routeOptionTitle(route: RouteCandidate, index: number) {
+  const photoStop = route.stops.find(isPhotoStop);
+  if (photoStop) {
+    return `${photoStop.name} 사진 찍는 경로`;
+  }
   const recoveryStop = route.stops.find((stop) => stop.category === "recovery");
   if (recoveryStop) {
     return `${recoveryStop.name} 들르는 경로`;
@@ -5790,10 +5802,6 @@ function routeOptionTitle(route: RouteCandidate, index: number) {
   const errandStop = route.stops.find((stop) => stop.category === "errand");
   if (errandStop) {
     return `${errandStop.name} 들르는 경로`;
-  }
-  const photoStop = route.stops.find((stop) => stop.category === "photo");
-  if (photoStop) {
-    return `${photoStop.name} 사진 찍는 경로`;
   }
   const placeStop = route.stops.find((stop) => stop.category === "place");
   if (placeStop) {
