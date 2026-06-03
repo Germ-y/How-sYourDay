@@ -1248,6 +1248,66 @@ def test_manual_waypoint_normalization_promotes_photo_text(monkeypatch) -> None:
     assert tasks[0].required is True
 
 
+def test_manual_waypoint_normalization_marks_named_building_as_place(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    tasks = normalize_manual_waypoints(
+        ["필수 경유: 상도 건영 106동 주변"],
+        "가기 전에 상도 건영 106동에 들러야 해",
+        Location(label="성균관대", lat=37.5882, lng=126.9936),
+        Location(label="홍대입구역 3번 출구", lat=37.5568, lng=126.9241),
+    )
+
+    assert len(tasks) == 1
+    assert tasks[0].kind == "place"
+    assert tasks[0].poi_query == "상도 건영 106동"
+    assert tasks[0].required is True
+
+
+def test_named_building_waypoint_uses_kakao_location_candidate(monkeypatch) -> None:
+    monkeypatch.setenv("HYS_DISABLE_LLM", "1")
+
+    from tools import search_poi
+
+    def fake_search_location_candidates(query, size=5, current_location=None):
+        assert query == "상도 건영 106동"
+        return [
+            LocationCandidate(
+                label="상도건영아파트",
+                address="서울 동작구 상도동",
+                lat=37.4992,
+                lng=126.9521,
+                source="kakao-keyword",
+                category="부동산 > 주거시설 > 아파트",
+                provider_id="sangdo-geonyeong",
+                category_name="부동산 > 주거시설 > 아파트",
+                distance_meters=3000,
+            )
+        ]
+
+    monkeypatch.setattr(search_poi, "search_location_candidates", fake_search_location_candidates)
+
+    candidates = search_poi.search_poi_candidates(
+        [
+            Task(
+                kind="place",
+                label="상도 건영 106동",
+                poi_query="상도 건영 106동",
+                priority=1,
+                required=True,
+            )
+        ],
+        Location(label="성균관대", lat=37.5882, lng=126.9936),
+        Location(label="홍대입구역 3번 출구", lat=37.5568, lng=126.9241),
+        "가기 전에 상도 건영 106동에 들러야 해",
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].name == "상도건영아파트"
+    assert candidates[0].category == "place"
+    assert candidates[0].required is True
+
+
 def test_preview_insights_detects_photo_booth_waypoint(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 

@@ -172,6 +172,8 @@ def _infer_landmark_type(document: dict, task: Task) -> str:
         return "medical"
     if task.kind == "photo" or any(marker in combined for marker in ["인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "스튜디오"]):
         return "culture"
+    if task.kind == "place" or any(marker in combined for marker in ["아파트", "오피스텔", "빌라", "주거시설", "건물", "빌딩"]):
+        return "residential"
     if task.kind == "errand" or any(marker in combined for marker in ["다이소", "생활용품", "마트", "편의점", "상점"]):
         return "commercial"
     if any(marker in combined for marker in ["지하철", "역", "버스", "교통"]):
@@ -198,6 +200,8 @@ def _task_emotion_tags(task: Task) -> list[str]:
         return ["practical", "errand"]
     if task.kind == "photo":
         return ["social", "photo", "culture"]
+    if task.kind == "place":
+        return ["waypoint"]
     return []
 
 

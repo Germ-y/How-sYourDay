@@ -3476,6 +3476,9 @@ function stopTimelineLabel(stop: PoiCandidate) {
   if (stop.category === "photo") {
     return `${stop.name}에서 사진을 찍습니다.`;
   }
+  if (stop.category === "place") {
+    return `${stop.name}을 경유합니다.`;
+  }
   if (stop.category === "print") {
     return `${stop.name}에서 인쇄 일을 처리합니다.`;
   }
@@ -4447,6 +4450,9 @@ function landmarkLabel(candidate: PoiCandidate) {
   if (normalized.includes("photo")) {
     return "사진";
   }
+  if (normalized.includes("place") || normalized.includes("residential")) {
+    return "경유지";
+  }
   if (normalized.includes("print")) {
     return "인쇄";
   }
@@ -4467,6 +4473,8 @@ function userFacingCategoryLabel(value: string | null | undefined) {
   const labels: Record<string, string> = {
     errand: "들를 곳",
     photo: "사진",
+    place: "경유지",
+    residential: "주거지",
     recovery: "쉴 곳",
     print: "인쇄",
     clinic: "병원",
@@ -5699,6 +5707,10 @@ function routeDisplayName(route: RouteCandidate) {
   if (photoStop) {
     return `${photoStop.name} 사진 경유 경로`;
   }
+  const placeStop = route.stops.find((stop) => stop.category === "place");
+  if (placeStop) {
+    return `${placeStop.name} 경유 경로`;
+  }
   if (route.provider === "tmap-pedestrian") {
     return "Tmap 도보 경로";
   }
@@ -5726,6 +5738,10 @@ function routeOptionTitle(route: RouteCandidate, index: number) {
   const photoStop = route.stops.find((stop) => stop.category === "photo");
   if (photoStop) {
     return `${photoStop.name} 사진 찍는 경로`;
+  }
+  const placeStop = route.stops.find((stop) => stop.category === "place");
+  if (placeStop) {
+    return `${placeStop.name} 들르는 경로`;
   }
   if (route.stops.length > 0) {
     return `${route.stops[0].name} 경유 경로`;

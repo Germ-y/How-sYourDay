@@ -224,6 +224,8 @@ def _why_stop(stop) -> str:
         return f"{stop.name}에 들러 필요한 일을 처리합니다."
     if stop.category == "photo":
         return f"{stop.name}에서 사진을 찍습니다."
+    if stop.category == "place":
+        return f"{stop.name}을 경유합니다."
     if stop.category == "print":
         return f"{stop.name}에서 인쇄 일을 처리합니다."
     if stop.category == "clinic":

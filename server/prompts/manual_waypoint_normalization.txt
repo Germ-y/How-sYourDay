@@ -131,3 +131,15 @@ Examples:
 - `[볼일] 인생네컷` -> kind `photo`, poi_query `인생네컷`, label `사진 찍기`, required true.
 - `[볼일] 포토이즘` -> kind `photo`, poi_query `포토이즘`, label `사진 찍기`, required true.
 - `참고 경유: 포토부스` -> kind `photo`, poi_query `포토부스`, label `사진 찍기`, required false.
+
+Additional Waypoint Kind: place
+The schema allows waypoint kind `place`.
+Use `place` for concrete named places that are neither rest nor shopping/service tasks: apartments, buildings, offices, addresses, numbered buildings, residences, and exact pass-through landmarks.
+These must be searched as real Kakao map locations and treated as actual route stops.
+Examples:
+- `필수 경유: 상도 건영 106동 주변` -> kind `place`, poi_query `상도 건영 106동`, label `상도 건영 106동`, required true.
+- `필수 경유: [경유] 상도 건영 106동` -> kind `place`, poi_query `상도 건영 106동`, label `상도 건영 106동`, required true.
+- `참고 경유: 석촌호수 주변` -> kind `recovery` if it is scenic/walking and optional.
+- `필수 경유: 석촌호수` -> kind `place` if the user explicitly says they must pass through that exact place.
+Do not turn apartments or numbered buildings into `recovery`.
+Do not turn concrete named waypoints into generic `카페`, `공원`, or `생활용품점`.

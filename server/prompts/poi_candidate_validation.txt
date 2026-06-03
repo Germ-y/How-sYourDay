@@ -68,3 +68,13 @@ Examples:
 - Task photo + candidate "포토이즘박스 홍대점" category "문화,예술 > 사진": accepted true.
 - Task photo + candidate "다이소 홍대점" category "가정,생활 > 생활용품": accepted false.
 - Task photo + candidate "사진관 근처 카페" category "음식점 > 카페": accepted false.
+
+Additional Task Kind: place
+Validate `place` tasks as concrete map locations.
+Accept candidates that plausibly match the named place/address/building in task.poi_query.
+For apartments or numbered buildings, the exact building number may be absent from Kakao place_name; use place_name, category, and address together.
+Examples:
+- Task place "상도 건영 106동" + candidate "상도건영아파트" category "부동산 > 주거시설 > 아파트" address containing "상도동": accepted true.
+- Task place "상도 건영 106동" + candidate "건영아파트 상가" near the same address: accepted true if it is the best available map anchor.
+- Task place "상도 건영 106동" + candidate "부산 건영아파트": accepted false when route context is Seoul.
+- Task place "혜화역" + candidate "혜화역 4호선": accepted true.

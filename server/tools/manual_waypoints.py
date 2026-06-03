@@ -30,7 +30,7 @@ MANUAL_WAYPOINT_SCHEMA = {
                 "properties": {
                     "kind": {
                         "type": "string",
-                        "enum": ["print", "clinic", "recovery", "errand", "photo"],
+                        "enum": ["print", "clinic", "recovery", "errand", "photo", "place"],
                     },
                     "label": {"type": "string"},
                     "poi_query": {"type": "string"},
@@ -54,6 +54,8 @@ WAYPOINT_CATEGORY_KINDS = {
     "볼일": "errand",
     "식사": "recovery",
     "사진": "photo",
+    "경유": "place",
+    "장소": "place",
 }
 
 
@@ -164,7 +166,11 @@ def _normalize_with_rules(hints: list[str], user_text: str) -> list[Task]:
         clean_hint = _strip_hint_metadata(hint)
         lowered = clean_hint.lower()
         inferred_kind = _infer_kind(lowered, context)
-        kind = inferred_kind if inferred_kind == "photo" else WAYPOINT_CATEGORY_KINDS.get(category or "", inferred_kind)
+        kind = (
+            inferred_kind
+            if inferred_kind in {"photo", "place"}
+            else WAYPOINT_CATEGORY_KINDS.get(category or "", inferred_kind)
+        )
         query = _query_for_hint(clean_hint, kind)
         if not query:
             continue
@@ -191,8 +197,8 @@ def _task_from_llm_item(item: dict) -> Task:
     )
     kind = _clean_text(item.get("kind")) or _infer_kind(raw_query.lower(), "")
     inferred_kind = _infer_kind(f"{raw_label} {raw_query}".lower(), "")
-    if inferred_kind == "photo":
-        kind = "photo"
+    if inferred_kind in {"photo", "place"}:
+        kind = inferred_kind
     query = _query_for_hint(raw_query, kind)
     label = raw_label or query
     return Task(
@@ -207,6 +213,8 @@ def _task_from_llm_item(item: dict) -> Task:
 def _infer_kind(hint: str, context: str) -> str:
     if any(marker in hint for marker in ["인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "사진"]):
         return "photo"
+    if _looks_like_specific_place(hint):
+        return "place"
     if any(marker in hint for marker in ["프린트", "프린터", "인쇄", "출력", "복사", "스캔"]):
         return "print"
     if any(marker in hint for marker in ["병원", "의원", "치과", "한의원", "진료"]):
@@ -235,6 +243,17 @@ def _infer_kind(hint: str, context: str) -> str:
     ):
         return "print"
     return "recovery"
+
+
+def _looks_like_specific_place(hint: str) -> bool:
+    compact = hint.replace(" ", "")
+    if any(marker in compact for marker in ["아파트", "오피스텔", "빌라", "건영", "자이", "푸르지오", "래미안"]):
+        return True
+    if any(marker in compact for marker in ["동", "호", "건물", "빌딩"]) and any(ch.isdigit() for ch in compact):
+        return True
+    if re.search(r"[가-힣]+(?:로|길)\d*", compact):
+        return True
+    return False
 
 
 def _query_for_hint(hint: str, kind: str) -> str:
@@ -266,6 +285,8 @@ def _query_for_hint(hint: str, kind: str) -> str:
         if "포토부스" in compact:
             return "포토부스"
         return hint if len(hint) >= 2 else "인생네컷"
+    if kind == "place":
+        return hint if len(hint) >= 2 else compact
     if kind == "print" and any(marker in compact for marker in ["프린트카페", "프린터카페"]):
         return "프린트카페"
     if kind == "print":
@@ -293,6 +314,8 @@ def _strip_route_suffix(hint: str) -> str:
 
 
 def _label_for_hint(hint: str, kind: str) -> str:
+    if kind == "place":
+        return hint if hint else "경유지"
     if kind == "photo":
         return "사진 찍기"
     if kind == "print":

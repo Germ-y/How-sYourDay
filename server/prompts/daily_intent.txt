@@ -354,3 +354,13 @@ Keep the search keyword concrete:
 - "친구 만나서 네컷 찍을래" -> kind photo, label "사진 찍기", poi_query "인생네컷", required true.
 - "포토부스 있으면 들러도 돼" -> kind photo, label "사진 찍기", poi_query "포토부스", required false.
 If a photo stop happens after meeting a friend, it is still a waypoint task unless the user explicitly says it is outside today's route.
+
+Additional Task Kind: place
+The schema allows task kind `place`.
+Use `place` for a concrete named waypoint that is not a service category: apartments, buildings, addresses, numbered buildings/units, offices, residences, or exact intermediate places the user must visit.
+Examples:
+- "가기 전에 상도 건영 106동에 들러야 해" -> kind place, label "상도 건영 106동", poi_query "상도 건영 106동", required true.
+- "석촌호수 지나서 롯데월드몰까지" -> kind recovery if the stop is scenic/walking; kind place only if the user must physically pass that named place as a concrete waypoint.
+- "친구 집 들렀다가" -> kind place, label "친구 집", poi_query "친구 집", required true if a real searchable saved place/address is available from context.
+Do not classify concrete apartment/building waypoints as `recovery`.
+Do not classify concrete apartment/building waypoints as `errand` unless there is a store/task intent.

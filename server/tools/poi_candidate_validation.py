@@ -117,6 +117,12 @@ def _rule_match(document: dict, task: Task, user_text: str) -> bool | None:
             return False
         return None
 
+    if task.kind == "place":
+        query = _normalize(task.poi_query)
+        if query and query in candidate_combined:
+            return True
+        return None
+
     return None
 
 

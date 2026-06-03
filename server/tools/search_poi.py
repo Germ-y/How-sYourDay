@@ -74,6 +74,20 @@ MOCK_POIS = {
             source_confidence="mock",
         )
     ],
+    "place": [
+        PoiCandidate(
+            id="poi-place-1",
+            provider_id="mock-place-1",
+            name="Named waypoint",
+            category="place",
+            landmark_type="side_street",
+            emotion_tags=["waypoint"],
+            lat=37.5884,
+            lng=126.9934,
+            distance_meters=300,
+            source_confidence="mock",
+        )
+    ],
 }
 
 
@@ -149,6 +163,9 @@ def _search_task_candidates(
 
 
 def _should_search_as_named_place(task: Task) -> bool:
+    if task.kind == "place":
+        return bool(task.poi_query.strip())
+
     if task.kind != "recovery":
         return False
 
@@ -201,10 +218,14 @@ def _search_named_place_candidates(
             if key in seen:
                 continue
             seen.add(key)
-            if destination is not None and not _is_near_route_corridor(
-                location,
-                origin,
-                destination,
+            if (
+                destination is not None
+                and task.kind != "place"
+                and not _is_near_route_corridor(
+                    location,
+                    origin,
+                    destination,
+                )
             ):
                 continue
             candidates.append(_location_candidate_to_poi(location, task))
@@ -233,7 +254,8 @@ def _is_relevant_named_place(location, task: Task) -> bool:
     combined = f"{label} {category}"
 
     if query and query not in combined:
-        return False
+        if task.kind != "place" or not _place_query_matches_candidate(task.poi_query, combined):
+            return False
 
     if any(marker in combined for marker in ["축제", "이벤트", "행사"]):
         return False
@@ -283,6 +305,9 @@ def _named_place_score(candidate: PoiCandidate, task: Task) -> int:
     elif query and query in name:
         score += 35
 
+    if task.kind == "place":
+        score += 30 * _place_query_match_count(task.poi_query, combined)
+
     if any(marker in combined for marker in ["호수", "공원", "숲", "관광명소", "도보여행"]):
         score += 50
 
@@ -327,6 +352,8 @@ def _landmark_type_for_location(location) -> str:
     )
     if any(marker in combined for marker in ["인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "스튜디오"]):
         return "culture"
+    if any(marker in combined for marker in ["아파트", "오피스텔", "빌라", "주거시설", "건물", "빌딩"]):
+        return "residential"
     if any(marker in combined for marker in ["공원", "숲"]):
         return "park"
     if any(marker in combined for marker in ["호수", "강", "하천"]):
@@ -345,6 +372,8 @@ def _emotion_tags_for_landmark(landmark_type: str) -> list[str]:
         return ["crowded", "walkable"]
     if landmark_type == "culture":
         return ["social", "photo", "walkable"]
+    if landmark_type == "residential":
+        return ["waypoint", "familiar"]
     return ["walkable"]
 
 
@@ -379,6 +408,9 @@ def _task_search_anchors(
     destination: Location | None,
     user_text: str,
 ) -> list[Location]:
+    if destination is not None and task.kind == "place":
+        return [_route_midpoint(origin, destination), origin, destination]
+
     if destination is not None and task.kind == "recovery":
         midpoint = _route_midpoint(origin, destination)
         if _recovery_task_mentions_destination_area(user_text):
@@ -394,7 +426,7 @@ def _route_relevant_candidates(
     origin: Location,
     destination: Location | None,
 ) -> list[PoiCandidate]:
-    if destination is None or task.kind != "recovery":
+    if destination is None or task.kind not in {"recovery", "place"}:
         return candidates
 
     filtered = [
@@ -403,6 +435,32 @@ def _route_relevant_candidates(
         if _is_near_route_corridor(candidate, origin, destination)
     ]
     return filtered
+
+
+def _place_query_matches_candidate(query: str, candidate_combined: str) -> bool:
+    return _place_query_match_count(query, candidate_combined) >= 1
+
+
+def _place_query_match_count(query: str, candidate_combined: str) -> int:
+    terms = _place_query_terms(query)
+    return sum(1 for term in terms if term in candidate_combined)
+
+
+def _place_query_terms(query: str) -> list[str]:
+    raw_terms = [term for term in query.replace("-", " ").split() if term]
+    terms: list[str] = []
+    for term in raw_terms:
+        normalized = _normalize_text(term)
+        without_unit = normalized.rstrip("동호")
+        without_digits = "".join(ch for ch in without_unit if not ch.isdigit())
+        for candidate in [normalized, without_unit, without_digits]:
+            if len(candidate) >= 2 and candidate not in terms:
+                terms.append(candidate)
+    compact = _normalize_text(query)
+    compact_without_digits = "".join(ch for ch in compact if not ch.isdigit()).rstrip("동호")
+    if len(compact_without_digits) >= 3 and compact_without_digits not in terms:
+        terms.append(compact_without_digits)
+    return terms
 
 
 def _route_midpoint(origin: Location, destination: Location) -> Location:
