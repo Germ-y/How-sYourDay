@@ -1260,6 +1260,12 @@ def test_preview_insights_friend_scenario_keeps_required_and_optional_waypoints(
     assert not any("산책" in value for value in waypoint_values)
     assert "바쁨" in mood_candidates
 
+    daiso_insight = next(insight for insight in insights if "다이소" in insight.value)
+    photo_insight = next(insight for insight in insights if "인생네컷" in insight.value)
+
+    assert daiso_insight.strength == "weak"
+    assert photo_insight.strength == "strong"
+
 
 def test_preview_insights_detects_via_place_before_final_destination(
     monkeypatch,
@@ -1332,7 +1338,7 @@ def test_preview_insights_uses_rules_as_llm_backfill_without_duplicates(
             '{"label":"시간","value":"18:00 전 도착 우선","kind":"time"},'
             '{"label":"거쳐 갈 곳","value":"가기 전에 상도 건영 106동 주변","kind":"stop","strength":"strong"},'
             '{"label":"들를 곳","value":"다이소 들르기","kind":"task","strength":"weak"},'
-            '{"label":"사진 찍기","value":"인생네컷","kind":"task","strength":"strong"}'
+            '{"label":"사진 찍기","value":"인생네컷","kind":"task","strength":"weak"}'
             "]} "
         ),
     )
@@ -1355,6 +1361,7 @@ def test_preview_insights_uses_rules_as_llm_backfill_without_duplicates(
     assert not any(value.startswith("가기 전에") for value in waypoint_values)
     assert any("다이소" in value for value in waypoint_values)
     assert any("인생네컷" in value for value in waypoint_values)
+    assert next(insight for insight in insights if "인생네컷" in insight.value).strength == "strong"
 
 
 def test_preview_insights_detects_named_store_errand(monkeypatch) -> None:
@@ -1507,6 +1514,8 @@ def test_preview_insights_detects_photo_booth_waypoint(monkeypatch) -> None:
     assert any("상도" in value for value in values)
     assert any("다이소" in value for value in values)
     assert any("인생네컷" in value for value in values)
+    assert next(insight for insight in insights if "다이소" in insight.value).strength == "weak"
+    assert next(insight for insight in insights if "인생네컷" in insight.value).strength == "strong"
 
 
 def test_preview_insights_detects_generic_errand(monkeypatch) -> None:

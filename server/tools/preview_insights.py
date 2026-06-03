@@ -42,6 +42,35 @@ PREVIEW_INSIGHTS_SCHEMA = {
     },
 }
 
+OPTIONAL_SIGNAL_MARKERS = [
+    "있으면",
+    "괜찮으면",
+    "들러도돼",
+    "들러도괜찮",
+    "후보",
+    "추천",
+    "가능하면",
+    "되면",
+]
+REQUIRED_SIGNAL_MARKERS = [
+    "들러야",
+    "가야",
+    "갈거야",
+    "갈꺼야",
+    "갈래",
+    "찍을래",
+    "찍기로",
+    "사야",
+    "살거",
+    "찾아야",
+    "해야",
+    "지나서",
+    "거쳐서",
+    "들러서",
+    "약속",
+    "예약",
+]
+
 
 def build_preview_insights(
     user_text: str,
@@ -268,7 +297,7 @@ def _repair_preview_insights(
     if not insights:
         return None
 
-    repaired = [_clean_preview_insight(insight) for insight in insights]
+    repaired = [_clean_preview_insight(insight, text) for insight in insights]
     route_value = f"{origin or '출발지'} → {destination or '도착지'}"
     if repaired[0].kind != "route":
         repaired.insert(
@@ -437,23 +466,25 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
 
     if any(marker in text for marker in ["카페", "커피", "과제", "공부", "작업"]):
         value = f"{area} 근처" if area else "카페에서 과제"
+        keyword = _first_matching_keyword(text, ["카페", "커피", "과제", "공부", "작업"], "카페")
         insights.append(
             PreviewInsight(
                 label="작업할 카페",
                 value=value,
                 kind="stop",
-                strength="weak" if _has_optional_signal(text) else "strong",
+                strength=_strength_for_keyword(text, keyword, default="strong"),
             )
         )
 
     if any(marker in text for marker in ["쉬", "휴식", "조용"]):
         value = f"{area} 근처 조용한 곳" if area else "잠깐 쉬어갈 곳"
+        keyword = _first_matching_keyword(text, ["쉬", "휴식", "조용"], "쉬")
         insights.append(
             PreviewInsight(
                 label="쉴 곳",
                 value=value,
                 kind="stop",
-                strength="weak" if _has_optional_signal(text) else "strong",
+                strength=_strength_for_keyword(text, keyword, default="strong"),
             )
         )
 
@@ -475,22 +506,24 @@ def _stop_insights(text: str, destination: str | None = None) -> list[PreviewIns
         ]
     ):
         value = _errand_value(text)
+        keyword = _errand_keyword(value, text)
         insights.append(
             PreviewInsight(
                 label="들를 곳",
                 value=value,
                 kind="task",
-                strength="weak" if _has_optional_signal(text) else "strong",
+                strength=_strength_for_keyword(text, keyword, default="strong"),
             )
         )
 
     if any(marker in text for marker in ["인생네컷", "네컷", "포토부스", "포토이즘", "사진관"]):
+        value = _photo_value(text)
         insights.append(
             PreviewInsight(
                 label="사진 찍기",
-                value=_photo_value(text),
+                value=value,
                 kind="task",
-                strength="weak" if _has_optional_signal(text) else "strong",
+                strength=_strength_for_keyword(text, value, default="strong"),
             )
         )
 
@@ -515,6 +548,15 @@ def _errand_value(text: str) -> str:
     return "살 것 사기"
 
 
+def _errand_keyword(value: str, text: str) -> str:
+    for keyword in ["다이소", "올리브영", "약국", "편의점", "마트"]:
+        if keyword in value or keyword in text:
+            return keyword
+    if "픽업" in value or "픽업" in text or "찾으러" in text:
+        return "픽업"
+    return "살 것"
+
+
 def _photo_value(text: str) -> str:
     for keyword in ["인생네컷", "포토이즘", "포토부스", "사진관"]:
         if keyword in text:
@@ -522,6 +564,17 @@ def _photo_value(text: str) -> str:
     if "네컷" in text:
         return "인생네컷"
     return "사진 찍기"
+
+
+def _first_matching_keyword(
+    text: str,
+    keywords: list[str],
+    fallback: str,
+) -> str:
+    for keyword in keywords:
+        if keyword in text:
+            return keyword
+    return fallback
 
 
 def _emotion_insight(primary: str) -> PreviewInsight | None:
@@ -547,14 +600,23 @@ def _limit_insights(insights: list[PreviewInsight]) -> list[PreviewInsight]:
     return insights[:12]
 
 
-def _clean_preview_insight(insight: PreviewInsight) -> PreviewInsight:
+def _clean_preview_insight(
+    insight: PreviewInsight,
+    context_text: str = "",
+) -> PreviewInsight:
     if insight.kind not in {"stop", "task"}:
         return insight
+    cleaned_value = _clean_waypoint_display_value(insight.value)
     return PreviewInsight(
         label=insight.label,
-        value=_clean_waypoint_display_value(insight.value),
+        value=cleaned_value,
         kind=insight.kind,
-        strength=insight.strength or "none",
+        strength=_semantic_waypoint_strength(
+            context_text,
+            insight.label,
+            cleaned_value,
+            insight.strength or "none",
+        ),
     )
 
 
@@ -654,19 +716,98 @@ def _has_time_hint(text: str) -> bool:
 
 def _has_optional_signal(text: str) -> bool:
     compact = text.replace(" ", "")
-    return any(
-        marker in compact
-        for marker in [
-            "있으면",
-            "괜찮으면",
-            "들러도돼",
-            "들러도괜찮",
-            "후보",
-            "추천",
-            "가능하면",
-            "되면",
-        ]
+    return any(marker in compact for marker in OPTIONAL_SIGNAL_MARKERS)
+
+
+def _semantic_waypoint_strength(
+    text: str,
+    label: str,
+    value: str,
+    current: str,
+) -> str:
+    keyword = _strength_keyword(label, value, text)
+    if not keyword:
+        return current if current in {"strong", "weak"} else "none"
+    return _strength_for_keyword(
+        text,
+        keyword,
+        default=current if current in {"strong", "weak"} else "strong",
     )
+
+
+def _strength_keyword(label: str, value: str, text: str) -> str | None:
+    combined = f"{label} {value}"
+    for keyword in [
+        "인생네컷",
+        "포토이즘",
+        "포토부스",
+        "사진관",
+        "다이소",
+        "올리브영",
+        "약국",
+        "편의점",
+        "마트",
+        "상도 건영 106동",
+        "상도건영",
+        "카페",
+        "커피",
+    ]:
+        if keyword in combined:
+            return keyword
+    if "네컷" in combined:
+        return "네컷"
+    if "사진" in combined:
+        for keyword in ["인생네컷", "포토이즘", "포토부스", "사진관", "네컷"]:
+            if keyword in text:
+                return keyword
+    return None
+
+
+def _strength_for_keyword(
+    text: str,
+    keyword: str,
+    default: str = "strong",
+) -> str:
+    segment = _context_segment(text, keyword)
+    if not segment:
+        return default
+    compact = segment.replace(" ", "")
+    has_optional = any(marker in compact for marker in OPTIONAL_SIGNAL_MARKERS)
+    has_required = any(marker in compact for marker in REQUIRED_SIGNAL_MARKERS)
+
+    if has_optional and not _has_hard_required_signal(compact):
+        return "weak"
+    if has_required:
+        return "strong"
+    return default
+
+
+def _context_segment(text: str, keyword: str, radius: int = 28) -> str:
+    aliases = _keyword_aliases(keyword)
+    positions = [text.find(alias) for alias in aliases if alias and text.find(alias) >= 0]
+    if not positions:
+        return ""
+    index = min(positions)
+    start = max(0, index - radius)
+    end = min(len(text), index + len(keyword) + radius)
+    return text[start:end]
+
+
+def _keyword_aliases(keyword: str) -> list[str]:
+    aliases = [keyword]
+    if keyword == "인생네컷":
+        aliases.extend(["네컷"])
+    if keyword == "네컷":
+        aliases.extend(["인생네컷"])
+    if keyword == "상도 건영 106동":
+        aliases.extend(["상도건영", "상도 건영"])
+    if keyword == "상도건영":
+        aliases.extend(["상도 건영 106동", "상도 건영"])
+    return aliases
+
+
+def _has_hard_required_signal(compact: str) -> bool:
+    return any(marker in compact for marker in ["꼭", "반드시", "무조건", "필수"])
 
 
 def _has_walking_avoidance(text: str) -> bool:
