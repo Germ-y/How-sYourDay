@@ -1498,6 +1498,115 @@ def test_named_building_waypoint_uses_kakao_location_candidate(monkeypatch) -> N
     assert candidates[0].required is True
 
 
+def test_photo_stop_after_friend_meet_prefers_destination_area(monkeypatch) -> None:
+    from tools import search_poi
+
+    def fake_kakao_candidates(tasks, anchor, user_text=""):
+        task = tasks[0]
+        if "홍대입구" in anchor.label:
+            return [
+                PoiCandidate(
+                    id="photo-hongdae",
+                    provider_id="photo-hongdae",
+                    name="인생네컷 홍대입구역점",
+                    category="photo",
+                    landmark_type="culture",
+                    emotion_tags=["social", "photo"],
+                    lat=37.5569,
+                    lng=126.9239,
+                    distance_meters=80,
+                    source_confidence="kakao",
+                )
+            ]
+        return [
+            PoiCandidate(
+                id="photo-jongno",
+                provider_id="photo-jongno",
+                name="인생네컷 종로경복궁점",
+                category=task.kind,
+                landmark_type="culture",
+                emotion_tags=["social", "photo"],
+                lat=37.5765,
+                lng=126.9715,
+                distance_meters=120,
+                source_confidence="kakao",
+            )
+        ]
+
+    monkeypatch.setattr(search_poi, "search_kakao_poi_candidates", fake_kakao_candidates)
+
+    candidates = search_poi.search_poi_candidates(
+        [
+            Task(
+                kind="photo",
+                label="사진 찍기",
+                poi_query="인생네컷",
+                priority=3,
+                required=True,
+            )
+        ],
+        Location(label="성균관대", lat=37.5882, lng=126.9936),
+        Location(label="홍대입구역 3번 출구", lat=37.5568, lng=126.9241),
+        "지금 성균관대야. 홍대입구역 3번 출구 앞에서 친구 만나야 해. 아 친구 만나서 인생네컷도 갈거야",
+    )
+
+    assert candidates
+    assert candidates[0].name == "인생네컷 홍대입구역점"
+
+
+def test_service_waypoint_candidates_are_sorted_by_destination_distance(monkeypatch) -> None:
+    from tools import search_poi
+
+    def fake_kakao_candidates(tasks, anchor, user_text=""):
+        task = tasks[0]
+        return [
+            PoiCandidate(
+                id="daiso-origin",
+                provider_id="daiso-origin",
+                name="다이소 성균관대점",
+                category=task.kind,
+                landmark_type="commercial",
+                emotion_tags=["practical", "errand"],
+                lat=37.5879,
+                lng=126.9940,
+                distance_meters=100,
+                source_confidence="kakao",
+            ),
+            PoiCandidate(
+                id="daiso-destination",
+                provider_id="daiso-destination",
+                name="다이소 홍대입구역점",
+                category=task.kind,
+                landmark_type="commercial",
+                emotion_tags=["practical", "errand"],
+                lat=37.5570,
+                lng=126.9243,
+                distance_meters=1600,
+                source_confidence="kakao",
+            ),
+        ]
+
+    monkeypatch.setattr(search_poi, "search_kakao_poi_candidates", fake_kakao_candidates)
+
+    candidates = search_poi.search_poi_candidates(
+        [
+            Task(
+                kind="errand",
+                label="들를 곳",
+                poi_query="다이소",
+                priority=2,
+                required=False,
+            )
+        ],
+        Location(label="성균관대", lat=37.5882, lng=126.9936),
+        Location(label="홍대입구역 3번 출구", lat=37.5568, lng=126.9241),
+        "시간 되면 다이소에서 공책도 사고 싶어",
+    )
+
+    assert candidates
+    assert candidates[0].name == "다이소 홍대입구역점"
+
+
 def test_preview_insights_detects_photo_booth_waypoint(monkeypatch) -> None:
     monkeypatch.setenv("HYS_DISABLE_LLM", "1")
 

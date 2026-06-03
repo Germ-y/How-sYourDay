@@ -427,6 +427,12 @@ def _task_search_anchors(
             return [destination, midpoint, origin]
         return [midpoint, origin, destination]
 
+    if destination is not None and task.kind == "photo":
+        midpoint = _route_midpoint(origin, destination)
+        if _photo_task_mentions_destination_area(user_text):
+            return [destination, midpoint, origin]
+        return [midpoint, destination, origin]
+
     if destination is not None:
         midpoint = _route_midpoint(origin, destination)
         return [midpoint, origin, destination]
@@ -448,7 +454,18 @@ def _route_relevant_candidates(
         for candidate in candidates
         if _is_near_route_corridor(candidate, origin, destination)
     ]
-    return filtered or candidates
+    route_candidates = filtered or candidates
+    if task.kind == "place":
+        return route_candidates
+
+    return sorted(
+        route_candidates,
+        key=lambda candidate: (
+            _rough_distance_meters(candidate, destination),
+            _route_detour_meters(candidate, origin, destination),
+            candidate.distance_meters or 999_999,
+        ),
+    )
 
 
 def _place_query_matches_candidate(query: str, candidate_combined: str) -> bool:
@@ -501,12 +518,43 @@ def _is_near_route_corridor(
     return detour <= 1800 and corridor_distance <= corridor_radius
 
 
+def _route_detour_meters(
+    candidate: PoiCandidate,
+    origin: Location,
+    destination: Location,
+) -> int:
+    direct = _rough_distance_meters(origin, destination)
+    via = _rough_distance_meters(origin, candidate) + _rough_distance_meters(
+        candidate,
+        destination,
+    )
+    return max(0, via - direct)
+
+
 def _recovery_task_mentions_destination_area(user_text: str) -> bool:
     text = user_text.replace(" ", "")
     recovery_markers = ["카페", "쉬", "휴식", "과제", "작업", "걷"]
     area_markers = ["가서", "간뒤", "갔다가", "하다가", "주변", "근처", "가는길", "들러"]
     return any(marker in text for marker in recovery_markers) and any(
         marker in text for marker in area_markers
+    )
+
+
+def _photo_task_mentions_destination_area(user_text: str) -> bool:
+    text = user_text.replace(" ", "")
+    photo_markers = ["인생네컷", "네컷", "포토부스", "포토이즘", "사진"]
+    destination_context_markers = [
+        "친구만나서",
+        "친구만난뒤",
+        "만나서",
+        "만난뒤",
+        "만나고",
+        "약속후",
+        "도착해서",
+        "가서",
+    ]
+    return any(marker in text for marker in photo_markers) and any(
+        marker in text for marker in destination_context_markers
     )
 
 
