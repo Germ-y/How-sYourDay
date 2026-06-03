@@ -805,6 +805,17 @@ def _area_aliases(area: str) -> list[str]:
 
 
 def _origin_hint_from_text(user_text: str) -> str | None:
+    current_place_patterns = [
+        r"(?:나|나는|저는|제가)?\s*(?:지금|현재)\s+([^,.;\n]+?)(?:야|이야|에\s*있어|에\s*있음|에\s*있고|고)",
+        r"(?:나|나는|저는|제가)?\s*([^,.;\n]+?)\s*(?:에\s*있어|에\s*있음|에\s*있고)",
+    ]
+    for pattern in current_place_patterns:
+        matches = re.findall(pattern, user_text, flags=re.IGNORECASE)
+        for value in matches:
+            cleaned = _clean_query(value)
+            if cleaned:
+                return cleaned
+
     matches = re.findall(r"([^,.;\n]+?)(?:에서|부터)", user_text)
     if not matches:
         return None
@@ -827,6 +838,8 @@ def _destination_hint_after_origin_from_text(user_text: str) -> str | None:
 
 def _specific_destination_hint_from_text(user_text: str) -> str | None:
     patterns = [
+        r"([가-힣A-Za-z0-9\s]+?(?:역(?:\s*\d+번\s*출구)?|출구|식당|카페|학교|병원|도서관|공원|몰|장소|곳))\s*(?:앞|근처|주변)?에서\s*(?:친구\s*)?(?:만나|보기|약속)",
+        r"([가-힣A-Za-z0-9\s]+?(?:역(?:\s*\d+번\s*출구)?|출구|식당|카페|학교|병원|도서관|공원|몰|장소|곳))\s*(?:앞|근처|주변)?(?:에서)?\s*(?:친구\s*)?(?:만나야|보기로|약속)",
         r"(?:\d{1,2}시(?:\s*\d{1,2}분)?(?:에)?\s*)?([가-힣A-Za-z0-9\s]+?(?:식당|카페|역|학교|병원|도서관|공원|장소|곳))에서\s*(?:\d{1,2}시|친구|약속|보기|만나|예약)",
         r"([가-힣A-Za-z0-9\s]+?)(?:이라는|라는)\s*(?:식당|카페|장소|곳)?에서\s*(?:\d{1,2}시|친구|약속|보기|만나)",
         r"([가-힣A-Za-z0-9\s]+?(?:식당|카페|역|학교|병원|도서관|공원))에서\s*(?:\d{1,2}시|친구|약속|보기|만나)",

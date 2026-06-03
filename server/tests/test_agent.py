@@ -80,6 +80,25 @@ def test_recovery_request_adds_recovery_poi_and_recommendation() -> None:
     assert any(item.kind == "recovery" for item in plan.recommendations)
 
 
+def test_korean_appointment_route_keeps_final_meeting_destination() -> None:
+    text = (
+        "지금 성균관대야. 홍대입구역 3번 출구 앞에서 친구 만나야 하는데 "
+        "약속까지 1시간 반 남았어. 가기 전에 상도 건영 106동에 들러야 해. "
+        "늦을까 봐 정신없고, 걷는 건 최대한 줄이고 싶어. "
+        "시간 되면 다이소에서 내일 필요한 공책도 사고 싶어."
+    )
+
+    extracted = extract_route_locations(text)
+
+    assert extracted.origin_text == "성균관대"
+    assert extracted.destination_text == "홍대입구역 3번 출구"
+    assert route_location_resolution._origin_hint_from_text(text) == "성균관대"
+    assert (
+        route_location_resolution._specific_destination_hint_from_text(text)
+        == "홍대입구역 3번 출구"
+    )
+
+
 def test_timeline_keeps_final_arrival_after_stops() -> None:
     plan = _run("I need to print and visit a clinic before 5. I am tired.")
 

@@ -793,20 +793,26 @@ export default function HomePage() {
           setOriginText(originCandidate.label);
           setSelectedOriginLocation(locationFromCandidate(originCandidate));
           resolvedCount += 1;
+        } else {
+          setOriginText(originHint);
+          setSelectedOriginLocation(null);
         }
         setOriginEdited(false);
         setOriginCandidates([]);
-        changed = changed || Boolean(originCandidate);
+        changed = true;
       }
       if (destinationHint) {
         if (destinationCandidate) {
           setDestinationText(destinationCandidate.label);
           setSelectedDestinationLocation(locationFromCandidate(destinationCandidate));
           resolvedCount += 1;
+        } else {
+          setDestinationText(destinationHint);
+          setSelectedDestinationLocation(null);
         }
         setDestinationEdited(false);
         setDestinationCandidates([]);
-        changed = changed || Boolean(destinationCandidate);
+        changed = true;
       }
 
       if (changed) {
@@ -817,7 +823,7 @@ export default function HomePage() {
         } else if (resolvedCount > 0) {
           setLocationStatus("일부 장소는 실제 장소로 확인");
         } else {
-          setLocationStatus("카카오에서 확인된 장소만 입력칸에 반영");
+          setLocationStatus("문장에서 찾은 장소를 입력칸에 반영");
         }
       } else {
         setLocationStatus("카카오에서 확인된 장소를 찾지 못했어요");
@@ -841,20 +847,26 @@ export default function HomePage() {
           setOriginText(originFallback.label);
           setSelectedOriginLocation(locationFromCandidate(originFallback));
           resolvedCount += 1;
+        } else {
+          setOriginText(localRoute.origin);
+          setSelectedOriginLocation(null);
         }
         setOriginEdited(false);
         setOriginCandidates([]);
-        changed = changed || Boolean(originFallback);
+        changed = true;
       }
       if (localRoute.destination) {
         if (destinationFallback) {
           setDestinationText(destinationFallback.label);
           setSelectedDestinationLocation(locationFromCandidate(destinationFallback));
           resolvedCount += 1;
+        } else {
+          setDestinationText(localRoute.destination);
+          setSelectedDestinationLocation(null);
         }
         setDestinationEdited(false);
         setDestinationCandidates([]);
-        changed = changed || Boolean(destinationFallback);
+        changed = true;
       }
 
       if (changed) {
@@ -863,7 +875,7 @@ export default function HomePage() {
         setLocationStatus(
           resolvedCount === requestedCount
             ? "실제 장소로 경로 확인"
-            : "카카오에서 확인된 장소만 입력칸에 반영"
+            : "문장에서 찾은 장소를 입력칸에 반영"
         );
       } else {
         setLocationStatus("카카오에서 확인된 장소를 찾지 못했어요");

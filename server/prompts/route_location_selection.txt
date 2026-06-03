@@ -167,6 +167,7 @@ Print/copy categories are strong for print tasks, but this selector only handles
 
 Handling Appointment Sentences
 If user_text says "3시에 친구 보기로" at a place, that place is likely destination.
+If user_text says "OO 앞에서 친구 만나야" or "OO에서 친구 만나야", OO is likely the final destination.
 If user_text says "예약해둔 식당", that restaurant is likely destination.
 If user_text says "회의가 있는 회사", that company/office is likely destination.
 If user_text says "카페에서 과제하다가 식당에서 만나", cafe is waypoint and restaurant is destination.
@@ -230,6 +231,15 @@ origin_text: "성균관대"
 destination_text: "서울역"
 Choose Sungkyunkwan University candidate for origin.
 Choose Seoul Station candidate for destination.
+
+Example 6
+user_text: "지금 성균관대야. 홍대입구역 3번 출구 앞에서 친구 만나야 하는데 약속까지 1시간 반 남았어. 가기 전에 상도 건영 106동에 들러야 해. 시간 되면 다이소에서 공책도 사고 싶어."
+origin_text: "성균관대"
+destination_text: "홍대입구역 3번 출구"
+Choose the Sungkyunkwan University candidate for origin.
+Choose Hongik Univ Station / Hongdae Entrance station or the specific 3번 출구 candidate for destination.
+Do not choose 상도 건영 106동 as destination because it is a required waypoint.
+Do not choose 다이소 as destination because it is an optional errand.
 
 Bad Selection Examples
 For "오목교역", do not choose "오목교역점 카페".

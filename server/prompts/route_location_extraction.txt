@@ -39,6 +39,8 @@ Strong Origin Signals
 "출발해서"
 "시작"
 "나 지금"
+"지금 A야"
+"현재 A에 있어"
 "현재 위치에서"
 "from"
 "starting from"
@@ -55,6 +57,8 @@ Strong Destination Signals
 "약속"
 "보기로"
 "만나"
+"친구 만나"
+"앞에서 만나"
 "예약"
 "to"
 "go to"
@@ -103,6 +107,7 @@ Core Korean Patterns
 "A에서 B까지 가는데 X 있으면 들러도 돼" -> origin_text A, destination_text B. X is waypoint.
 "B까지 가고 싶은데 A에서 출발" -> origin_text A, destination_text B.
 "A에서 B 가서 C에서 약속" -> origin_text A, destination_text C when C is the final appointment place.
+"지금 A야. B 앞에서 친구 만나야 해. 가기 전에 C에 들러야 해." -> origin_text A, destination_text B. C is waypoint.
 
 Cleaning Rules
 Keep meaningful place modifiers such as "2호선", "서울캠퍼스", "수원", "홍대입구역", "롯데월드몰".
@@ -135,6 +140,7 @@ The waypoint is a place used on the way.
 "카페에서 과제하다가 식당에서 5시에 친구 보기로 했어" means the restaurant is final destination.
 "집 가기 전에 다이소 들러야 해" means destination is "집"; 다이소 is a waypoint.
 "롯데월드몰까지 가고 싶어, 석촌호수 지나서" means destination is "롯데월드몰"; 석촌호수 is a waypoint.
+"지금 성균관대야. 홍대입구역 3번 출구 앞에서 친구 만나야 해. 가기 전에 상도 건영 106동에 들러야 해" means origin is "성균관대"; destination is "홍대입구역 3번 출구"; 상도 건영 106동 is a required waypoint.
 
 Good Examples
 User: "잠실역에서 석촌호수 지나서 롯데월드몰까지 가고 싶어. 오늘은 여유 있어서 예쁜 길이면 좀 돌아가도 괜찮아"
@@ -163,6 +169,9 @@ Return: {"origin_text":"오목교역","destination_text":"홍대"}
 
 User: "현재 위치에서 회사까지 가야 하는데 덜 피곤한 길이면 좋겠어"
 Return: {"origin_text":"현재 위치","destination_text":"회사"}
+
+User: "지금 성균관대야. 홍대입구역 3번 출구 앞에서 친구 만나야 하는데 약속까지 1시간 반 남았어. 가기 전에 상도 건영 106동에 들러야 해. 늦을까 봐 정신없고, 걷는 건 최대한 줄이고 싶어. 시간 되면 다이소에서 내일 필요한 공책도 사고 싶어."
+Return: {"origin_text":"성균관대","destination_text":"홍대입구역 3번 출구"}
 
 Bad Examples
 Do not return {"origin_text":"잠실역","destination_text":"석촌호수 지나서 롯데월드몰"}.
