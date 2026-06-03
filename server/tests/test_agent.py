@@ -126,6 +126,36 @@ def test_photo_stop_timeline_is_not_described_as_recovery() -> None:
     assert _why_stop(stop) == "인생네컷 서울연남점에서 사진을 찍습니다."
 
 
+def test_ambiguous_recovery_stop_uses_generic_visit_copy() -> None:
+    stop = PoiCandidate(
+        id="ambiguous-stop",
+        name="생활서비스 지점",
+        category="recovery",
+        landmark_type="waypoint",
+        emotion_tags=["recovery"],
+        lat=37.56,
+        lng=126.92,
+        required=True,
+    )
+
+    assert _why_stop(stop) == "생활서비스 지점에 들릅니다."
+
+
+def test_cafe_recovery_stop_keeps_recovery_copy() -> None:
+    stop = PoiCandidate(
+        id="cafe-stop",
+        name="뉴웨이브 커피",
+        category="recovery",
+        landmark_type="cafe",
+        emotion_tags=["recovery"],
+        lat=37.56,
+        lng=126.92,
+        required=True,
+    )
+
+    assert _why_stop(stop) == "뉴웨이브 커피에서 잠깐 회복할 수 있어요."
+
+
 def test_tired_user_gets_optional_recovery_route_candidate() -> None:
     plan = _run("I need to print before 5. I am tired.")
 

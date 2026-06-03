@@ -220,7 +220,7 @@ def _explanation(evaluation: TradeoffEvaluation, score: EmotionCost) -> str:
 def _why_stop(stop) -> str:
     if _is_photo_stop(stop):
         return f"{stop.name}에서 사진을 찍습니다."
-    if stop.category == "recovery":
+    if _is_recovery_stop(stop):
         return f"{stop.name}에서 잠깐 회복할 수 있어요."
     if stop.category == "errand":
         return f"{stop.name}에 들러 필요한 일을 처리합니다."
@@ -236,11 +236,59 @@ def _why_stop(stop) -> str:
 
 
 def _is_photo_stop(stop) -> bool:
-    tags = " ".join(getattr(stop, "emotion_tags", []) or [])
-    text = f"{getattr(stop, 'name', '')} {getattr(stop, 'category', '')} {tags}"
+    text = _stop_search_text(stop)
     return any(
         marker in text.lower()
         for marker in ["photo", "인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "셀프사진"]
+    )
+
+
+def _is_recovery_stop(stop) -> bool:
+    if getattr(stop, "category", "") != "recovery":
+        return False
+    text = _stop_search_text(stop).lower()
+    return any(
+        marker in text
+        for marker in [
+            "calm",
+            "cafe",
+            "coffee",
+            "park",
+            "library",
+            "book",
+            "walk",
+            "rest",
+            "quiet",
+            "카페",
+            "커피",
+            "공원",
+            "산책",
+            "도서관",
+            "책방",
+            "서점",
+            "북카페",
+            "만화",
+            "휴식",
+            "쉼",
+            "조용",
+            "작업",
+            "공부",
+            "벤치",
+        ]
+    )
+
+
+def _stop_search_text(stop) -> str:
+    tags = " ".join(getattr(stop, "emotion_tags", []) or [])
+    return " ".join(
+        [
+            getattr(stop, "name", "") or "",
+            getattr(stop, "category", "") or "",
+            getattr(stop, "landmark_type", "") or "",
+            getattr(stop, "category_group_name", "") or "",
+            getattr(stop, "category_name", "") or "",
+            tags,
+        ]
     )
 
 

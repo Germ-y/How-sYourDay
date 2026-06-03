@@ -200,7 +200,7 @@ def _route_name(route: RouteCandidate) -> str:
     photo_stop = next((stop for stop in route.stops if _is_photo_stop(stop)), None)
     if photo_stop:
         return f"{photo_stop.name} 사진 경유 경로"
-    recovery_stop = next((stop for stop in route.stops if stop.category == "recovery"), None)
+    recovery_stop = next((stop for stop in route.stops if _is_recovery_stop(stop)), None)
     if recovery_stop:
         return f"{recovery_stop.name} 경유 경로"
     errand_stop = next((stop for stop in route.stops if stop.category == "errand"), None)
@@ -221,9 +221,57 @@ def _route_name(route: RouteCandidate) -> str:
 
 
 def _is_photo_stop(stop) -> bool:
-    tags = " ".join(getattr(stop, "emotion_tags", []) or [])
-    text = f"{getattr(stop, 'name', '')} {getattr(stop, 'category', '')} {tags}"
+    text = _stop_search_text(stop)
     return any(
         marker in text.lower()
         for marker in ["photo", "인생네컷", "네컷", "포토부스", "포토이즘", "사진관", "셀프사진"]
+    )
+
+
+def _is_recovery_stop(stop) -> bool:
+    if getattr(stop, "category", "") != "recovery":
+        return False
+    text = _stop_search_text(stop).lower()
+    return any(
+        marker in text
+        for marker in [
+            "calm",
+            "cafe",
+            "coffee",
+            "park",
+            "library",
+            "book",
+            "walk",
+            "rest",
+            "quiet",
+            "카페",
+            "커피",
+            "공원",
+            "산책",
+            "도서관",
+            "책방",
+            "서점",
+            "북카페",
+            "만화",
+            "휴식",
+            "쉼",
+            "조용",
+            "작업",
+            "공부",
+            "벤치",
+        ]
+    )
+
+
+def _stop_search_text(stop) -> str:
+    tags = " ".join(getattr(stop, "emotion_tags", []) or [])
+    return " ".join(
+        [
+            getattr(stop, "name", "") or "",
+            getattr(stop, "category", "") or "",
+            getattr(stop, "landmark_type", "") or "",
+            getattr(stop, "category_group_name", "") or "",
+            getattr(stop, "category_name", "") or "",
+            tags,
+        ]
     )

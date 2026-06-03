@@ -3470,7 +3470,7 @@ function stopTimelineLabel(stop: PoiCandidate) {
   if (isPhotoStop(stop)) {
     return `${stop.name}에서 사진을 찍습니다.`;
   }
-  if (stop.category === "recovery") {
+  if (isRecoveryStop(stop)) {
     return `${stop.name}에서 잠깐 회복할 수 있어요.`;
   }
   if (stop.category === "errand") {
@@ -3492,8 +3492,27 @@ function stopTimelineLabel(stop: PoiCandidate) {
 }
 
 function isPhotoStop(stop: PoiCandidate) {
-  const text = `${stop.name} ${stop.category} ${stop.emotion_tags.join(" ")}`;
+  const text = stopSearchText(stop);
   return /(photo|인생네컷|네컷|포토부스|포토이즘|사진관|셀프사진)/i.test(text);
+}
+
+function isRecoveryStop(stop: PoiCandidate) {
+  if (stop.category !== "recovery") {
+    return false;
+  }
+  const text = stopSearchText(stop);
+  return /(calm|cafe|coffee|park|library|book|walk|rest|quiet|카페|커피|공원|산책|도서관|책방|서점|북카페|만화|휴식|쉼|조용|작업|공부|벤치)/i.test(text);
+}
+
+function stopSearchText(stop: PoiCandidate) {
+  return [
+    stop.name,
+    stop.category,
+    stop.landmark_type,
+    stop.category_group_name ?? "",
+    stop.category_name ?? "",
+    ...stop.emotion_tags
+  ].join(" ");
 }
 
 function formatTimelineMinutes(totalMinutes: number) {
