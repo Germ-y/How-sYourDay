@@ -4005,12 +4005,6 @@ function PreferenceDeck({
             ))}
           </div>
 
-          <div className="px-4 pb-2">
-            <p className="line-clamp-2 rounded-xl bg-[#eef8f4] px-3 py-2 text-xs font-medium leading-5 text-moss [word-break:keep-all]">
-              {preferenceLearningHint(active)}
-            </p>
-          </div>
-
           <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
             {preferenceDisplayTags(active, points, votes).map((tag) => (
               <span
@@ -4475,12 +4469,6 @@ function compactAddress(address: string | null) {
   }
   const parts = address.split(/\s+/).filter(Boolean);
   return parts.length > 4 ? parts.slice(0, 4).join(" ") : address;
-}
-
-function preferenceLearningHint(point: PreferencePoint) {
-  const distance =
-    point.distanceMeters === null ? "내 주변 후보" : `현재 위치에서 약 ${Math.round(point.distanceMeters)}m`;
-  return `${distance}. 선택하면 비슷한 ${point.kind} 장소를 경로 후보에 더 잘 반영해요.`;
 }
 
 function pointTags(candidate: PoiCandidate) {
