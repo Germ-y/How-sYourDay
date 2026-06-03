@@ -1202,6 +1202,14 @@ export default function HomePage() {
     setPoiPreferenceIndex(0);
   }
 
+  function handleRecentRouteOpen() {
+    setActiveView(plan ? "result" : "planner");
+  }
+
+  function handleRouteFeedbackSave(routeId: string) {
+    setPlan((current) => (current ? selectRouteInPlan(current, routeId) : current));
+  }
+
   const likedCount = Object.values(poiVotes).filter((vote) => vote === "like").length;
   const dislikedCount = Object.values(poiVotes).filter(
     (vote) => vote === "dislike"
@@ -1488,6 +1496,7 @@ export default function HomePage() {
           <RouteResultPage
             plan={plan}
             onBackToPlanner={() => setActiveView("planner")}
+            onRouteFeedbackSave={handleRouteFeedbackSave}
           />
         ) : activeView === "taste" ? (
           <TastePage
@@ -1517,6 +1526,7 @@ export default function HomePage() {
             onSavedPlaceDraftChange={handleSavedPlaceDraftChange}
             onLogout={handleLogout}
             onOpenPlanner={() => setActiveView("planner")}
+            onOpenRecentRoute={handleRecentRouteOpen}
             onUseSavedPlace={handleUseSavedPlace}
           />
         )}
@@ -2057,6 +2067,7 @@ function ProfilePage({
   onAddSavedPlace,
   onLogout,
   onOpenPlanner,
+  onOpenRecentRoute,
   onRemoveSavedPlace,
   onSavedPlaceDraftChange,
   onUseSavedPlace,
@@ -2073,6 +2084,7 @@ function ProfilePage({
   onAddSavedPlace: () => void;
   onLogout: () => void;
   onOpenPlanner: () => void;
+  onOpenRecentRoute: () => void;
   onRemoveSavedPlace: (id: string) => void;
   onSavedPlaceDraftChange: (
     field: "name" | "address" | "kind",
@@ -2111,9 +2123,9 @@ function ProfilePage({
             <button
               className="min-h-10 shrink-0 rounded-xl bg-ink px-3 text-sm font-semibold text-white transition active:scale-[0.98]"
               type="button"
-              onClick={onOpenPlanner}
+              onClick={plan ? onOpenRecentRoute : onOpenPlanner}
             >
-              경로 만들기
+              {plan ? "다시 보기" : "경로 만들기"}
             </button>
           </div>
           {plan ? (
@@ -2524,10 +2536,12 @@ function ComposerTitle({
 
 function RouteResultPage({
   plan,
-  onBackToPlanner
+  onBackToPlanner,
+  onRouteFeedbackSave
 }: {
   plan: DailyPlan;
   onBackToPlanner: () => void;
+  onRouteFeedbackSave: (routeId: string) => void;
 }) {
   const [selectedRouteId, setSelectedRouteId] = useState(plan.selected_route.id);
 
@@ -2591,6 +2605,7 @@ function RouteResultPage({
 
       <div className="grid gap-4">
         <MobilePlanResult
+          onRouteFeedbackSave={onRouteFeedbackSave}
           onSelectRoute={setSelectedRouteId}
           plan={plan}
           selectedMap={selectedMap}
@@ -2752,12 +2767,14 @@ function PlanPreview({
 }
 
 function MobilePlanResult({
+  onRouteFeedbackSave,
   onSelectRoute,
   plan,
   selectedMap,
   selectedRoute,
   selectedScore
 }: {
+  onRouteFeedbackSave: (routeId: string) => void;
   onSelectRoute: (routeId: string) => void;
   plan: DailyPlan;
   selectedMap: MapViewModel;
@@ -2787,6 +2804,9 @@ function MobilePlanResult({
         provider: selectedRoute.provider,
         reason: firstTradeoff?.reason ?? plan.explanation
       });
+      if (liked) {
+        onRouteFeedbackSave(selectedRoute.id);
+      }
     } catch {
       setFeedbackChoice(null);
     } finally {
@@ -3380,6 +3400,21 @@ function mapForSelectedRoute(map: MapViewModel, route: RouteCandidate): MapViewM
       ...polyline,
       selected: polyline.route_id === route.id
     }))
+  };
+}
+
+function selectRouteInPlan(plan: DailyPlan, routeId: string): DailyPlan {
+  const selectedRoute = plan.routes.find((route) => route.id === routeId);
+  if (!selectedRoute) {
+    return plan;
+  }
+  const selectedScore = scoreForRoute(plan, selectedRoute);
+  return {
+    ...plan,
+    emotional_cost: selectedScore,
+    map_overlays: mapForSelectedRoute(plan.map_overlays, selectedRoute),
+    score: selectedScore,
+    selected_route: selectedRoute
   };
 }
 
