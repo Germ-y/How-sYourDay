@@ -430,7 +430,7 @@ def _task_search_anchors(
     if destination is not None and task.kind == "photo":
         midpoint = _route_midpoint(origin, destination)
         if _photo_task_mentions_destination_area(user_text):
-            return [destination, midpoint, origin]
+            return [destination]
         return [midpoint, destination, origin]
 
     if destination is not None:
